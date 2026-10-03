@@ -166,3 +166,16 @@ Si falla la descarga o la preparación, el comando devuelve código 1 e indica e
 No se sobrescriben ejecuciones anteriores ni se elige automáticamente una descarga reciente: la repetición exige indicar el snapshot. El registro de Git identifica la revisión y si había cambios; para reconstruir exactamente el código usado, conserva esos cambios en un commit.
 
 El comando se comprobó con el snapshot real de 7.033 sesiones, sin red y desde fuera del repositorio. No requiere dependencias adicionales a las ya instaladas.
+
+## Menú interactivo
+
+Desde la raíz del repositorio:
+
+```bash
+source .venv/bin/activate
+python -m tfm
+```
+
+En una terminal aparece un menú para descargar y preparar, escoger una descarga existente por número, consultar ejecuciones, ver la configuración o salir. Al elegir una tarea de datos puedes indicar otro TOML o pulsar Intro para usar `configs/data.toml`. Se muestra el instrumento y el periodo antes de ejecutar. Escribe `0` en las selecciones para volver o salir; Ctrl+C cancela la acción y Ctrl+D sale.
+
+Los comandos con argumentos siguen disponibles. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.

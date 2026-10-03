@@ -6,11 +6,11 @@ Permitir ejecutar las tareas del TFM eligiendo opciones, sin memorizar comandos.
 
 ## Estado y decisión actual
 
-La CLI existente separa la presentación (`tfm.cli`) del flujo (`tfm.pipeline`) y de los módulos de datos. Esta estructura permite incorporar un menú sin reorganizar la lógica. En este incremento solo se documenta el plan; no se modifica código ni se añaden dependencias.
+La CLI existente separa la presentación (`tfm.cli`) del flujo (`tfm.pipeline`) y de los módulos de datos. Esta estructura permite incorporar un menú sin reorganizar la lógica. El menú inicial está implementado en `tfm.menu`, utiliza la biblioteca estándar y reutiliza `run_prepare_prices`. Los comandos existentes se conservan.
 
-## Próximo incremento: menú inicial
+## Menú inicial implementado
 
-Implementarlo como un bloque pequeño antes de empezar el simulador:
+El bloque implementado antes del simulador contempla:
 
 1. Abrir un menú al ejecutar `python -m tfm` en una terminal interactiva. Conservar `prepare-prices` y sus argumentos. Sin terminal interactiva, mostrar ayuda y terminar sin esperar entradas.
 2. Ofrecer descargar y preparar precios, preparar una descarga existente, consultar ejecuciones, ver la configuración y salir.

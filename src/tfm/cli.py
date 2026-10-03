@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from tfm.pipeline import PipelineError, run_prepare_prices
+from tfm.menu import interactive_menu
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -14,7 +15,13 @@ def main(argv: list[str] | None = None) -> int:
     prepare = commands.add_parser("prepare-prices", help="Descargar y preparar precios con registro de ejecución")
     prepare.add_argument("--config", type=Path, default=Path("configs/data.toml"))
     prepare.add_argument("--snapshot", type=Path, help="Reutilizar una descarga existente sin acceder a la red")
-    args = parser.parse_args(argv)
+    arguments = sys.argv[1:] if argv is None else argv
+    if not arguments:
+        if sys.stdin.isatty():
+            return interactive_menu()
+        parser.print_help()
+        return 0
+    args = parser.parse_args(arguments)
     try:
         run_dir = run_prepare_prices(args.config, args.snapshot)
     except (PipelineError, OSError) as exc:
