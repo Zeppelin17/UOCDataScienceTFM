@@ -7,3 +7,5 @@ Ejecutar desde la raíz con el entorno virtual activado: `python -m pytest -q`.
 La comprobación real del proveedor se realiza manualmente con el comando de descarga del README. No forma parte de los tests automáticos para evitar dependencia de disponibilidad y revisiones de Yahoo.
 
 `test_preparation_prices.py` contiene tres tests esenciales: conservación y procedencia de los precios preparados, bloqueo de duplicados y ausentes, y rechazo de un snapshot modificado. Se priorizan estos riesgos sin añadir un test separado por cada comprobación del informe.
+
+`test_pipeline.py` añade únicamente dos tests del flujo completo: comando satisfactorio y repetición sin red, y registro de un rechazo de calidad con salida de error. Simula el proveedor, pero ejecuta la persistencia, normalización y registro reales sobre tablas pequeñas.

@@ -4,7 +4,7 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-Entorno inicial preparado. Todavía no descarga datos, entrena modelos ni simula operaciones.
+El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. Todavía no entrena modelos ni simula operaciones.
 
 ## Arquitectura
 
@@ -27,6 +27,8 @@ Las reglas originales generan la dirección de las señales. El meta-modelo deci
 ```text
 configs/                 Configuración de datos y experimentos
 src/tfm/
+  cli.py                 Comandos locales
+  pipeline.py            Coordinación y registro de ejecuciones
   sources/               Descarga y procedencia de datos
   preparation/           Calidad, normalización e integración temporal
   features/              Variables disponibles en cada decisión
@@ -49,7 +51,7 @@ Los módulos reutilizables viven en `src/tfm`. Los cuadernos llaman a esos módu
 
 ## Datos y reproducibilidad
 
-Se prevé utilizar pandas para el procesamiento y Parquet para persistir tablas. Las dependencias se añadirán cuando se implementen las funciones que las necesiten. DuckDB podrá incorporarse si las consultas SQL lo justifican.
+Se utiliza pandas para el procesamiento y Parquet para persistir tablas. Las nuevas dependencias se añadirán cuando una función las necesite. DuckDB podrá incorporarse si las consultas SQL lo justifican.
 
 - Conservar originales y registrar fuente, fecha de descarga y ajustes.
 - Distinguir fecha observada, fecha disponible, decisión y ejecución.
@@ -70,7 +72,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet y el extra `dev` incorpora pytest. El proveedor de descarga se añadirá tras verificar la fuente. Para comprobar que el paquete se importa tras instalarlo:
+La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
 
 ```bash
 python -c "import tfm; print(tfm.__version__)"
@@ -93,7 +95,7 @@ Consulta `docs/architecture.md` para los contratos y las decisiones pendientes.
 
 Los tests se añadirán con cada comportamiento implementado. Priorizarán disponibilidad temporal de datos, ventanas de señales, separación de etiquetas, ejecución y costes, purga de particiones cuando corresponda y un recorrido completo con datos pequeños calculables a mano.
 
-El framework de tests es pytest. Se ejecuta con `python -m pytest`; los tests de procesamiento se añadirán al implementar cada incremento. Los módulos actuales son únicamente marcadores de responsabilidades.
+El framework de tests es pytest. Se ejecuta con `python -m pytest -q`. Se mantienen tests esenciales de descarga, preparación y flujo completo; los módulos posteriores aún son marcadores de responsabilidades.
 
 ### Dependencias reproducibles
 
@@ -132,4 +134,33 @@ python -c 'from tfm.preparation.prices import prepare_prices; print(prepare_pric
 
 Se verifica la integridad del original y se guardan una tabla con columnas normalizadas, su informe de calidad y un manifiesto de procedencia en un directorio nuevo. No se modifica el snapshot original ni se rellenan datos ausentes. Un error de calidad impide publicar la tabla y señala la ruta del informe. Consulta [la arquitectura](docs/architecture.md) para el esquema y los controles.
 
-La preparación real de las 7.033 sesiones de SPY pasó los controles implementados. Sigue pendiente verificar el calendario bursátil completo y contrastar precios con otra fuente. El comando que unirá descarga y preparación se añadirá en el siguiente incremento.
+La preparación real de las 7.033 sesiones de SPY pasó los controles implementados. Sigue pendiente verificar el calendario bursátil completo y contrastar precios con otra fuente. El comando completo se describe a continuación.
+
+## Flujo completo desde la terminal
+
+Desde la raíz del repositorio, activa el entorno y ejecuta:
+
+```bash
+source .venv/bin/activate
+python -m tfm prepare-prices --config configs/data.toml
+```
+
+Este comando descarga un nuevo snapshot, prepara los precios y muestra las rutas del resultado y del registro. Para volver a preparar una descarga concreta sin acceder a Yahoo:
+
+```bash
+python -m tfm prepare-prices --config configs/data.toml --snapshot RUTA_DEL_SNAPSHOT
+```
+
+La descarga reutilizada debe tener los mismos parámetros de proveedor, instrumento, periodo y opciones de descarga que la configuración. Las rutas relativas de `--config` y `--snapshot` parten del directorio actual. Las rutas de almacenamiento dentro del TOML parten del padre de la carpeta que contiene la configuración: mantén los TOML en `configs/`. Así se resuelven los datos en el mismo lugar aunque ejecutes el comando desde otro directorio con una ruta absoluta al TOML.
+
+Cada intento tiene su directorio `outputs/runs/<run_id>/`, excluido de Git:
+
+- `run.json`: estado, fase, tiempos UTC, rutas, versiones y commit de Git, con indicación de cambios locales.
+- `config.toml`: copia de la configuración y su huella registrada en `run.json`.
+- En ejecuciones completadas: `source_manifest.json`, `prepared_manifest.json` y `quality_report.json`.
+
+Si falla la descarga o la preparación, el comando devuelve código 1 e indica el registro. Un rechazo de calidad deja también la ruta del informe en `run.json`; los originales se conservan. Las ejecuciones interrumpidas con Ctrl+C se registran como `interrupted`. Una terminación forzada o un fallo del propio almacenamiento puede impedir actualizar el registro y dejarlo en `running`.
+
+No se sobrescriben ejecuciones anteriores ni se elige automáticamente una descarga reciente: la repetición exige indicar el snapshot. El registro de Git identifica la revisión y si había cambios; para reconstruir exactamente el código usado, conserva esos cambios en un commit.
+
+El comando se comprobó con el snapshot real de 7.033 sesiones, sin red y desde fuera del repositorio. No requiere dependencias adicionales a las ya instaladas.

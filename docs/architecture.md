@@ -58,3 +58,11 @@ Versión 1 del esquema: `asset`, `observed_at`, `open`, `high`, `low`, `close`, 
 Cada preparación genera un directorio nuevo bajo `<processed_root>/prices/<preparation_id>/`. Un resultado válido contiene `prices.parquet`, `quality_report.json` y `manifest.json`, con la procedencia y la huella de la tabla preparada. Un resultado con errores de calidad conserva informe y manifiesto, sin publicar Parquet, y lanza `PriceQualityError`; su atributo `report_path` permite localizar el informe. Los errores de integridad o estructura se rechazan antes de crear el resultado. Un fallo de escritura elimina el directorio parcial.
 
 Los controles bloqueantes comprueban datos vacíos, fechas ausentes, duplicadas o con horas, valores ausentes o infinitos, precios no positivos, volumen y eventos negativos, coherencia OHLC y fechas fuera del intervalo solicitado. No certifican la exactitud del proveedor ni detectan todavía sesiones ausentes mediante un calendario bursátil. La separación general del periodo final se implementará en el flujo de experimentos.
+
+## Coordinación implementada
+
+`tfm.pipeline.run_prepare_prices` coordina los módulos de descarga y preparación; `tfm.cli` expone `python -m tfm prepare-prices`. La lógica de cada etapa permanece en su módulo, para poder reutilizarla desde un notebook o un flujo posterior. No se introduce un framework de workflows.
+
+El coordinador crea un registro por intento bajo `outputs/runs`, copia la configuración y registra sus rutas resueltas. Las fases son `configuration`, `download` o `snapshot_validation`, `preparation` y `completed`. Los estados son `running`, `completed`, `failed` e `interrupted`. Un error conserva el mensaje, tipo, fase y los artefactos ya terminados. Los snapshots y tablas mantienen sus propios manifiestos; el run referencia sus directorios y copia los manifiestos al terminar.
+
+`--snapshot` permite repetir el procesamiento sin red y exige que los parámetros coincidan con la configuración. Las rutas de almacenamiento parten de la raíz deducida de `configs/`, en línea con el adaptador existente. El comando no realiza entrenamiento ni selección de modelos: sus registros de datos se ampliarán cuando existan experimentos financieros. El estado de Git incluye revisión y cambios locales, pero no una copia del código sin commit.
