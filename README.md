@@ -101,7 +101,7 @@ El framework de tests es pytest. Se ejecuta con `python -m pytest`; los tests de
 
 ## Fuente de precios propuesta
 
-Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. El adaptador de descarga está implementado; la normalización y el informe de calidad se añadirán en el siguiente incremento.
+Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. El adaptador de descarga está implementado; la normalización y el informe de calidad también están disponibles.
 
 ## Descargar un snapshot de precios
 
@@ -121,3 +121,15 @@ Los snapshots anteriores no se sobrescriben. Una respuesta vacía, columnas inco
 La copia conserva la salida de yfinance, no el payload HTTP original de Yahoo. Tampoco representa una versión conocida en la fecha histórica. El adaptador está limitado por ahora a SPY diario y exige los parámetros documentados. No impone por sí solo un bloqueo general del periodo final; utiliza el intervalo de la configuración.
 
 Verificación de este incremento: nueve tests sin red y descarga real de 7.033 sesiones entre 29/01/1993 y 31/12/2020. El contraste numérico con otra fuente sigue pendiente.
+
+## Preparar los precios descargados
+
+Sustituye `RUTA_DEL_SNAPSHOT` por el directorio devuelto por la descarga:
+
+```bash
+python -c 'from tfm.preparation.prices import prepare_prices; print(prepare_prices("RUTA_DEL_SNAPSHOT", "data/processed"))'
+```
+
+Se verifica la integridad del original y se guardan una tabla con columnas normalizadas, su informe de calidad y un manifiesto de procedencia en un directorio nuevo. No se modifica el snapshot original ni se rellenan datos ausentes. Un error de calidad impide publicar la tabla y señala la ruta del informe. Consulta [la arquitectura](docs/architecture.md) para el esquema y los controles.
+
+La preparación real de las 7.033 sesiones de SPY pasó los controles implementados. Sigue pendiente verificar el calendario bursátil completo y contrastar precios con otra fuente. El comando que unirá descarga y preparación se añadirá en el siguiente incremento.

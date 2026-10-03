@@ -63,7 +63,7 @@ Otras limitaciones: posibles revisiones, interrupciones, límites de acceso, aus
 
 - Contrastar una selección de cierres y dividendos hasta 2020 con una segunda fuente, indicando si ofrece precio de mercado, NAV o cierre ajustado. No comparar cantidades de naturaleza distinta.
 - Comprobar sesiones ausentes con un calendario adecuado.
-- Validar campos, duplicados, valores ausentes y coherencia de ajustes sobre la descarga persistida.
+- Validar el significado económico de los ajustes. La preparación implementada ya verifica integridad SHA-256, estructura, fechas duplicadas, ausentes, valores no finitos y coherencia OHLC. El snapshot real de 7.033 filas pasó esos controles; esto no certifica los ajustes del proveedor.
 - Fijar política de dividendos, ejecución y cortos antes del simulador.
 
 El contraste numérico independiente no se ha completado: la fuente queda propuesta, no certificada. Si no se logra un contraste adecuado, registrar la limitación antes de usarla como base de resultados finales.
