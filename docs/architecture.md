@@ -66,3 +66,7 @@ Los controles bloqueantes comprueban datos vacíos, fechas ausentes, duplicadas 
 El coordinador crea un registro por intento bajo `outputs/runs`, copia la configuración y registra sus rutas resueltas. Las fases son `configuration`, `download` o `snapshot_validation`, `preparation` y `completed`. Los estados son `running`, `completed`, `failed` e `interrupted`. Un error conserva el mensaje, tipo, fase y los artefactos ya terminados. Los snapshots y tablas mantienen sus propios manifiestos; el run referencia sus directorios y copia los manifiestos al terminar.
 
 `--snapshot` permite repetir el procesamiento sin red y exige que los parámetros coincidan con la configuración. Las rutas de almacenamiento parten de la raíz deducida de `configs/`, en línea con el adaptador existente. El comando no realiza entrenamiento ni selección de modelos: sus registros de datos se ampliarán cuando existan experimentos financieros. El estado de Git incluye revisión y cambios locales, pero no una copia del código sin commit.
+
+## Protocolo financiero propuesto
+
+[financial_protocol.md](financial_protocol.md) documenta las convenciones propuestas y las decisiones aún abiertas. El siguiente bloque será el benchmark diario de comprar y mantener; la tabla mensual y las anomalías se incorporarán después. Este documento no convierte `configs/experiment_base.toml` en una configuración ejecutable ni resuelve la financiación de cortos.

@@ -89,7 +89,7 @@ python -c "import tfm; print(tfm.__version__)"
 7. Alternativas justificadas, SHAP y controles DSR/PBO.
 8. Configuración fijada, evaluación final y exportación de resultados.
 
-Consulta `docs/architecture.md` para los contratos y las decisiones pendientes.
+Consulta `docs/architecture.md` para los contratos y las decisiones pendientes. El [protocolo financiero propuesto](docs/financial_protocol.md) concreta las convenciones temporales y el alcance del primer simulador.
 
 Como próximo incremento de usabilidad, antes del simulador, se añadirá un menú interactivo a la CLI. El alcance y su ampliación están descritos en [el plan de la CLI](docs/cli_plan.md).
 
