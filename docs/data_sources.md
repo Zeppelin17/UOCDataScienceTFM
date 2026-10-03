@@ -19,7 +19,7 @@ Consulta directa al endpoint chart de Yahoo, con intervalo diario y eventos de d
 - Cierre ajustado: presente.
 - Eventos de dividendos: 113.
 
-Es una comprobación de disponibilidad y estructura, no una auditoría de exactitud o calendario completo. No se ha persistido esa respuesta ni instalado yfinance en este incremento. El adaptador deberá repetir y registrar estos controles con su versión concreta de yfinance.
+Es una comprobación de disponibilidad y estructura, no una auditoría de exactitud o calendario completo. La consulta inicial no se persistió. Posteriormente se verificó el adaptador con yfinance 1.7.0: se guardó un snapshot Parquet y su manifiesto, con 7.033 filas y los mismos límites de cobertura. La comprobación de calendario y exactitud permanece pendiente.
 
 ## Parámetros explícitos
 
@@ -47,9 +47,9 @@ No sumar dividendos de nuevo a retornos calculados a partir del cierre ajustado.
 
 La descarga actual reconstruye historia según la versión vigente del proveedor. Guardarla permite reproducir nuestra investigación, pero no convierte los ajustes retrospectivos en snapshots point-in-time. Esta limitación deberá evaluarse según la variable calculada; no implica que todo retorno histórico esté necesariamente contaminado.
 
-## Persistencia prevista
+## Persistencia implementada
 
-Conservar respuesta del adaptador sin transformaciones propias, parámetros, fecha UTC de descarga, versión de yfinance, identificador de snapshot y SHA-256. Esta copia será original respecto a nuestra descarga, no una captura del mercado realizada en 1993.
+Se conserva la tabla devuelta por el adaptador sin transformaciones propias, en Parquet, junto con parámetros, configuración, tiempos UTC, versiones de yfinance/pandas/pyarrow, identificador de snapshot y SHA-256 del fichero. No se conserva el payload HTTP original. Esta copia será original respecto a nuestra descarga, no una captura del mercado realizada en 1993.
 
 No sobrescribir snapshots. Los datos preparados apuntarán al snapshot de procedencia. Los ficheros de datos permanecen excluidos de Git.
 

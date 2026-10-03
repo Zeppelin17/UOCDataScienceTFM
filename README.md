@@ -101,4 +101,23 @@ El framework de tests es pytest. Se ejecuta con `python -m pytest`; los tests de
 
 ## Fuente de precios propuesta
 
-Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. La descarga programada todavía no está implementada.
+Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. El adaptador de descarga está implementado; la normalización y el informe de calidad se añadirán en el siguiente incremento.
+
+## Descargar un snapshot de precios
+
+Desde la raíz del repositorio, con el entorno virtual activado:
+
+```bash
+python -c 'from tfm.sources.prices import download_prices; print(download_prices("configs/data.toml"))'
+```
+
+Cada ejecución descarga el periodo configurado y crea un directorio nuevo en `data/raw/yahoo/SPY/<snapshot_id>/`, excluido de Git:
+
+- `prices.parquet`: tabla devuelta por yfinance, con fechas, precios, cierre ajustado y eventos, sin normalización propia.
+- `manifest.json`: parámetros efectivos, configuración, tiempos UTC, versiones de bibliotecas, cobertura y SHA-256 del Parquet.
+
+Los snapshots anteriores no se sobrescriben. Una respuesta vacía, columnas incompatibles o fechas fuera del intervalo generan un error. Si falla la escritura, se elimina el directorio parcial. El manifiesto identifica una descarga terminada. Esto no sustituye el informe de calidad: los valores ausentes, duplicados y la coherencia económica se revisarán en `preparation`.
+
+La copia conserva la salida de yfinance, no el payload HTTP original de Yahoo. Tampoco representa una versión conocida en la fecha histórica. El adaptador está limitado por ahora a SPY diario y exige los parámetros documentados. No impone por sí solo un bloqueo general del periodo final; utiliza el intervalo de la configuración.
+
+Verificación de este incremento: nueve tests sin red y descarga real de 7.033 sesiones entre 29/01/1993 y 31/12/2020. El contraste numérico con otra fuente sigue pendiente.
