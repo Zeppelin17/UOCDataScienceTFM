@@ -1,0 +1,25 @@
+# Entorno y Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+.DS_Store
+
+# Credenciales locales
+.env
+.env.*
+!.env.example
+
+# Datos y resultados: se conserva la estructura
+/data/**/*
+!/data/**/
+!/data/**/.gitkeep
+/outputs/**/*
+!/outputs/**/
+!/outputs/**/.gitkeep

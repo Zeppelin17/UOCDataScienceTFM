@@ -1,0 +1,10 @@
+# Propuesta inicial, pendiente de verificar cobertura y ajustes.
+[market]
+instrument = "SPY"
+provider = "pending"
+frequency = "daily"
+
+[storage]
+raw = "data/raw"
+processed = "data/processed"
+datasets = "data/datasets"
