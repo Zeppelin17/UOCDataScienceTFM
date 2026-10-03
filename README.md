@@ -98,3 +98,7 @@ El framework de tests es pytest. Se ejecuta con `python -m pytest`; los tests de
 ### Dependencias reproducibles
 
 `requirements-lock.txt` registra las versiones verificadas con Python 3.14 en macOS. Para reproducir ese entorno, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. En otra versión de Python o plataforma, resuelve las dependencias de `pyproject.toml` y valida antes de renovar este archivo.
+
+## Fuente de precios propuesta
+
+Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. La descarga programada todavía no está implementada.
