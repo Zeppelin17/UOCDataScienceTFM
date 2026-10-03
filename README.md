@@ -4,7 +4,7 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-Scaffold inicial. Todavía no descarga datos, entrena modelos ni simula operaciones. No incluye dependencias de análisis instaladas ni resultados experimentales.
+Entorno inicial preparado. Todavía no descarga datos, entrena modelos ni simula operaciones.
 
 ## Arquitectura
 
@@ -67,10 +67,10 @@ Se propone Python 3.11 o posterior. Para crear un entorno aislado:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 ```
 
-La instalación editable utiliza setuptools como herramienta de construcción. El scaffold no declara todavía bibliotecas de análisis. Para comprobar que el paquete se importa tras instalarlo:
+La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet y el extra `dev` incorpora pytest. El proveedor de descarga se añadirá tras verificar la fuente. Para comprobar que el paquete se importa tras instalarlo:
 
 ```bash
 python -c "import tfm; print(tfm.__version__)"
@@ -93,4 +93,8 @@ Consulta `docs/architecture.md` para los contratos y las decisiones pendientes.
 
 Los tests se añadirán con cada comportamiento implementado. Priorizarán disponibilidad temporal de datos, ventanas de señales, separación de etiquetas, ejecución y costes, purga de particiones cuando corresponda y un recorrido completo con datos pequeños calculables a mano.
 
-No se ha elegido todavía un framework de tests. Los módulos actuales son únicamente marcadores de responsabilidades.
+El framework de tests es pytest. Se ejecuta con `python -m pytest`; los tests de procesamiento se añadirán al implementar cada incremento. Los módulos actuales son únicamente marcadores de responsabilidades.
+
+### Dependencias reproducibles
+
+`requirements-lock.txt` registra las versiones verificadas con Python 3.14 en macOS. Para reproducir ese entorno, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. En otra versión de Python o plataforma, resuelve las dependencias de `pyproject.toml` y valida antes de renovar este archivo.
