@@ -91,6 +91,8 @@ python -c "import tfm; print(tfm.__version__)"
 
 Consulta `docs/architecture.md` para los contratos y las decisiones pendientes.
 
+Como próximo incremento de usabilidad, antes del simulador, se añadirá un menú interactivo a la CLI. El alcance y su ampliación están descritos en [el plan de la CLI](docs/cli_plan.md).
+
 ## Verificación
 
 Los tests se añadirán con cada comportamiento implementado. Priorizarán disponibilidad temporal de datos, ventanas de señales, separación de etiquetas, ejecución y costes, purga de particiones cuando corresponda y un recorrido completo con datos pequeños calculables a mano.
