@@ -16,7 +16,7 @@ def test_menu_selects_snapshot_and_delegates(tmp_path, monkeypatch, capsys):
     (run / "run.json").write_text('{"prepared_dir":"prepared"}')
     (run / "quality_report.json").write_text('{"rows":2,"first_session":"2020-12-30","last_session":"2020-12-31","status":"passed"}')
     monkeypatch.chdir(tmp_path)
-    answers = iter(["invalid", "2", "999", "1", "0"])
+    answers = iter(["invalid", "", "2", "999", "1", "", "0"])
     monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
     calls = []
     def prepare(config_path, snapshot):
@@ -49,8 +49,9 @@ def test_view_is_direct_and_configuration_changes_are_explicit(tmp_path, monkeyp
     (directory / "data.toml").write_text(text)
     (directory / "alternative.toml").write_text(text.replace("1993-01-29", "2000-01-01"))
     monkeypatch.chdir(tmp_path)
-    answers = iter(["4", "5", "missing.toml", "4", "5", "configs/alternative.toml", "4", "0"])
+    answers = iter(["4", "", "5", "missing.toml", "", "4", "", "5", "configs/alternative.toml", "", "4", "", "0"])
     prompts = []
+    monkeypatch.setattr(menu, "_clear_screen", lambda: print("[pantalla limpia]"))
     def answer(prompt):
         prompts.append(prompt)
         return next(answers)
@@ -58,6 +59,8 @@ def test_view_is_direct_and_configuration_changes_are_explicit(tmp_path, monkeyp
     assert menu.interactive_menu() == 0
     assert sum("Ruta del archivo" in prompt for prompt in prompts) == 2
     output = capsys.readouterr().out
+    assert sum("Pulsa Intro" in prompt for prompt in prompts) == 5
+    assert output.count("[pantalla limpia]") >= 10
     assert "Error:" in output
     assert "Configuración cambiada para esta sesión" in output
     assert "Configuración en uso: configs/alternative.toml" in output

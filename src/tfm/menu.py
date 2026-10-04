@@ -1,10 +1,29 @@
 """Menú local que reutiliza el flujo de datos existente."""
 
 import json
+import os
+import sys
 from pathlib import Path
 import tomllib
 
 from tfm.pipeline import PipelineError, run_prepare_prices
+
+
+def _clear_screen() -> None:
+    """Limpiar solo la pantalla de una terminal compatible."""
+    if sys.stdout.isatty() and os.environ.get("TERM") != "dumb":
+        print("\033[2J\033[H", end="", flush=True)
+
+
+def _pause() -> bool:
+    """Conservar la pantalla hasta Intro; devolver False si se cierra la entrada."""
+    try:
+        input("\nPulsa Intro para volver al menú…")
+    except KeyboardInterrupt:
+        print()
+    except EOFError:
+        return False
+    return True
 
 
 def _configuration(path: Path) -> dict:
@@ -89,9 +108,12 @@ def _show_result(run_dir: Path) -> None:
 def interactive_menu() -> int:
     """Elegir tareas; Ctrl+C cancela la acción y Ctrl+D sale del menú."""
     config_path = Path("configs/data.toml")
-    while True:
+    stop = False
+    while not stop:
+        pause = False
         try:
-            print(f"\nConfiguración en uso: {config_path}")
+            _clear_screen()
+            print(f"Configuración en uso: {config_path}")
             print("¿Qué quieres hacer?\n"
                   "1. Descargar y preparar precios\n"
                   "2. Preparar una descarga existente\n"
@@ -103,14 +125,18 @@ def interactive_menu() -> int:
             if option == "0":
                 return 0
             if option not in {"1", "2", "3", "4", "5"}:
+                pause = True
                 print("Escribe un número del 0 al 5.")
                 continue
+            pause = True
+            _clear_screen()
             if option == "3":
                 _show_runs(config_path)
                 continue
             if option == "5":
                 selected = input("Ruta del archivo TOML (Intro o 0 para volver sin cambiar): ").strip()
                 if selected in {"", "0"}:
+                    pause = False
                     continue
                 candidate = Path(selected)
                 config = _configuration(candidate)
@@ -134,11 +160,17 @@ def interactive_menu() -> int:
             else:
                 print("Descargando una nueva copia y preparando los precios…")
             run_dir = run_prepare_prices(config_path, snapshot)
+            _clear_screen()
             _show_result(run_dir)
         except KeyboardInterrupt:
+            pause = True
             print("\nAcción cancelada; vuelves al menú.")
         except EOFError:
+            pause = False
             print("\nSaliendo.")
             return 0
         except (PipelineError, OSError, ValueError, KeyError, TypeError) as exc:
             print(f"Error: {exc}")
+        finally:
+            stop = pause and not _pause()
+    return 0
