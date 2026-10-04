@@ -91,7 +91,7 @@ python -c "import tfm; print(tfm.__version__)"
 
 Consulta `docs/architecture.md` para los contratos y las decisiones pendientes. El [protocolo financiero propuesto](docs/financial_protocol.md) concreta las convenciones temporales y el alcance del primer simulador.
 
-Como próximo incremento de usabilidad, antes del simulador, se añadirá un menú interactivo a la CLI. El alcance y su ampliación están descritos en [el plan de la CLI](docs/cli_plan.md).
+La CLI dispone de un menú interactivo. Su alcance y ampliaciones están descritos en [el plan de la CLI](docs/cli_plan.md).
 
 ## Verificación
 
@@ -176,6 +176,6 @@ source .venv/bin/activate
 python -m tfm
 ```
 
-En una terminal aparece un menú para descargar y preparar, escoger una descarga existente por número, consultar ejecuciones, ver la configuración o salir. Al elegir una tarea de datos puedes indicar otro TOML o pulsar Intro para usar `configs/data.toml`. Se muestra el instrumento y el periodo antes de ejecutar. Escribe `0` en las selecciones para volver o salir; Ctrl+C cancela la acción y Ctrl+D sale.
+En una terminal aparece un menú para descargar y preparar, escoger una descarga existente por número, consultar ejecuciones, ver la configuración, cambiar configuración o salir. Las acciones utilizan directamente `configs/data.toml`; la opción 4 muestra su contenido sin preguntar. La opción 5 permite elegir otro TOML para esta sesión del menú; Intro o 0 cancela ese cambio. Se muestra el instrumento y el periodo antes de ejecutar. Al elegir una descarga, escribe uno de los números mostrados; 0 vuelve al menú. Al terminar se muestran sesiones, periodo, controles de calidad y rutas de resultados. Ctrl+C cancela la acción y Ctrl+D sale.
 
 Los comandos con argumentos siguen disponibles. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.

@@ -10,4 +10,4 @@ La comprobación real del proveedor se realiza manualmente con el comando de des
 
 `test_pipeline.py` añade únicamente dos tests del flujo completo: comando satisfactorio y repetición sin red, y registro de un rechazo de calidad con salida de error. Simula el proveedor, pero ejecuta la persistencia, normalización y registro reales sobre tablas pequeñas.
 
-`test_menu.py` contiene dos pruebas esenciales: selección y delegación al flujo, y apertura del menú únicamente en una terminal interactiva.
+`test_menu.py` comprueba selección y delegación al flujo, apertura del menú únicamente en una terminal interactiva y visualización directa/cambio explícito de configuración.

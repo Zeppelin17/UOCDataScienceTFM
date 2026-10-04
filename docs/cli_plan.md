@@ -26,3 +26,7 @@ Usar inicialmente la biblioteca estándar de Python. Añadir solo pruebas esenci
 Añadir opciones de simulación, estrategias, variables, entrenamiento y evaluación cuando se implementen sus respectivos módulos. Cada acción deberá disponer también de un comando explícito y utilizar el mismo flujo tanto desde el menú como desde la ejecución automatizada.
 
 El menú facilitará seleccionar configuraciones; no introducirá ahora un editor de parámetros ni permitirá saltarse la separación entre desarrollo y evaluación final. Los controles temporales se implementarán en los módulos correspondientes.
+
+## Ajuste de usabilidad implementado
+
+Las acciones usan directamente la configuración activa, inicialmente `configs/data.toml`. La opción 4 la muestra sin preguntas y la opción 5 permite cambiarla explícitamente para la sesión. Una ruta inválida conserva la configuración anterior. La selección de descargas muestra periodo, fecha de descarga y número de sesiones cuando el manifiesto los incluye, con instrucciones sobre los números válidos. El resultado resume sesiones, periodo y controles, junto con las limitaciones pendientes del informe.
