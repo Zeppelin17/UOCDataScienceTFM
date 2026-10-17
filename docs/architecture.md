@@ -98,3 +98,9 @@ Los artefactos de auditoría y las simulaciones nuevas no sobrescriben preparaci
 `sources.ssga` importa y conserva un XLSX elegido explícitamente, valida el formato del emisor y normaliza únicamente las distribuciones SPY de la ventana de desarrollo. `preparation.reconciliation` compara todos los eventos de ambas fuentes en la intersección y separa cobertura de concordancia. No hay capa abstracta de proveedores ni dependencia de un servidor; se añade openpyxl porque la publicación real del emisor es XLSX.
 
 `pipeline.run_audit_prices(..., reference_dir=None)` conserva v1 sin referencia y publica v2 con referencia explícita, manteniendo resultados anteriores. `preparation.audits` acepta ambas versiones, verifica los artefactos y reproduce el contraste v2 antes de permitir adjuntarlo a una simulación. No se certifican cierres o ajustes mediante distribuciones. Una referencia o configuración alterada o discrepancias sin resolver se rechazan. Véase [source_reconciliation.md](source_reconciliation.md).
+
+## Historia mensual principal implementada
+
+El estudio 1.B incorpora `sources.shiller` y `preparation.shiller` con un contrato propio, en lugar de reutilizar cierres ajustados o sesiones SPY. `pipeline.run_prepare_shiller` coordina descarga/importación/repetición sin red y validación temporal. Se añade `load_historical_policy` para la separación 1927–1989 / desde 1990, independiente de `experiment_base.toml`, que permanece como configuración exploratoria anterior.
+
+Los originales completos se aíslan en `data/raw/shiller`; solo se publican meses hasta 1989 y columnas Date/P/D, con roles de historia previa y desarrollo. El lector mensual comprueba integridad y contrato para futuras etapas. La opción 9 y el comando `prepare-shiller` comparten el flujo. No se generaliza aún el simulador diario ni se implementan señales o retornos de promedios mensuales. Contrato, errores y límites en [shiller_monthly.md](shiller_monthly.md).

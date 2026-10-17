@@ -1,5 +1,7 @@
 # Fuente inicial: precios diarios de SPY
 
+> Planteamiento exploratorio anterior. El estudio mensual principal sigue ahora 1927–1989 / desde 1990 y prepara el original de Shiller; véase [shiller_monthly.md](shiller_monthly.md). Las comprobaciones SPY se conservan como evidencia histórica.
+
 ## Decisión y alcance
 
 Proveedor propuesto: Yahoo Finance, mediante yfinance cuando se implemente el adaptador. Instrumento: SPY, ETF que sigue el S&P 500. La guía del TFM propone esta combinación. SPY es un instrumento invertible con gastos y diferencias de seguimiento respecto al índice; sus retornos no deben presentarse como idénticos a los del índice.

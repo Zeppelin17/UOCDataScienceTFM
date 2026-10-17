@@ -46,3 +46,7 @@ Opción 7: elige preparación y ejecuta `audit-prices` con `audit.toml`, sin des
 ## Incremento: distribuciones del emisor
 
 Implementados `import-ssga-dividends --file ... --config configs/reconciliation.toml` y `audit-prices --reference ... --config configs/reconciliation.toml`. La opción 8 permite seleccionar una preparación y una referencia existente o importar otro Excel oficial. La opción 7 conserva el calendario y la opción 6 permite seleccionar explícitamente una auditoría v1/v2. Se muestran cobertura, concordancia y discrepancias sin atribuir aprobación a precios o ajustes. Detalles y resultados reales en [source_reconciliation.md](source_reconciliation.md).
+
+## Incremento principal: historia mensual de Shiller
+
+Implementados `prepare-shiller [--config configs/shiller_monthly.toml] [--file XLS | --snapshot DIRECTORIO]` y la opción 9. Sin origen explícito se descarga; el menú exige elegir D, F o un snapshot por número. Se muestran meses de historia/desarrollo y limitaciones. Las opciones previas SPY conservan numeración y se identifican como exploración anterior. Detalles en [shiller_monthly.md](shiller_monthly.md).

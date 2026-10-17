@@ -19,8 +19,10 @@ from tfm.preparation.prices import load_prepared_prices, prepare_prices
 from tfm.preparation.calendar import CALENDAR_NAME, METHOD_VERSION, audit_calendar
 from tfm.preparation.audits import load_calendar_audit
 from tfm.preparation.quality import other_warnings, pending_checks
-from tfm.validation.policy import load_development_policy
+from tfm.validation.policy import load_development_policy, load_historical_policy
 from tfm.sources.prices import download_prices
+from tfm.sources.shiller import INSTRUMENT, archive_shiller, load_shiller_snapshot, validate_source_url
+from tfm.preparation.shiller import load_shiller_monthly, preparation_window, prepare_shiller
 from tfm.sources.ssga import import_reference, load_reference
 from tfm.preparation.reconciliation import ABSOLUTE_TOLERANCE_USD, RECONCILIATION_VERSION, reconcile_dividends
 
@@ -403,6 +405,90 @@ def run_audit_prices(config_path: str | Path, prepared_dir: str | Path, referenc
             (run_dir / name).unlink(missing_ok=True)
         record["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
         record["error"] = {"type": type(exc).__name__, "message": str(exc)}
+        record["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        _write_record(record_path, record)
+        raise PipelineError(f"{exc}\nRegistro: {record_path}", run_dir) from exc
+    record["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+    _write_record(record_path, record)
+    return run_dir
+
+
+def load_shiller_config(config_path: str | Path) -> dict:
+    path = Path(config_path).resolve()
+    content = path.read_bytes()
+    config = tomllib.loads(content.decode("utf-8"))
+    if set(config) != {"source", "preparation", "validation", "storage"}:
+        raise ValueError("Se esperaba una configuración independiente de Shiller")
+    source = config["source"]
+    conventions = {"provider": "shiller", "instrument": INSTRUMENT, "frequency": "monthly"}
+    if (set(source) != set(conventions) | {"url", "timeout"}
+            or any(source[key] != expected for key, expected in conventions.items())):
+        raise ValueError("Este flujo solo prepara observaciones mensuales de SHILLER_SP_COMPOSITE")
+    validate_source_url(source["url"])
+    timeout = source["timeout"]
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or not 0 < timeout <= 60:
+        raise ValueError("timeout debe ser finito y estar entre 0 y 60 segundos")
+    if set(config["preparation"]) != {"history_start"}:
+        raise ValueError("La preparación mensual solo permite history_start")
+    root = path.parent.parent
+    policy_path = (root / config["validation"]["policy_config"]).resolve()
+    policy_bytes, policy = load_historical_policy(policy_path)
+    history_start = config["preparation"]["history_start"]
+    preparation_window(history_start, policy_bytes)
+    if set(config["storage"]) != {"raw", "processed"}:
+        raise ValueError("Se requieren las rutas raw y processed de Shiller")
+    return {"root": root, "config_bytes": content, "source": source,
+            "history_start": history_start, "policy_path": policy_path, "policy_bytes": policy_bytes,
+            **policy, "raw_root": (root / config["storage"]["raw"]).resolve(),
+            "processed_root": (root / config["storage"]["processed"]).resolve()}
+
+
+def run_prepare_shiller(config_path: str | Path, *, snapshot_dir: str | Path | None = None,
+                        file_path: str | Path | None = None) -> Path:
+    """Descargar/importar o reutilizar un original; preparar solo historia y desarrollo."""
+    config_path = Path(config_path).resolve()
+    root = config_path.parent.parent
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex
+    run_dir = root / "outputs" / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=False)
+    record_path = run_dir / "run.json"
+    record = {"schema_version": 1, "run_id": run_id, "command": "prepare-shiller",
+              "started_at_utc": datetime.now(timezone.utc).isoformat(),
+              "status": "running", "stage": "configuration", "git": _git_state(root),
+              "config_path": str(config_path), "snapshot_dir": None, "prepared_dir": None,
+              "versions": {name: version(name) for name in ("uoc-data-science-tfm", "pandas", "pyarrow", "xlrd")}}
+    _write_record(record_path, record)
+    try:
+        (run_dir / "config.toml").write_bytes(config_path.read_bytes())
+        settings = load_shiller_config(config_path)
+        (run_dir / "config.toml").write_bytes(settings["config_bytes"])
+        (run_dir / "validation_policy.toml").write_bytes(settings["policy_bytes"])
+        record.update({"config_sha256": hashlib.sha256(settings["config_bytes"]).hexdigest(),
+                       "policy_sha256": hashlib.sha256(settings["policy_bytes"]).hexdigest()})
+        if file_path is not None and snapshot_dir is not None:
+            raise ValueError("Selecciona un archivo local o un snapshot, no ambos")
+        record["stage"] = "snapshot_validation" if snapshot_dir is not None else "import" if file_path is not None else "download"
+        _write_record(record_path, record)
+        snapshot = Path(snapshot_dir).resolve() if snapshot_dir is not None else archive_shiller(
+            settings["raw_root"], url=settings["source"]["url"], timeout=settings["source"]["timeout"], file=file_path)
+        record["snapshot_dir"] = str(snapshot)
+        _, source_manifest_bytes = load_shiller_snapshot(snapshot)
+        (run_dir / "source_manifest.json").write_bytes(source_manifest_bytes)
+        record.update({"source_manifest_sha256": hashlib.sha256(source_manifest_bytes).hexdigest(), "stage": "preparation"})
+        _write_record(record_path, record)
+        prepared = prepare_shiller(snapshot, settings["processed_root"], history_start=settings["history_start"],
+                                   policy_bytes=settings["policy_bytes"])
+        _, manifest_bytes, report_bytes = load_shiller_monthly(prepared, settings["policy_bytes"])
+        (run_dir / "prepared_manifest.json").write_bytes(manifest_bytes)
+        (run_dir / "quality_report.json").write_bytes(report_bytes)
+        record.update({"status": "completed", "stage": "completed", "prepared_dir": str(prepared),
+                       "prepared_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+                       "quality_report_sha256": hashlib.sha256(report_bytes).hexdigest()})
+    except (Exception, KeyboardInterrupt) as exc:
+        record["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
+        record["error"] = {"type": type(exc).__name__, "message": str(exc)}
+        if getattr(exc, "report_path", None) is not None:
+            record["quality_report_path"] = str(exc.report_path)
         record["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
         _write_record(record_path, record)
         raise PipelineError(f"{exc}\nRegistro: {record_path}", run_dir) from exc

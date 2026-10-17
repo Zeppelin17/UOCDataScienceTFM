@@ -11,6 +11,7 @@ from tfm.pipeline import (
     PipelineError, load_audit_config, load_buy_and_hold_config,
     run_audit_prices, run_buy_and_hold, run_prepare_prices,
     import_ssga_reference, load_reconciliation_config,
+    load_shiller_config, run_prepare_shiller,
 )
 from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
 
@@ -117,6 +118,51 @@ def _show_result(run_dir: Path) -> None:
         print(f"Pendiente: {warning}")
     print(f"Precios preparados: {record['prepared_dir']}")
     print(f"Registro de ejecución: {run_dir / 'run.json'}")
+
+
+def show_shiller_result(run_dir: Path) -> None:
+    report = json.loads((run_dir / "quality_report.json").read_bytes())
+    record = json.loads((run_dir / "run.json").read_bytes())
+    interval = report["interval"]
+    print("Preparación de la historia mensual de Shiller terminada.")
+    print(f"Periodo preparado: {report['first_period']} → {report['last_period']} | Meses: {report['rows']}")
+    print(f"Historia previa: {interval['history_start']} → 1926-12 | {report['history_rows']} meses")
+    print(f"Desarrollo: {interval['development_start']} → {interval['development_end']} | {report['development_rows']} meses")
+    print("Evaluación desde 1990: importes excluidos de la tabla preparada.")
+    print("Controles de estructura y cobertura mensual: superados.")
+    for warning in report["warnings"]:
+        print(f"Nota: {warning}")
+    print(f"Tabla mensual: {record['prepared_dir']}/monthly.parquet")
+    print(f"Original archivado: {record['snapshot_dir']}")
+    print(f"Registro: {run_dir / 'run.json'}")
+
+
+def _select_shiller_input(settings: dict) -> dict | None:
+    items = []
+    for path in sorted(settings["raw_root"].glob("shiller/SHILLER_SP_COMPOSITE/*/manifest.json")):
+        try:
+            manifest = json.loads(path.read_bytes())
+            if (manifest["schema_version"] != 1 or manifest["provider"] != "shiller"
+                    or manifest["instrument"] != "SHILLER_SP_COMPOSITE" or manifest["status"] != "archived"):
+                continue
+            items.append(path.parent)
+            print(f"{len(items)}. Original {path.parent.name} | archivado: {manifest['archived_at_utc']}")
+        except (OSError, ValueError, KeyError, TypeError):
+            print(f"No se pudo leer el original: {path.parent}")
+    print("D. Descargar una nueva copia del Excel oficial")
+    print("F. Importar un Excel XLS original que ya tienes en el ordenador")
+    while True:
+        answer = input("Número de original, D para descargar, F para importar o 0 para volver: ").strip()
+        if answer == "0":
+            return None
+        if answer.lower() == "d":
+            return {}
+        if answer.lower() == "f":
+            filename = input("Ruta del XLS original (Intro o 0 para volver): ").strip()
+            return None if filename in {"", "0"} else {"file_path": Path(filename).expanduser()}
+        if answer.isdecimal() and 1 <= int(answer) <= len(items):
+            return {"snapshot_dir": items[int(answer) - 1]}
+        print("Selecciona un original de la lista, D, F o 0; no se elige automáticamente.")
 
 
 def show_simulation_result(run_dir: Path) -> None:
@@ -272,26 +318,40 @@ def interactive_menu() -> int:
         pause = False
         try:
             _clear_screen()
-            print(f"Configuración en uso: {config_path}")
+            print(f"Configuración en uso: {config_path} (exploración anterior de SPY)")
+            print("Estudio principal: historia mensual; desarrollo 1927–1989, evaluación desde 1990.")
             print("¿Qué quieres hacer?\n"
-                  "1. Descargar y preparar precios\n"
-                  "2. Preparar una descarga existente\n"
+                  "1. Descargar y preparar precios de SPY (exploración anterior)\n"
+                  "2. Preparar una descarga de SPY existente (exploración anterior)\n"
                   "3. Consultar ejecuciones anteriores\n"
-                  "4. Ver la configuración actual\n"
-                  "5. Cambiar configuración\n"
-                  "6. Simular comprar y mantener\n"
-                  "7. Auditar calendario de precios preparados\n"
-                  "8. Contrastar dividendos con el Excel oficial de State Street\n"
+                  "4. Ver la configuración de SPY\n"
+                  "5. Cambiar configuración de SPY\n"
+                  "6. Simular comprar y mantener SPY (exploración anterior)\n"
+                  "7. Auditar calendario de SPY (exploración anterior)\n"
+                  "8. Contrastar dividendos de SPY (exploración anterior)\n"
+                  "9. Preparar historia mensual de Shiller (estudio principal)\n"
                   "0. Salir")
-            option = input("Opción del menú (0–8): ").strip()
+            option = input("Opción del menú (0–9): ").strip()
             if option == "0":
                 return 0
-            if option not in {"1", "2", "3", "4", "5", "6", "7", "8"}:
+            if option not in {"1", "2", "3", "4", "5", "6", "7", "8", "9"}:
                 pause = True
-                print("Escribe un número del 0 al 8.")
+                print("Escribe un número del 0 al 9.")
                 continue
             pause = True
             _clear_screen()
+            if option == "9":
+                monthly_path = config_path.resolve().parent / "shiller_monthly.toml"
+                settings = load_shiller_config(monthly_path)
+                print(f"Configuración del estudio mensual: {monthly_path}")
+                print(f"Historia desde {settings['history_start']} | Desarrollo 1927–1989 | Evaluación desde 1990 excluida")
+                print("P es un promedio mensual y D un importe anualizado interpolado; todavía no se simulan estrategias.")
+                origin = _select_shiller_input(settings)
+                if origin is not None:
+                    run_dir = run_prepare_shiller(monthly_path, **origin)
+                    _clear_screen()
+                    show_shiller_result(run_dir)
+                continue
             if option == "3":
                 _show_runs(config_path)
                 continue

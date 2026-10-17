@@ -4,7 +4,9 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. También está implementado el primer simulador largo/efectivo y el benchmark de comprar y mantener. La auditoría de calendario y el contraste de distribuciones con State Street están disponibles como pasos independientes. El contraste real encontró tres discrepancias de importe pendientes de investigar; precios y ajustes siguen pendientes. Todavía no genera las anomalías ni entrena modelos.
+El estudio principal sigue la guía 1.B: desarrollo mensual en 1927–1989 y evaluación desde 1990 hasta un corte de 2026 pendiente de fijar. Ya se puede descargar o importar el Excel de Shiller y preparar únicamente 1926–1989, distinguiendo historia previa y desarrollo. No se calculan todavía las anomalías ni se entrenan modelos.
+
+La exploración previa con SPY conserva descarga, preparación, simulador diario, auditoría de calendario y contraste de distribuciones. Sus resultados y configuraciones se mantienen como planteamiento anterior, separado de la historia mensual. Véase [la fuente y el alcance del nuevo flujo](docs/shiller_monthly.md).
 
 ## Arquitectura
 
@@ -60,7 +62,7 @@ Se utiliza pandas para el procesamiento y Parquet para persistir tablas. Las nue
 - Registrar configuraciones, versiones, semillas y particiones por ejecución.
 - No sobrescribir resultados de experimentos anteriores.
 
-El bloque de desarrollo termina en 2020. El periodo desde 2021 hasta el corte disponible de 2026 se reserva para la evaluación final. No debe utilizarse para seleccionar variables, modelos o filtros. La configuración inicial deja la fecha final pendiente de concretar.
+El bloque principal de desarrollo es 1927–1989; 1926 se conserva inicialmente como historia previa. Desde 1990 comienza la evaluación, cuyo corte final permanece pendiente. La configuración histórica impide preparar importes desde 1990. Ya se consultó parte de 1993–2020 bajo el planteamiento anterior: no se presenta todo el nuevo periodo de evaluación como nunca examinado. Los resultados de evaluación no se utilizarán para elegir variables, modelos o filtros.
 
 ## Entorno local
 
@@ -72,7 +74,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet, exchange_calendars aporta las reglas históricas de sesiones, openpyxl lee el Excel oficial de distribuciones y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
+La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet, exchange_calendars aporta las reglas históricas de sesiones, openpyxl lee el Excel oficial de distribuciones, xlrd lee el XLS original de Shiller y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
 
 ```bash
 python -c "import tfm; print(tfm.__version__)"
@@ -103,7 +105,7 @@ El framework de tests es pytest. Se ejecuta con `python -m pytest -q`. Se mantie
 
 `requirements-lock.txt` registra las versiones verificadas con Python 3.14 en macOS. Para reproducir ese entorno, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. En otra versión de Python o plataforma, resuelve las dependencias de `pyproject.toml` y valida antes de renovar este archivo.
 
-## Fuente de precios propuesta
+## Fuente de precios de SPY (exploración anterior)
 
 Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. El adaptador de descarga está implementado; la normalización y el informe de calidad también están disponibles.
 
@@ -223,3 +225,11 @@ Consulta [el alcance, formato y limitaciones de la auditoría](docs/calendar_aud
 ## Contraste con el emisor
 
 La opción 8 del menú permite importar el Excel oficial de State Street y contrastar todas las distribuciones del desarrollo. La opción 7 sigue auditando solo calendario. Véase [source_reconciliation.md](docs/source_reconciliation.md) para los comandos, la política de comparación, los resultados reales y las limitaciones pendientes. No se modifican los originales ni se certifican cierres o ajustes a partir de dividendos.
+
+## Preparar la historia mensual del estudio principal
+
+```bash
+python -m tfm prepare-shiller
+```
+
+La opción 9 del menú ofrece descarga, importación de un XLS local y reutilización de un original archivado. El resumen debe mostrar 768 meses: 12 de historia previa y 756 de desarrollo. Se conserva P como precio medio mensual y D como dividendo anualizado, sin tratarlos como cierres de ejecución o pagos mensuales. Véanse [los comandos, el contrato y las limitaciones](docs/shiller_monthly.md). La memoria y el protocolo financiero deben adaptarse al nuevo diseño antes de simularlo.

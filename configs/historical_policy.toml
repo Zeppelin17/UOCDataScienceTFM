@@ -1,0 +1,7 @@
+# Estudio mensual 1.B siguiendo los periodos recomendados en la guía.
+[validation]
+development_start = "1927-01-01"
+development_end = "1989-12-31"
+final_test_start = "1990-01-01"
+# Se fijará antes de habilitar la evaluación; este flujo solo prepara desarrollo.
+final_test_end = "pending"
