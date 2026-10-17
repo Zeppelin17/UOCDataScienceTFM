@@ -10,6 +10,7 @@ import tomllib
 from tfm.pipeline import (
     PipelineError, load_audit_config, load_buy_and_hold_config,
     run_audit_prices, run_buy_and_hold, run_prepare_prices,
+    import_ssga_reference, load_reconciliation_config,
 )
 from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
 
@@ -88,7 +89,7 @@ def _show_runs(config_path: Path) -> None:
             print(f"{record['run_id']} | {record.get('command', 'prepare-prices')} | {record['status']} | {record['stage']}")
             print(f"  Registro: {path}")
             if record.get("audit_report_path"):
-                print(f"  Resultado de calendario: {record['audit_result']}")
+                print(f"  Resultado de auditoría: {record['audit_result']}")
                 print(f"  Auditoría: {record['audit_report_path']}")
             if record.get("equity_path"):
                 print(f"  Resultado: {record['equity_path']}")
@@ -141,7 +142,8 @@ def show_simulation_result(run_dir: Path) -> None:
 
 def show_audit_result(run_dir: Path) -> bool:
     report = json.loads((run_dir / "audit_report.json").read_text(encoding="utf-8"))
-    print("Auditoría ejecutada. Alcance: calendario de sesiones; no contraste de precios.")
+    extended = report["schema_version"] == 2
+    print("Auditoría ejecutada. Alcance: " + ("calendario y distribuciones monetarias." if extended else "calendario de sesiones; no contraste de precios."))
     interval = report["interval"]
     print(f"Intervalo completo solicitado: {interval['start']} → {interval['end_exclusive']} (fin exclusivo)")
     for message in quality_messages(report["checks"]):
@@ -157,7 +159,49 @@ def show_audit_result(run_dir: Path) -> bool:
     print(f"Informe: {run_dir / 'audit_report.json'}")
     print(f"Sesiones esperadas: {run_dir / 'calendar_sessions.parquet'}")
     print(f"Registro: {run_dir / 'run.json'}")
-    return calendar["status"] == "passed"
+    if extended:
+        print("Precios de mercado y ajustes de rentabilidad total permanecen pendientes.")
+        print(f"Comparaciones por evento: {run_dir / 'distribution_comparison.parquet'}")
+        import pandas as pd
+        details = pd.read_parquet(run_dir / "distribution_comparison.parquet")
+        differences = details.loc[details["result"].ne("within_tolerance")]
+        for row in differences.head(10).itertuples():
+            print(f"  {row.observed_at.date()} | Yahoo: {row.yahoo_distribution:.6f} USD | SSGA: {row.ssga_distribution:.6f} USD | {row.result}")
+        if len(differences) > 10:
+            print("La lista completa está en la tabla de comparaciones.")
+        print("Una discrepancia no determina cuál de las fuentes es correcta; no se han reparado los datos.")
+    return not any(check["status"] == "failed" for check in report["checks"].values())
+
+
+def _select_reference(settings: dict, config_path: Path) -> Path | None:
+    items = []
+    for path in sorted(settings["raw_root"].glob("ssga/SPY/*/manifest.json")):
+        try:
+            manifest = json.loads(path.read_bytes())
+            coverage = manifest["coverage"]
+            if manifest["status"] != "completed":
+                continue
+            items.append(path.parent)
+            print(f"{len(items)}. SSGA | {coverage['start']} → {coverage['end_exclusive']} (fin exclusivo) | {manifest['rows']} eventos | {path.parent.name}")
+        except (OSError, ValueError, KeyError, TypeError):
+            print(f"No se pudo leer la referencia: {path.parent}")
+    print("I. Importar otro Excel oficial de distribuciones de State Street")
+    while True:
+        answer = input("Número de referencia, I para importar o 0 para volver: ").strip()
+        if answer == "0":
+            return None
+        if answer.lower() == "i":
+            print("Descarga 'SPDR Historical Distributions XLSX' desde:")
+            print("https://www.ssga.com/us/en/intermediary/resources/documents/etf-dividend-distributions")
+            filename = input("Ruta del Excel (Intro o 0 para volver): ").strip()
+            if filename in {"", "0"}:
+                return None
+            directory = import_ssga_reference(config_path, Path(filename).expanduser())
+            print(f"Referencia importada: {directory}")
+            return directory
+        if answer.isdecimal() and 1 <= int(answer) <= len(items):
+            return items[int(answer) - 1]
+        print("Selecciona una referencia de la lista, I o 0.")
 
 
 def _select_prepared_prices(settings: dict) -> Path | None:
@@ -205,7 +249,7 @@ def _select_audit(prepared: Path, runs_root: Path) -> Path | None:
                     or report["binding"]["prepared_manifest_sha256"] != manifest_hash):
                 continue
             items.append(path.parent)
-            print(f"{len(items)}. Auditoría {path.parent.name} | calendario: {record['audit_result']}")
+            print(f"{len(items)}. Auditoría {path.parent.name} | calendario: {report['checks']['calendar']['status']} | dividendos: {report['checks']['dividends']['status']}")
         except (OSError, ValueError, KeyError, TypeError):
             continue
     if not items:
@@ -237,18 +281,32 @@ def interactive_menu() -> int:
                   "5. Cambiar configuración\n"
                   "6. Simular comprar y mantener\n"
                   "7. Auditar calendario de precios preparados\n"
+                  "8. Contrastar dividendos con el Excel oficial de State Street\n"
                   "0. Salir")
-            option = input("Opción del menú (0–7): ").strip()
+            option = input("Opción del menú (0–8): ").strip()
             if option == "0":
                 return 0
-            if option not in {"1", "2", "3", "4", "5", "6", "7"}:
+            if option not in {"1", "2", "3", "4", "5", "6", "7", "8"}:
                 pause = True
-                print("Escribe un número del 0 al 7.")
+                print("Escribe un número del 0 al 8.")
                 continue
             pause = True
             _clear_screen()
             if option == "3":
                 _show_runs(config_path)
+                continue
+            if option == "8":
+                audit_path = config_path.resolve().parent / "reconciliation.toml"
+                settings = load_reconciliation_config(audit_path)
+                print(f"Configuración de contraste: {audit_path}")
+                print(f"Desarrollo hasta {settings['development_end']}; sin contraste de cierres ni ajustes.")
+                prepared = _select_prepared_prices(settings)
+                if prepared is not None:
+                    reference = _select_reference(settings, audit_path)
+                    if reference is not None:
+                        run_dir = run_audit_prices(audit_path, prepared, reference)
+                        _clear_screen()
+                        show_audit_result(run_dir)
                 continue
             if option == "7":
                 audit_path = config_path.resolve().parent / "audit.toml"

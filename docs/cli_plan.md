@@ -42,3 +42,7 @@ El resultado muestra rentabilidad bruta/neta, capital, coste, rotación y caída
 ## Auditoría de calendario implementada
 
 Opción 7: elige preparación y ejecuta `audit-prices` con `audit.toml`, sin descargas. Muestra intervalo completo, calendario, sesiones esperadas/observadas, faltas y fechas inesperadas, además de los otros campos pendientes. La opción 6 permite elegir explícitamente una auditoría compatible tras seleccionar precios, o 0 para simular sin ella con advertencia. No se utiliza automáticamente la más reciente. El historial distingue estado de ejecución y resultado de auditoría. Los comandos admiten `audit-prices --prepared RUTA` y `simulate-buy-and-hold --prepared RUTA --audit RUTA_AUDITORIA`, con sus configuraciones por defecto habituales.
+
+## Incremento: distribuciones del emisor
+
+Implementados `import-ssga-dividends --file ... --config configs/reconciliation.toml` y `audit-prices --reference ... --config configs/reconciliation.toml`. La opción 8 permite seleccionar una preparación y una referencia existente o importar otro Excel oficial. La opción 7 conserva el calendario y la opción 6 permite seleccionar explícitamente una auditoría v1/v2. Se muestran cobertura, concordancia y discrepancias sin atribuir aprobación a precios o ajustes. Detalles y resultados reales en [source_reconciliation.md](source_reconciliation.md).

@@ -4,7 +4,7 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. También está implementado el primer simulador largo/efectivo y el benchmark de comprar y mantener. La auditoría de calendario está disponible como paso independiente. Todavía no genera las anomalías ni entrena modelos.
+El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. También está implementado el primer simulador largo/efectivo y el benchmark de comprar y mantener. La auditoría de calendario y el contraste de distribuciones con State Street están disponibles como pasos independientes. El contraste real encontró tres discrepancias de importe pendientes de investigar; precios y ajustes siguen pendientes. Todavía no genera las anomalías ni entrena modelos.
 
 ## Arquitectura
 
@@ -72,7 +72,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet, exchange_calendars aporta las reglas históricas de sesiones y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
+La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet, exchange_calendars aporta las reglas históricas de sesiones, openpyxl lee el Excel oficial de distribuciones y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
 
 ```bash
 python -c "import tfm; print(tfm.__version__)"
@@ -219,3 +219,7 @@ Se contrasta **todo el intervalo solicitado del manifiesto**, con final exclusiv
 Para usar el resultado en una simulación, selecciona la auditoría por número en la opción 6 o añade `--audit RUTA_DE_EJECUCION_DE_AUDITORIA` al comando `simulate-buy-and-hold`. No se elige automáticamente la última auditoría. Se comprueban huellas, cobertura, configuración/política y versión; se rechazan informes de otra preparación, parciales o con discrepancias. Se copia el informe empleado para conservar su procedencia. Sin auditoría sigue disponible el benchmark exploratorio, con calendario pendiente.
 
 Consulta [el alcance, formato y limitaciones de la auditoría](docs/calendar_audit.md). Los informes y resultados anteriores permanecen intactos. Si aparecen discrepancias, se conserva la lista y la ejecución de auditoría puede quedar completada técnicamente con un resultado de calendario fallido; no se presenta como superada.
+
+## Contraste con el emisor
+
+La opción 8 del menú permite importar el Excel oficial de State Street y contrastar todas las distribuciones del desarrollo. La opción 7 sigue auditando solo calendario. Véase [source_reconciliation.md](docs/source_reconciliation.md) para los comandos, la política de comparación, los resultados reales y las limitaciones pendientes. No se modifican los originales ni se certifican cierres o ajustes a partir de dividendos.

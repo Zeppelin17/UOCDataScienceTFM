@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-from tfm.pipeline import PipelineError, run_audit_prices, run_buy_and_hold, run_prepare_prices
+from tfm.pipeline import PipelineError, import_ssga_reference, run_audit_prices, run_buy_and_hold, run_prepare_prices
 from tfm.menu import interactive_menu, show_audit_result, show_simulation_result
 
 
@@ -19,9 +19,13 @@ def main(argv: list[str] | None = None) -> int:
     simulate.add_argument("--config", type=Path, default=Path("configs/buy_and_hold.toml"))
     simulate.add_argument("--prepared", type=Path, required=True, help="Directorio de precios preparados")
     simulate.add_argument("--audit", type=Path, help="Directorio de auditoría seleccionado explícitamente")
-    audit = commands.add_parser("audit-prices", help="Auditar sesiones de precios preparados sin descargar datos")
+    audit = commands.add_parser("audit-prices", help="Auditar calendario y, opcionalmente, distribuciones con una referencia explícita")
     audit.add_argument("--config", type=Path, default=Path("configs/audit.toml"))
     audit.add_argument("--prepared", type=Path, required=True)
+    audit.add_argument("--reference", type=Path, help="Snapshot SSGA importado; requiere configs/reconciliation.toml")
+    reference = commands.add_parser("import-ssga-dividends", help="Archivar y preparar un Excel histórico oficial de distribuciones")
+    reference.add_argument("--config", type=Path, default=Path("configs/reconciliation.toml"))
+    reference.add_argument("--file", type=Path, required=True, help="Excel oficial descargado desde State Street")
     arguments = sys.argv[1:] if argv is None else argv
     if not arguments:
         if sys.stdin.isatty():
@@ -30,15 +34,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args = parser.parse_args(arguments)
     try:
+        if args.command == "import-ssga-dividends":
+            directory = import_ssga_reference(args.config, args.file)
+            print(f"Referencia de distribuciones importada: {directory}")
+            print("Original conservado; solo se han preparado importes de la ventana de desarrollo.")
+            return 0
         if args.command == "audit-prices":
-            run_dir = run_audit_prices(args.config, args.prepared)
+            run_dir = run_audit_prices(args.config, args.prepared, args.reference)
             return 0 if show_audit_result(run_dir) else 1
         if args.command == "simulate-buy-and-hold":
             run_dir = run_buy_and_hold(args.config, args.prepared, args.audit)
             show_simulation_result(run_dir)
             return 0
         run_dir = run_prepare_prices(args.config, args.snapshot)
-    except (PipelineError, OSError) as exc:
+    except (PipelineError, OSError, ValueError, KeyError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))

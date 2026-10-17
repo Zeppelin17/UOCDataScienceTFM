@@ -21,6 +21,8 @@ from tfm.preparation.audits import load_calendar_audit
 from tfm.preparation.quality import other_warnings, pending_checks
 from tfm.validation.policy import load_development_policy
 from tfm.sources.prices import download_prices
+from tfm.sources.ssga import import_reference, load_reference
+from tfm.preparation.reconciliation import ABSOLUTE_TOLERANCE_USD, RECONCILIATION_VERSION, reconcile_dividends
 
 
 class PipelineError(RuntimeError):
@@ -218,7 +220,7 @@ def run_buy_and_hold(config_path: str | Path, prepared_dir: str | Path, audit_di
             record["stage"] = "audit_validation"
             record["audit_dir"] = str(Path(audit_dir).resolve())
             _write_record(record_path, record)
-            audit, content = load_calendar_audit(audit_dir, manifest_bytes, settings["policy_bytes"], simulation["start"], simulation["end"])
+            audit, content = load_calendar_audit(audit_dir, manifest_bytes, settings["policy_bytes"], simulation["start"], simulation["end"], prices=prices)
             checks = audit["checks"]
             (run_dir / "audit_report.json").write_bytes(content)
             record["audit_report_sha256"] = hashlib.sha256(content).hexdigest()
@@ -260,6 +262,29 @@ def run_buy_and_hold(config_path: str | Path, prepared_dir: str | Path, audit_di
     return run_dir
 
 
+def load_reconciliation_config(config_path: str | Path) -> dict:
+    settings = load_audit_config(config_path)
+    config = tomllib.loads(settings["config_bytes"].decode())
+    reference = config["reference"]
+    if set(reference) != {"provider", "start", "end"} or reference["provider"] != "ssga_dividends":
+        raise ValueError("Solo se admite el listado histórico SSGA documentado")
+    start, end = date.fromisoformat(reference["start"]), date.fromisoformat(reference["end"])
+    if start < date(1993, 1, 29) or start >= end or end > date.fromisoformat(settings["final_test_start"]):
+        raise ValueError("La ventana de referencia es inválida o invade el periodo reservado")
+    if config["reconciliation"] != {"absolute_tolerance_usd": ABSOLUTE_TOLERANCE_USD}:
+        raise ValueError("La tolerancia no coincide con el protocolo versionado; no se ajusta tras observar discrepancias")
+    settings.update({"reference": reference, "tolerance": ABSOLUTE_TOLERANCE_USD,
+                     "raw_root": (Path(config_path).resolve().parent.parent / config["storage"]["raw"]).resolve()})
+    return settings
+
+
+def import_ssga_reference(config_path: str | Path, file: str | Path) -> Path:
+    settings = load_reconciliation_config(config_path)
+    ref = settings["reference"]
+    return import_reference(file, settings["raw_root"], ref["start"], ref["end"],
+                            settings["config_bytes"], settings["policy_bytes"])
+
+
 def load_audit_config(config_path: str | Path) -> dict:
     path = Path(config_path).resolve()
     content = path.read_bytes()
@@ -277,7 +302,7 @@ def load_audit_config(config_path: str | Path) -> dict:
     }
 
 
-def run_audit_prices(config_path: str | Path, prepared_dir: str | Path) -> Path:
+def run_audit_prices(config_path: str | Path, prepared_dir: str | Path, reference_dir: str | Path | None = None) -> Path:
     """Auditar todo el intervalo del manifiesto sin alterar la preparación.
 
     Un resultado failed de calendario se registra en una ejecución completed:
@@ -299,7 +324,7 @@ def run_audit_prices(config_path: str | Path, prepared_dir: str | Path) -> Path:
     _write_record(record_path, record)
     try:
         (run_dir / "config.toml").write_bytes(config_path.read_bytes())
-        settings = load_audit_config(config_path)
+        settings = load_audit_config(config_path) if reference_dir is None else load_reconciliation_config(config_path)
         (run_dir / "config.toml").write_bytes(settings["config_bytes"])
         (run_dir / "validation_policy.toml").write_bytes(settings["policy_bytes"])
         config_hash = hashlib.sha256(settings["config_bytes"]).hexdigest()
@@ -329,6 +354,37 @@ def run_audit_prices(config_path: str | Path, prepared_dir: str | Path) -> Path:
             },
             "checks": checks,
         }
+        artifact_names = ["audit_report.json", "calendar_sessions.parquet"]
+        audit_result = calendar["status"]
+        if reference_dir is not None:
+            record["stage"] = "reference_validation"
+            record["reference_dir"] = str(Path(reference_dir).resolve())
+            _write_record(record_path, record)
+            reference, reference_bytes = load_reference(reference_dir, settings["policy_bytes"])
+            reference_manifest = json.loads(reference_bytes)
+            reference_coverage = reference_manifest["coverage"]
+            if ({"start": reference_coverage["start"], "end": reference_coverage["end_exclusive"]}
+                    != {key: settings["reference"][key] for key in ("start", "end")}):
+                raise ValueError("La ventana de la referencia no coincide con la configuración seleccionada")
+            check, details = reconcile_dividends(prices, reference, reference_coverage,
+                                                parameters["start"], parameters["end"], tolerance=settings["tolerance"])
+            checks["dividends"] = check
+            report.update({"schema_version": 2, "scope": "calendar_and_distributions",
+                           "reconciliation_version": RECONCILIATION_VERSION})
+            report["reference"] = {"directory": str(Path(reference_dir).resolve()),
+                                   "manifest_sha256": hashlib.sha256(reference_bytes).hexdigest(),
+                                   "original_sha256": reference_manifest["artifacts_sha256"]["original.xlsx"],
+                                   "normalized_sha256": reference_manifest["artifacts_sha256"]["dividends.parquet"]}
+            (run_dir / "reference_manifest.json").write_bytes(reference_bytes)
+            # Leer los bytes verificados por load_reference; no copiar una segunda lectura sin cotejarla.
+            normalized = (Path(reference_dir) / "dividends.parquet").read_bytes()
+            if hashlib.sha256(normalized).hexdigest() != report["reference"]["normalized_sha256"]:
+                raise ValueError("La referencia cambió durante la auditoría")
+            (run_dir / "reference_dividends.parquet").write_bytes(normalized)
+            details.to_parquet(run_dir / "distribution_comparison.parquet", index=False)
+            artifact_names += ["reference_manifest.json", "reference_dividends.parquet", "distribution_comparison.parquet"]
+            # Precios y ajustes siguen pendientes, incluso con dividendos concordantes.
+            audit_result = "failed" if any(c["status"] == "failed" for c in checks.values()) else "partial"
         record["stage"] = "publication"
         _write_record(record_path, record)
         temporary = run_dir / "calendar_sessions.tmp.parquet"
@@ -336,13 +392,14 @@ def run_audit_prices(config_path: str | Path, prepared_dir: str | Path) -> Path:
         temporary.replace(run_dir / "calendar_sessions.parquet")
         _write_record(run_dir / "audit_report.json", report)
         record.update({
-            "status": "completed", "stage": "completed", "audit_result": calendar["status"],
+            "status": "completed", "stage": "completed", "audit_result": audit_result,
             "audit_report_path": str(run_dir / "audit_report.json"),
             "artifacts_sha256": {name: hashlib.sha256((run_dir / name).read_bytes()).hexdigest()
-                                  for name in ("audit_report.json", "calendar_sessions.parquet")},
+                                  for name in artifact_names},
         })
     except (Exception, KeyboardInterrupt) as exc:
-        for name in ("audit_report.json", "audit_report.tmp", "calendar_sessions.parquet", "calendar_sessions.tmp.parquet"):
+        for name in ("audit_report.json", "audit_report.tmp", "calendar_sessions.parquet", "calendar_sessions.tmp.parquet",
+                     "reference_manifest.json", "reference_dividends.parquet", "distribution_comparison.parquet"):
             (run_dir / name).unlink(missing_ok=True)
         record["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
         record["error"] = {"type": type(exc).__name__, "message": str(exc)}

@@ -48,7 +48,7 @@ La simulación copia el informe seleccionado y registra su huella. Sin auditorí
 
 ## Estados y compatibilidad
 
-Las comprobaciones son independientes: `calendar`, `prices`, `dividends` y `adjustments`. Este incremento solo puede acreditar calendario; las demás quedan `not_evaluated`. No existe todavía adaptador ni contraste numérico de segunda fuente. Una comprobación posterior deberá especificar valores comparados, cobertura y tolerancias; comprobar cierres o dividendos no certificará automáticamente los ajustes de rentabilidad total.
+Las comprobaciones son independientes: `calendar`, `prices`, `dividends` y `adjustments`. Este incremento solo puede acreditar calendario; las demás quedan `not_evaluated`. Este era el alcance de la versión 1. La versión 2 añade distribuciones de State Street, conservando v1; véase [source_reconciliation.md](source_reconciliation.md). Cada comprobación especifica valores comparados, cobertura y tolerancias; comprobar cierres o dividendos no certificará automáticamente los ajustes de rentabilidad total.
 
 Las nuevas preparaciones guardan estos estados en `quality_report.json`. Las anteriores siguen siendo compatibles: se interpretan como no evaluadas hasta adjuntar una auditoría. La nota genérica antigua se sustituye en la presentación por los estados separados, sin reescribir archivos históricos. Los avisos de supuestos financieros se mantienen aparte y no se duplican con los de calidad.
 

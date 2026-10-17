@@ -79,3 +79,7 @@ El contraste numérico independiente no se ha completado: la fuente queda propue
 ## Actualización: control de calendario
 
 La auditoría de calendario está implementada en un flujo separado, versionado y sin modificación de archivos anteriores. Los informes originales que dicen calendario pendiente siguen reflejando su estado histórico. La presentación nueva muestra estados independientes y solo acredita calendario cuando se adjunta una auditoría válida. El contraste con una fuente numérica distinta de Yahoo continúa pendiente; no se ha sustituido por la coincidencia con XNYS.
+
+## Actualización: contraste de distribuciones
+
+Está implementado el adaptador del Excel histórico oficial de State Street y el contraste de todos los eventos de la ventana de desarrollo. El primer contraste real encontró 110 coincidencias dentro de tolerancia y tres diferencias de importe entre 113 eventos. El objetivo global permanece abierto: falta resolver las diferencias y contrastar cierres de mercado y ajustes con referencias comparables. Los resultados, el protocolo fijado previamente y los comandos se documentan en [source_reconciliation.md](source_reconciliation.md). Las notas previas describen el estado histórico de aquellos incrementos.
