@@ -23,10 +23,17 @@ Usar inicialmente la biblioteca estándar de Python. Añadir solo pruebas esenci
 
 ## Ampliaciones posteriores
 
-Añadir opciones de simulación, estrategias, variables, entrenamiento y evaluación cuando se implementen sus respectivos módulos. Cada acción deberá disponer también de un comando explícito y utilizar el mismo flujo tanto desde el menú como desde la ejecución automatizada.
+Añadir opciones de anomalías, variables, entrenamiento y evaluación cuando se implementen sus respectivos módulos. Cada acción deberá disponer también de un comando explícito y utilizar el mismo flujo tanto desde el menú como desde la ejecución automatizada.
 
 El menú facilitará seleccionar configuraciones; no introducirá ahora un editor de parámetros ni permitirá saltarse la separación entre desarrollo y evaluación final. Los controles temporales se implementarán en los módulos correspondientes.
 
 ## Ajuste de usabilidad implementado
 
 Las acciones usan directamente la configuración activa, inicialmente `configs/data.toml`. La opción 4 la muestra sin preguntas y la opción 5 permite cambiarla explícitamente para la sesión. Una ruta inválida conserva la configuración anterior. La selección de descargas muestra periodo, fecha de descarga y número de sesiones cuando el manifiesto los incluye, con instrucciones sobre los números válidos. El resultado resume sesiones, periodo y controles, junto con las limitaciones pendientes del informe.
+
+
+## Simulación implementada
+
+La opción 6 ejecuta comprar y mantener desde una preparación seleccionada por número, usando `buy_and_hold.toml` situado junto al TOML de datos activo. La configuración de simulación es independiente de la de descarga: muestra su ruta, fechas inclusivas y coste antes de listar las preparaciones. No se realiza una descarga. La verificación completa de integridad y del periodo de desarrollo se hace en el coordinador incluso si se utiliza el comando explícito. Las preparaciones incompatibles por cobertura o periodo se omiten del selector.
+
+El resultado muestra rentabilidad bruta/neta, capital, coste, rotación y caída máxima, además de supuestos y rutas. El historial distingue los comandos y muestra las salidas financieras. El comando reproducible es `python -m tfm simulate-buy-and-hold --config configs/buy_and_hold.toml --prepared RUTA`.

@@ -1,0 +1,18 @@
+# Benchmark de desarrollo. Fechas INCLUSIVAS, distintas del end de Yahoo.
+[simulation]
+instrument = "SPY"
+start = "1993-01-29"
+end = "2020-12-31"
+cost_bps = 5.0
+# Supuestos explícitos: solo estas convenciones están implementadas.
+execution = "next_session_close"
+return_basis = "adjusted_close"
+cash_rate = 0.0
+liquidate_at_end = false
+
+[validation]
+# Relativa a la raíz deducida del directorio configs/, como el resto del proyecto.
+policy_config = "configs/experiment_base.toml"
+
+[storage]
+processed = "data/processed"

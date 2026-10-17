@@ -4,7 +4,7 @@
 
 Cada fuente se adapta a un formato común en `preparation`. Las variables se calculan exclusivamente con información disponible. `signals` genera propuestas; `models` añade su evaluación. `backtesting` transforma ambas en resultados usando un motor común. `validation` define las particiones y `evaluation` interpreta sus salidas.
 
-No se introducen interfaces abstractas ni clases genéricas antes de contar con implementaciones concretas. Los acuerdos siguientes describen los datos esperados. El esquema de precios implementado se detalla al final; el resto permanece previsto.
+No se introducen interfaces abstractas ni clases genéricas antes de contar con implementaciones concretas. Los acuerdos siguientes describen los datos esperados. Los esquemas implementados de precios y del benchmark se detallan debajo; señales, etiquetas y modelos permanecen previstos.
 
 ## Contratos de datos previstos
 
@@ -69,4 +69,17 @@ El coordinador crea un registro por intento bajo `outputs/runs`, copia la config
 
 ## Protocolo financiero propuesto
 
-[financial_protocol.md](financial_protocol.md) documenta las convenciones propuestas y las decisiones aún abiertas. El siguiente bloque será el benchmark diario de comprar y mantener; la tabla mensual y las anomalías se incorporarán después. Este documento no convierte `configs/experiment_base.toml` en una configuración ejecutable ni resuelve la financiación de cortos.
+[financial_protocol.md](financial_protocol.md) documenta las convenciones propuestas y las decisiones aún abiertas. El benchmark diario de comprar y mantener está implementado; la tabla mensual y las anomalías se incorporarán después. Este documento no convierte `configs/experiment_base.toml` en una configuración ejecutable ni resuelve la financiación de cortos.
+
+
+## Primer simulador implementado
+
+- `backtesting.engine`: validación de precios y cálculo de una secuencia de exposiciones 0/1 efectivas al cierre, con rentabilidad anterior al rebalanceo, costes y capital. Sin red, persistencia ni generación de señales.
+- `backtesting.buy_and_hold`: genera posiciones del benchmark e invoca el motor. Conserva separado qué se compra de cómo se calcula el resultado financiero.
+- `evaluation.simulation`: resumen descriptivo de la trayectoria; no entrena ni calcula métricas de selección de modelos.
+- `pipeline.run_buy_and_hold`: configuración, política temporal, verificación SHA-256 de la preparación, intervalo inclusivo, simulación y publicación por ejecución. La política se obtiene de la sección validation de experiment_base.toml; no existe aún un evaluador del periodo final.
+- `cli` y `menu`: comando simulate-buy-and-hold y selección interactiva de preparaciones; ambas vías llaman al mismo coordinador.
+
+Esquema inicial de equity.parquet: asset, observed_at, adjusted_close, position_after, position_before, asset_return, gross_return, turnover, cost_fraction, net_return, gross_capital, net_capital, cost_amount y drawdown. Los costes monetarios se expresan en unidades del capital inicial normalizado. drawdown es cero o negativo; max_drawdown del resumen es una magnitud positiva.
+
+El registro utiliza las fases configuration, prepared_validation, simulation, publication y completed. Las ejecuciones completadas incluyen las rutas y huellas de equity.parquet y summary.json. Un fallo o Ctrl+C conserva su estado/error y elimina los resultados financieros parciales, manteniendo configuración y procedencia que se hayan registrado. Como en el flujo previo, una terminación forzada o un fallo de almacenamiento puede dejar un registro running. No se sobrescriben ejecuciones ni se modifica la preparación de entrada.

@@ -4,7 +4,7 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. Todavía no entrena modelos ni simula operaciones.
+El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. También está implementado el primer simulador largo/efectivo y el benchmark de comprar y mantener. Todavía no genera las anomalías ni entrena modelos.
 
 ## Arquitectura
 
@@ -81,7 +81,7 @@ python -c "import tfm; print(tfm.__version__)"
 ## Desarrollo incremental
 
 1. Primera fuente y reconstrucción de tablas desde originales.
-2. Simulador básico con comprar y mantener y costes.
+2. Simulador básico con comprar y mantener y costes (implementado).
 3. Momentum y reversión con ejemplos verificables.
 4. Variables de entorno, integración de fuentes y filtros sencillos.
 5. Etiquetas, particiones temporales y registro de configuraciones.
@@ -97,7 +97,7 @@ La CLI dispone de un menú interactivo. Su alcance y ampliaciones están descrit
 
 Los tests se añadirán con cada comportamiento implementado. Priorizarán disponibilidad temporal de datos, ventanas de señales, separación de etiquetas, ejecución y costes, purga de particiones cuando corresponda y un recorrido completo con datos pequeños calculables a mano.
 
-El framework de tests es pytest. Se ejecuta con `python -m pytest -q`. Se mantienen tests esenciales de descarga, preparación y flujo completo; los módulos posteriores aún son marcadores de responsabilidades.
+El framework de tests es pytest. Se ejecuta con `python -m pytest -q`. Se mantienen tests esenciales de descarga, preparación y flujo completo; el simulador tiene pruebas esenciales de cálculo, protección temporal y recorrido por CLI y menú.
 
 ### Dependencias reproducibles
 
@@ -181,3 +181,26 @@ En una terminal aparece un menú para descargar y preparar, escoger una descarga
 Los comandos con argumentos siguen disponibles. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.
 
 El menú limpia la pantalla al cambiar de vista. Los resultados, errores y consultas permanecen visibles hasta pulsar Intro para volver. La limpieza solo se aplica en terminales compatibles; no se introducen códigos de control en salidas redirigidas.
+
+
+## Simular comprar y mantener
+
+Desde la raíz del repositorio, con el entorno virtual activado, ejecuta `python -m tfm` y elige **6. Simular comprar y mantener**. Selecciona por número una preparación compatible. El menú muestra primero intervalo y coste, y utiliza el mismo flujo que el comando:
+
+```bash
+python -m tfm simulate-buy-and-hold --config configs/buy_and_hold.toml --prepared RUTA_DE_PRECIOS_PREPARADOS
+```
+
+`RUTA_DE_PRECIOS_PREPARADOS` es un directorio bajo `data/processed/prices/` con Parquet, manifiesto e informe aprobados. Se elige explícitamente; no se descarga nada ni se toma automáticamente la preparación más reciente.
+
+La configuración independiente `configs/buy_and_hold.toml` contiene inicio y fin **inclusivos**, coste en puntos básicos y las convenciones admitidas. Las fechas deben quedar dentro de la cobertura del archivo. La primera sesión del intervalo es la decisión: se compra al cierre de la segunda y la nueva posición recibe el retorno desde ese cierre. Se requieren al menos tres sesiones. Cambiar el intervalo reinicia la estrategia en efectivo; no arrastra posiciones anteriores. Cuando se comparen anomalías, sus fechas efectivas deberán alinearse con las del benchmark.
+
+La opción 5 sigue cambiando solo la configuración de datos. La opción 6 utiliza `buy_and_hold.toml` del mismo directorio `configs/` y muestra su ruta; los parámetros financieros se editan allí. Las rutas de almacenamiento y política declaradas en TOML parten de la raíz del proyecto deducida de `configs/`. Las rutas de `--config` y `--prepared` parten del directorio de ejecución.
+
+La política de desarrollo se lee de `[validation]` en `configs/experiment_base.toml`, mediante `validation.policy_config`; todavía no se interpreta su resto como un experimento ejecutable. Se rechazan intervalos y preparaciones completas que invadan el periodo final. No basta con recortar un archivo que incluya datos reservados. El protocolo de evaluación final se incorporará en otro incremento.
+
+Convenciones: capital inicial 1, exposición 0/1 sin cortos, efectivo no remunerado, retornos de cierre ajustado como aproximación a rentabilidad total y sin liquidación final automática. No se suman dividendos otra vez. El coste inicial de 5 puntos básicos (0,05 %) es ilustrativo y configurable; no representa una tarifa de bróker verificada. Mantener exposición 1 no genera nuevas compras diarias.
+
+Cada intento deja su registro en `outputs/runs/<run_id>`. Una ejecución completada guarda `config.toml`, `validation_policy.toml`, manifiesto e informe de los precios, `equity.parquet` y `summary.json`. El registro contiene huellas de configuraciones y resultados, versiones y estado de Git. La tabla distingue posiciones antes/después del cierre, retorno bruto/neto, rotación, coste monetario y capital bruto/neto. El resumen añade rentabilidades acumuladas, coste en unidades de capital, rotación y caída máxima neta como magnitud positiva. La caída incluye el capital inicial, por lo que recoge el coste de entrada. La suma de costes monetarios no equivale a la diferencia entre rentabilidades acumuladas.
+
+Los errores e interrupciones se registran y no publican una trayectoria finalizada. No se sobrescriben precios ni ejecuciones anteriores. El historial del menú identifica descargas y simulaciones y muestra las rutas de sus resultados. El calendario bursátil completo y el contraste numérico con otra fuente siguen pendientes; se muestran como limitaciones del benchmark. No se han implementado Sharpe, DSR, PBO ni interpretación de modelos en este incremento.
