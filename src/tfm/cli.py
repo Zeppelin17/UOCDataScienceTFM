@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 import sys
 
-from tfm.pipeline import PipelineError, run_buy_and_hold, run_prepare_prices
-from tfm.menu import interactive_menu, show_simulation_result
+from tfm.pipeline import PipelineError, run_audit_prices, run_buy_and_hold, run_prepare_prices
+from tfm.menu import interactive_menu, show_audit_result, show_simulation_result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,6 +18,10 @@ def main(argv: list[str] | None = None) -> int:
     simulate = commands.add_parser("simulate-buy-and-hold", help="Simular comprar y mantener sin descargar datos")
     simulate.add_argument("--config", type=Path, default=Path("configs/buy_and_hold.toml"))
     simulate.add_argument("--prepared", type=Path, required=True, help="Directorio de precios preparados")
+    simulate.add_argument("--audit", type=Path, help="Directorio de auditoría seleccionado explícitamente")
+    audit = commands.add_parser("audit-prices", help="Auditar sesiones de precios preparados sin descargar datos")
+    audit.add_argument("--config", type=Path, default=Path("configs/audit.toml"))
+    audit.add_argument("--prepared", type=Path, required=True)
     arguments = sys.argv[1:] if argv is None else argv
     if not arguments:
         if sys.stdin.isatty():
@@ -26,8 +30,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args = parser.parse_args(arguments)
     try:
+        if args.command == "audit-prices":
+            run_dir = run_audit_prices(args.config, args.prepared)
+            return 0 if show_audit_result(run_dir) else 1
         if args.command == "simulate-buy-and-hold":
-            run_dir = run_buy_and_hold(args.config, args.prepared)
+            run_dir = run_buy_and_hold(args.config, args.prepared, args.audit)
             show_simulation_result(run_dir)
             return 0
         run_dir = run_prepare_prices(args.config, args.snapshot)

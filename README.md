@@ -4,7 +4,7 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. También está implementado el primer simulador largo/efectivo y el benchmark de comprar y mantener. Todavía no genera las anomalías ni entrena modelos.
+El primer flujo de datos está implementado: descarga diaria de SPY, snapshots originales, normalización, controles de calidad y registro de ejecuciones. También está implementado el primer simulador largo/efectivo y el benchmark de comprar y mantener. La auditoría de calendario está disponible como paso independiente. Todavía no genera las anomalías ni entrena modelos.
 
 ## Arquitectura
 
@@ -72,7 +72,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
+La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet, exchange_calendars aporta las reglas históricas de sesiones y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
 
 ```bash
 python -c "import tfm; print(tfm.__version__)"
@@ -203,4 +203,19 @@ Convenciones: capital inicial 1, exposición 0/1 sin cortos, efectivo no remuner
 
 Cada intento deja su registro en `outputs/runs/<run_id>`. Una ejecución completada guarda `config.toml`, `validation_policy.toml`, manifiesto e informe de los precios, `equity.parquet` y `summary.json`. El registro contiene huellas de configuraciones y resultados, versiones y estado de Git. La tabla distingue posiciones antes/después del cierre, retorno bruto/neto, rotación, coste monetario y capital bruto/neto. El resumen añade rentabilidades acumuladas, coste en unidades de capital, rotación y caída máxima neta como magnitud positiva. La caída incluye el capital inicial, por lo que recoge el coste de entrada. La suma de costes monetarios no equivale a la diferencia entre rentabilidades acumuladas.
 
-Los errores e interrupciones se registran y no publican una trayectoria finalizada. No se sobrescriben precios ni ejecuciones anteriores. El historial del menú identifica descargas y simulaciones y muestra las rutas de sus resultados. El calendario bursátil completo y el contraste numérico con otra fuente siguen pendientes; se muestran como limitaciones del benchmark. No se han implementado Sharpe, DSR, PBO ni interpretación de modelos en este incremento.
+Los errores e interrupciones se registran y no publican una trayectoria finalizada. No se sobrescriben precios ni ejecuciones anteriores. El historial del menú identifica descargas y simulaciones y muestra las rutas de sus resultados. El calendario se comprueba con una auditoría seleccionada explícitamente; sin ella se muestra pendiente. El contraste numérico con otra fuente sigue pendiente. No se han implementado Sharpe, DSR, PBO ni interpretación de modelos en este incremento.
+
+
+## Auditar las sesiones del calendario
+
+Ejecuta `python -m tfm` y elige **7. Auditar calendario de precios preparados**, o usa:
+
+```bash
+python -m tfm audit-prices --config configs/audit.toml --prepared RUTA_DE_PRECIOS_PREPARADOS
+```
+
+Se contrasta **todo el intervalo solicitado del manifiesto**, con final exclusivo, contra XNYS como referencia de sesiones diarias US. No se rellena ni modifica ningún precio. El informe separa calendario de precios, dividendos y ajustes: aprobar calendario no acredita esos otros campos. Funciona sin red después de instalar las dependencias.
+
+Para usar el resultado en una simulación, selecciona la auditoría por número en la opción 6 o añade `--audit RUTA_DE_EJECUCION_DE_AUDITORIA` al comando `simulate-buy-and-hold`. No se elige automáticamente la última auditoría. Se comprueban huellas, cobertura, configuración/política y versión; se rechazan informes de otra preparación, parciales o con discrepancias. Se copia el informe empleado para conservar su procedencia. Sin auditoría sigue disponible el benchmark exploratorio, con calendario pendiente.
+
+Consulta [el alcance, formato y limitaciones de la auditoría](docs/calendar_audit.md). Los informes y resultados anteriores permanecen intactos. Si aparecen discrepancias, se conserva la lista y la ejecución de auditoría puede quedar completada técnicamente con un resultado de calendario fallido; no se presenta como superada.

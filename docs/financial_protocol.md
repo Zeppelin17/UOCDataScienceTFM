@@ -76,3 +76,8 @@ El intervalo de `configs/buy_and_hold.toml` tiene extremos inclusivos y debe est
 El resumen incluye fecha de decisión y entrada, capital bruto y neto, retorno acumulado, coste monetario, rotación y caída máxima neta. La caída se mide respecto a máximos incluyendo el capital inicial 1. No se compara la suma de costes directamente con la diferencia de retornos acumulados. Con [100, 110, 121], la entrada ocurre al segundo cierre: capital final 1,10 sin coste y 1,09945 con 5 puntos básicos. La subida anterior a la entrada no se atribuye al benchmark.
 
 No se exige aún un calendario externo: se ejecuta en la siguiente observación y se advierte de esta limitación. No se aceptan silenciosamente intervalos fuera de la cobertura, ni preparaciones alteradas, fallidas o que contengan fechas posteriores al desarrollo, aunque se solicite un subintervalo anterior. No se admiten aún otras convenciones de efectivo, liquidación, instrumento o ejecución.
+
+
+## Calendario y auditorías
+
+La auditoría independiente de calendario ya puede ejecutarse sobre los precios preparados y adjuntarse explícitamente al benchmark. Guarda las sesiones XNYS esperadas y las discrepancias para todo el intervalo del manifiesto, incluidas las faltas en los extremos. El benchmark sin informe continúa siendo exploratorio; la futura tabla mensual deberá exigir calendario aprobado. La auditoría acredita concordancia con esa referencia de sesiones diarias US, no precios exactos, horarios intradía ni reconstrucción del mercado primario histórico. El contraste independiente de precios/dividendos/ajustes sigue pendiente, con estados separados. Véase [el alcance completo](calendar_audit.md).

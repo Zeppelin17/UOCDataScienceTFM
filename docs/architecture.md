@@ -83,3 +83,12 @@ El coordinador crea un registro por intento bajo `outputs/runs`, copia la config
 Esquema inicial de equity.parquet: asset, observed_at, adjusted_close, position_after, position_before, asset_return, gross_return, turnover, cost_fraction, net_return, gross_capital, net_capital, cost_amount y drawdown. Los costes monetarios se expresan en unidades del capital inicial normalizado. drawdown es cero o negativo; max_drawdown del resumen es una magnitud positiva.
 
 El registro utiliza las fases configuration, prepared_validation, simulation, publication y completed. Las ejecuciones completadas incluyen las rutas y huellas de equity.parquet y summary.json. Un fallo o Ctrl+C conserva su estado/error y elimina los resultados financieros parciales, manteniendo configuración y procedencia que se hayan registrado. Como en el flujo previo, una terminación forzada o un fallo de almacenamiento puede dejar un registro running. No se sobrescriben ejecuciones ni se modifica la preparación de entrada.
+
+
+## Auditoría de calendario implementada
+
+`preparation.prices.load_prepared_prices` comparte entre simulación y auditoría la verificación de esquema, calidad, integridad SHA-256 y fechas del manifiesto. `validation.policy` comparte la lectura de la separación desarrollo/final; no modifica las decisiones del protocolo.
+
+`preparation.calendar` compara las sesiones con XNYS durante todo el intervalo solicitado. `pipeline.run_audit_prices` guarda cada intento y sus artefactos. `preparation.audits.load_calendar_audit` verifica el informe seleccionado antes de usarlo en una simulación, exigiendo coincidencia de datos/manifiesto, cobertura, política y método. `preparation.quality` mantiene los cuatro estados independientes y su presentación, con compatibilidad para preparaciones antiguas.
+
+Los artefactos de auditoría y las simulaciones nuevas no sobrescriben preparaciones ni resultados anteriores. No hay migración destructiva: se añaden estados a informes nuevos y el simulador recibe `audit_dir=None` por defecto. La dependencia exchange_calendars se justifica por la cobertura histórica de cierres especiales; sus versiones exactas se registran en lock e informes. No se ha implementado aún el contraste de segunda fuente. Véase [calendar_audit.md](calendar_audit.md).

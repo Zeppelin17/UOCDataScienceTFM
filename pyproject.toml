@@ -12,6 +12,7 @@ dependencies = [
     "pandas>=2.3,<4",
     "pyarrow>=22,<24",
     "yfinance>=1.4,<2",
+    "exchange-calendars>=4.11,<5",
 ]
 
 [project.optional-dependencies]

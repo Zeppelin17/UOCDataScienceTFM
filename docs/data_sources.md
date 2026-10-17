@@ -62,7 +62,7 @@ Otras limitaciones: posibles revisiones, interrupciones, límites de acceso, aus
 ## Verificación pendiente
 
 - Contrastar una selección de cierres y dividendos hasta 2020 con una segunda fuente, indicando si ofrece precio de mercado, NAV o cierre ajustado. No comparar cantidades de naturaleza distinta.
-- Comprobar sesiones ausentes con un calendario adecuado.
+- Comprobación implementada mediante auditoría independiente XNYS; debe adjuntarse un informe compatible para acreditar la preparación concreta. No certifica los precios. Véase calendar_audit.md.
 - Validar el significado económico de los ajustes. La preparación implementada ya verifica integridad SHA-256, estructura, fechas duplicadas, ausentes, valores no finitos y coherencia OHLC. El snapshot real de 7.033 filas pasó esos controles; esto no certifica los ajustes del proveedor.
 - Fijar política de dividendos, ejecución y cortos antes del simulador.
 
@@ -74,3 +74,8 @@ El contraste numérico independiente no se ha completado: la fuente queda propue
 - API de descarga: https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html
 - Repositorio y aviso de uso: https://github.com/ranaroussi/yfinance
 - Endpoint consultado: https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=725846400&period2=1609459200&interval=1d&events=div%2Csplits
+
+
+## Actualización: control de calendario
+
+La auditoría de calendario está implementada en un flujo separado, versionado y sin modificación de archivos anteriores. Los informes originales que dicen calendario pendiente siguen reflejando su estado histórico. La presentación nueva muestra estados independientes y solo acredita calendario cuando se adjunta una auditoría válida. El contraste con una fuente numérica distinta de Yahoo continúa pendiente; no se ha sustituido por la coincidencia con XNYS.

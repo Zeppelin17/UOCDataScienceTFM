@@ -1,12 +1,17 @@
 """Menú local que reutiliza el flujo de datos existente."""
 
+import hashlib
 import json
 import os
 import sys
 from pathlib import Path
 import tomllib
 
-from tfm.pipeline import PipelineError, load_buy_and_hold_config, run_buy_and_hold, run_prepare_prices
+from tfm.pipeline import (
+    PipelineError, load_audit_config, load_buy_and_hold_config,
+    run_audit_prices, run_buy_and_hold, run_prepare_prices,
+)
+from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
 
 
 def _clear_screen() -> None:
@@ -82,6 +87,9 @@ def _show_runs(config_path: Path) -> None:
             record = json.loads(path.read_text(encoding="utf-8"))
             print(f"{record['run_id']} | {record.get('command', 'prepare-prices')} | {record['status']} | {record['stage']}")
             print(f"  Registro: {path}")
+            if record.get("audit_report_path"):
+                print(f"  Resultado de calendario: {record['audit_result']}")
+                print(f"  Auditoría: {record['audit_report_path']}")
             if record.get("equity_path"):
                 print(f"  Resultado: {record['equity_path']}")
                 print(f"  Resumen: {record['summary_path']}")
@@ -102,7 +110,9 @@ def _show_result(run_dir: Path) -> None:
     print(f"Sesiones: {report['rows']:,}".replace(",", "."))
     print(f"Periodo: {report['first_session'][:10]} → {report['last_session'][:10]}")
     print(f"Controles de calidad: {'superados' if report['status'] == 'passed' else 'no superados'}")
-    for warning in report.get("warnings", []):
+    for message in quality_messages(report.get("checks", pending_checks())):
+        print(message)
+    for warning in other_warnings(report):
         print(f"Pendiente: {warning}")
     print(f"Precios preparados: {record['prepared_dir']}")
     print(f"Registro de ejecución: {run_dir / 'run.json'}")
@@ -120,11 +130,34 @@ def show_simulation_result(run_dir: Path) -> None:
     print(f"Costes en unidades de capital: {summary['total_cost_amount']:.6f}")
     print(f"Rotación acumulada: {summary['total_turnover']:.2f}")
     print(f"Caída máxima neta: {summary['max_drawdown']:.2%}")
+    for message in quality_messages(summary.get("checks", pending_checks())):
+        print(message)
     for warning in summary["warnings"]:
         print(f"Nota: {warning}")
     print(f"Trayectoria: {run_dir / 'equity.parquet'}")
     print(f"Resumen: {run_dir / 'summary.json'}")
     print(f"Registro: {run_dir / 'run.json'}")
+
+
+def show_audit_result(run_dir: Path) -> bool:
+    report = json.loads((run_dir / "audit_report.json").read_text(encoding="utf-8"))
+    print("Auditoría ejecutada. Alcance: calendario de sesiones; no contraste de precios.")
+    interval = report["interval"]
+    print(f"Intervalo completo solicitado: {interval['start']} → {interval['end_exclusive']} (fin exclusivo)")
+    for message in quality_messages(report["checks"]):
+        print(message)
+    calendar = report["checks"]["calendar"]
+    for key, label in (("missing_sessions", "Sesiones ausentes"), ("unexpected_sessions", "Fechas inesperadas")):
+        if calendar[key]:
+            print(f"{label}: {', '.join(calendar[key][:10])}")
+            if len(calendar[key]) > 10:
+                print("La lista completa está en el informe.")
+    print(f"Versión del calendario: {calendar['library_version']} | Sesiones reducidas: {calendar['early_close_sessions']}")
+    print("XNYS es la referencia de sesiones diarias US; no certifica precios ni el horario intradía de SPY.")
+    print(f"Informe: {run_dir / 'audit_report.json'}")
+    print(f"Sesiones esperadas: {run_dir / 'calendar_sessions.parquet'}")
+    print(f"Registro: {run_dir / 'run.json'}")
+    return calendar["status"] == "passed"
 
 
 def _select_prepared_prices(settings: dict) -> Path | None:
@@ -136,16 +169,17 @@ def _select_prepared_prices(settings: dict) -> Path | None:
                 continue
             report = json.loads((path.parent / "quality_report.json").read_text(encoding="utf-8"))
             first, last = report["first_session"][:10], report["last_session"][:10]
-            simulation = settings["simulation"]
-            if (report["status"] != "passed" or first > simulation["start"]
-                    or last < simulation["end"] or last > settings["development_end"]):
+            simulation = settings.get("simulation")
+            if report["status"] != "passed" or last > settings["development_end"]:
+                continue
+            if simulation is not None and (first > simulation["start"] or last < simulation["end"]):
                 continue
             items.append(path.parent)
             print(f"{len(items)}. SPY | {first} → {last} | {report['rows']} sesiones | {path.parent.name}")
         except (OSError, ValueError, KeyError, TypeError):
             print(f"No se pudo leer la preparación: {path.parent}")
     if not items:
-        print("No hay precios preparados compatibles con el intervalo. Prepara los datos o revisa configs/buy_and_hold.toml.")
+        print("No hay precios preparados compatibles. Prepara los datos o revisa el intervalo de la configuración.")
         return None
     while True:
         answer = input(f"Número de preparación (1–{len(items)}; 0 para volver): ").strip()
@@ -154,6 +188,36 @@ def _select_prepared_prices(settings: dict) -> Path | None:
         if answer.isdecimal() and 1 <= int(answer) <= len(items):
             return items[int(answer) - 1]
         print("Selecciona un número de la lista; 0 para volver.")
+
+
+def _select_audit(prepared: Path, runs_root: Path) -> Path | None:
+    manifest_bytes = (prepared / "manifest.json").read_bytes()
+    manifest = json.loads(manifest_bytes)
+    manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
+    items = []
+    for path in sorted(runs_root.glob("*/run.json")):
+        try:
+            record = json.loads(path.read_bytes())
+            if record.get("command") != "audit-prices" or record["status"] != "completed":
+                continue
+            report = json.loads((path.parent / "audit_report.json").read_bytes())
+            if (report["binding"]["prices_sha256"] != manifest["sha256"]
+                    or report["binding"]["prepared_manifest_sha256"] != manifest_hash):
+                continue
+            items.append(path.parent)
+            print(f"{len(items)}. Auditoría {path.parent.name} | calendario: {record['audit_result']}")
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    if not items:
+        print("No hay auditorías disponibles para estos precios; simulación exploratoria con calendario pendiente.")
+        return None
+    while True:
+        answer = input(f"Auditoría (1–{len(items)}; 0 para simular SIN auditoría): ").strip()
+        if answer == "0":
+            return None
+        if answer.isdecimal() and 1 <= int(answer) <= len(items):
+            return items[int(answer) - 1]
+        print("Selecciona una auditoría de la lista o 0; no se elige automáticamente.")
 
 
 def interactive_menu() -> int:
@@ -172,18 +236,30 @@ def interactive_menu() -> int:
                   "4. Ver la configuración actual\n"
                   "5. Cambiar configuración\n"
                   "6. Simular comprar y mantener\n"
+                  "7. Auditar calendario de precios preparados\n"
                   "0. Salir")
-            option = input("Opción del menú (0–6): ").strip()
+            option = input("Opción del menú (0–7): ").strip()
             if option == "0":
                 return 0
-            if option not in {"1", "2", "3", "4", "5", "6"}:
+            if option not in {"1", "2", "3", "4", "5", "6", "7"}:
                 pause = True
-                print("Escribe un número del 0 al 6.")
+                print("Escribe un número del 0 al 7.")
                 continue
             pause = True
             _clear_screen()
             if option == "3":
                 _show_runs(config_path)
+                continue
+            if option == "7":
+                audit_path = config_path.resolve().parent / "audit.toml"
+                settings = load_audit_config(audit_path)
+                print(f"Configuración de auditoría: {audit_path}")
+                print(f"Calendario de referencia: {settings['calendar']} | Desarrollo hasta {settings['development_end']}")
+                prepared = _select_prepared_prices(settings)
+                if prepared is not None:
+                    run_dir = run_audit_prices(audit_path, prepared)
+                    _clear_screen()
+                    show_audit_result(run_dir)
                 continue
             if option == "6":
                 simulation_path = config_path.resolve().parent / "buy_and_hold.toml"
@@ -195,7 +271,8 @@ def interactive_menu() -> int:
                 print(f"Desarrollo hasta: {settings['development_end']} | Política: {settings['policy_path']}")
                 prepared = _select_prepared_prices(settings)
                 if prepared is not None:
-                    run_dir = run_buy_and_hold(simulation_path, prepared)
+                    audit = _select_audit(prepared, simulation_path.parent.parent / "outputs/runs")
+                    run_dir = run_buy_and_hold(simulation_path, prepared, audit)
                     _clear_screen()
                     show_simulation_result(run_dir)
                 continue

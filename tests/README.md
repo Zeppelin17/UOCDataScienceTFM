@@ -13,3 +13,5 @@ La comprobación real del proveedor se realiza manualmente con el comando de des
 `test_menu.py` comprueba selección y delegación al flujo, apertura del menú únicamente en una terminal interactiva y visualización directa/cambio explícito de configuración.
 
 `test_backtesting.py` incorpora cálculo manual con y sin coste, salida a efectivo, rechazo de integridad alterada/configuración inválida/datos reservados y un recorrido sin red de CLI, repetición y menú. Comprueba intervalo, retraso de entrada, ausencia de dividendos duplicados, ausencia de costes de mantenimiento y caída desde el capital inicial.
+
+`test_calendar_audit.py` comprueba cierres extraordinarios y reducidos, sesiones ausentes en los extremos y fechas inesperadas; auditoría/repetición por CLI, menú y simulación con informe explícito; rechazo de otra preparación, cobertura parcial y discrepancias. Los contrastes numéricos de segunda fuente permanecen no evaluados.
