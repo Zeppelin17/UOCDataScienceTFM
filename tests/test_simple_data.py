@@ -114,3 +114,65 @@ def test_spy_keeps_yahoo_options_and_reuses_its_original(study, monkeypatch, cap
     assert calls[0]["auto_adjust"] is False and calls[0]["actions"] is True
     assert first.asset.eq("SPY").all() and first.source.eq("yahoo").all()
     assert not (root / "data/processed/shiller_monthly.parquet").exists()
+
+
+def test_spy_rejects_extra_configuration_before_downloading(study, monkeypatch, capsys):
+    config, _ = study
+    config.write_text(config.read_text().replace("[spy]", '[spy]\ntickers = "QQQ"'))
+    monkeypatch.setattr(prices.yf, "download", lambda **kwargs: pytest.fail("No debe descargar otro activo"))
+    assert cli.main(["prepare-data", "--source", "spy", "--config", str(config)]) == 1
+    assert "solo admite start y end" in capsys.readouterr().err
+    assert not (config.parent.parent / "data").exists()
+
+
+def test_spy_saved_original_cannot_be_relabelled_with_a_new_period(study, monkeypatch):
+    config, _ = study
+    root = config.parent.parent
+    frame = pd.DataFrame({"Open": [100.0], "High": [102.0], "Low": [99.0], "Close": [101.0],
+                          "Adj Close": [100.0], "Volume": [1000], "Dividends": [0.0], "Stock Splits": [0.0]},
+                         index=pd.DatetimeIndex(["2020-12-31"], name="Date"))
+    monkeypatch.setattr(prices.yf, "download", lambda **kwargs: frame)
+    prepare_spy_data(config)
+    before = {p: p.read_bytes() for p in (root / "data").rglob("*") if p.is_file()}
+    config.write_text(config.read_text().replace('end = "2021-01-01"', 'end = "2022-01-01"'))
+    monkeypatch.setattr(prices.yf, "download", lambda **kwargs: pytest.fail("No debe sustituir el original automáticamente"))
+    with pytest.raises(ValueError, match="periodo del original SPY.*no coincide"):
+        prepare_spy_data(config)
+    assert before == {p: p.read_bytes() for p in (root / "data").rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("failure", ["table", "summary", "dependent"])
+def test_publication_failure_restores_data_summary_and_signals(study, monkeypatch, failure):
+    config, original = study
+    root = config.parent.parent
+    prepare_shiller_data(config, file=original)
+    calculate_signals(config)
+    before = {p: p.read_bytes() for p in (root / "data").rglob("*") if p.is_file()}
+    # La nueva lectura daría otros precios y otro resumen: no basta con dejar
+    # los archivos recién escritos para que la comparación por bytes pase.
+    sheet = workbook(monkeypatch)
+    sheet.months.append("2027-01")
+    sheet.nrows += 1
+    cell = sheet.cell
+    def revised_cell(row, column):
+        result = cell(row, column)
+        if column == 1:
+            result.value *= 2
+        return result
+    monkeypatch.setattr(sheet, "cell", revised_cell)
+    replace, unlink = Path.replace, Path.unlink
+    failing_name = "shiller_monthly.parquet.tmp" if failure == "table" else "shiller_monthly.json.tmp"
+    def fail_replace(path, target):
+        if failure != "dependent" and path.name == failing_name:
+            raise PermissionError("archivo bloqueado")
+        return replace(path, target)
+    def fail_unlink(path, *args, **kwargs):
+        if failure == "dependent" and path.name == "shiller_signals.json":
+            raise PermissionError("archivo bloqueado")
+        return unlink(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    with pytest.raises(PermissionError, match="archivo bloqueado"):
+        prepare_shiller_data(config)
+    assert before == {p: p.read_bytes() for p in (root / "data").rglob("*") if p.is_file()}
+    assert len(load_monthly(load_config(config))) == 768

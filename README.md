@@ -29,6 +29,8 @@ Cada tarea identifica la fuente, el periodo, la entrada, el resultado y el sigui
 
 Solo hay una configuración: [configs/estudio.toml](configs/estudio.toml). Contiene la fuente de Shiller, los periodos del estudio, las convenciones de las reglas y el periodo diario solicitado para SPY. La opción 5 explica sus valores. El menú vuelve a leer el archivo antes de cada tarea.
 
+La sección `[spy]` solo admite `start` y `end`. El activo está fijado en SPY; otros parámetros se rechazan antes de descargar.
+
 - **Shiller:** historia previa desde 1926, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. P es un precio medio mensual y D es anualizado e interpolado. Todavía está pendiente acordar con el tutor cómo evaluar rentabilidades con esa información.
 - **SPY:** datos diarios del ETF mediante Yahoo Finance y `yfinance`, inicialmente desde 1993 hasta 2020. Se mantienen separados de Shiller y su utilización definitiva sigue pendiente.
 
@@ -44,9 +46,11 @@ data/processed/shiller_signals.parquet   Señales de momentum y reversión
 data/processed/spy_prices.parquet        Precios diarios normalizados
 ```
 
-Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales anteriores cuando termina correctamente. Los fallos de calidad o de escritura de los archivos provisionales conservan las salidas válidas anteriores. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
+Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales anteriores cuando termina correctamente. Durante la sustitución se conserva en memoria el contenido anterior para restaurar tabla, resumen y señales si ocurre un error. No se crean archivos permanentes de respaldo. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
 
-Los originales de trabajo no se sustituyen automáticamente. Si necesitas actualizar uno, conserva primero una copia y retíralo de su ruta de trabajo antes de importar o descargar otro; después regenera los datos preparados y sus señales. Los originales y resultados históricos permanecen en sus carpetas y quedan fuera de Git, igual que los datos nuevos.
+Los originales de trabajo no se sustituyen automáticamente. Si necesitas actualizar uno, conserva primero una copia con su JSON de procedencia y retira el original de su ruta de trabajo antes de importar o descargar otro; después regenera los datos preparados y sus señales. Los originales y resultados históricos permanecen en sus carpetas y quedan fuera de Git, igual que los datos nuevos.
+
+Antes de reutilizar o importar SPY se comprueba que su JSON declara Yahoo, SPY y el mismo periodo solicitado. Si cambias las fechas, se pide un original de ese periodo; no se vuelve a etiquetar la descarga antigua con las fechas nuevas. Esto comprueba el periodo declarado de adquisición y no certifica todas las sesiones del calendario.
 
 Las comprobaciones detectan problemas de estructura, cobertura mensual, fechas, valores y coherencia de precios. No certifican la exactitud financiera de una fuente. La herramienta no crea CSV, identificadores de ejecución, huellas de integridad, copias de configuraciones ni registros del estado de Git.
 
@@ -87,7 +91,7 @@ python -m tfm prepare-data --source spy
 python -m tfm status
 ```
 
-`prepare-data` reutiliza el original de trabajo o descarga si falta. Para empezar sin red, añade `--file "/ruta/al/original.xls"`; con `--source spy`, indica el Parquet original de Yahoo, con sus columnas originales. Un archivo normalizado no sirve como original de Yahoo.
+`prepare-data` reutiliza el original de trabajo o descarga si falta. Para empezar sin red, añade `--file "/ruta/al/original.xls"`; con `--source spy`, indica el Parquet original de Yahoo, con sus columnas originales y su JSON de procedencia junto a él: `spy_fuente.json` para `spy.parquet`, o `manifest.json` para los originales de la etapa anterior. Si el archivo se ha renombrado, su procedencia se busca como `<nombre>_fuente.json`. Un archivo normalizado no sirve como original de Yahoo.
 
 Los comandos admiten `--config` para indicar un archivo de estudio dentro de `configs/`; las salidas parten de su raíz de proyecto. Sin `--config`, se localiza la configuración desde el paquete. Sin argumentos y sin terminal interactiva, se muestra ayuda y no se esperan respuestas.
 

@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     simple_data = commands.add_parser("prepare-data", help="Preparar Shiller o SPY con configuración única y rutas fijas")
     simple_data.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     simple_data.add_argument("--source", choices=("shiller", "spy"), default="shiller")
-    simple_data.add_argument("--file", type=Path, help="Importar un original local si aún no hay uno guardado")
+    simple_data.add_argument("--file", type=Path, help="Importar un original local; SPY requiere su JSON de procedencia junto al Parquet")
     simple_signals = commands.add_parser("calculate-signals", help="Calcular señales de Shiller sin simular rentabilidades")
     simple_signals.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     status = commands.add_parser("status", help="Consultar qué datos y señales están disponibles, sin modificar archivos")

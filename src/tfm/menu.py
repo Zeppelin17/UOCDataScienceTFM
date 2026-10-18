@@ -87,7 +87,7 @@ def _select_input(settings: dict, source: str) -> tuple[bool, Path | None]:
         selected = _select_history(items, source)
         return selected is not None, selected
     print("Pega la ruta del XLS original de Shiller." if source == "shiller" else
-          "Pega la ruta del Parquet original descargado de Yahoo, con sus columnas originales.")
+          "Pega la ruta del Parquet original de Yahoo. Conserva junto a él su JSON de procedencia (spy_fuente.json o manifest.json), con el periodo solicitado.")
     while True:
         text = input("Ruta del archivo (0 para volver): ").strip().strip("\"'")
         if text == "0":

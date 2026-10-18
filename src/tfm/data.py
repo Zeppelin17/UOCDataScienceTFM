@@ -20,23 +20,35 @@ def _json(path: Path, value: dict) -> None:
 
 
 def _publish(table: pd.DataFrame, path: Path, summary: dict, *, dependents: tuple[Path, ...] = ()) -> dict:
-    """Preparar ambos archivos antes de sustituir una salida existente.
+    """Guardar tabla y resumen; restaurar las salidas anteriores ante un error.
 
-    Sin el resumen no se acepta una tabla como terminada. Los dependientes se
-    invalidan antes de sustituir su entrada; no se necesita un registro de runs.
+    La copia anterior vive solo en memoria durante esta operación local.
+    Los dependientes se retiran después de sustituir la tabla y su resumen.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     report_path = path.with_suffix(".json")
     temporary = path.with_suffix(".parquet.tmp")
     temporary_report = path.with_suffix(".json.tmp")
+    previous = {}
+    changed = []
     try:
         table.to_parquet(temporary, index=False)
         _json(temporary_report, summary)
-        report_path.unlink(missing_ok=True)
+        previous = {p: p.read_bytes() if p.exists() else None for p in (path, report_path, *dependents)}
+        temporary.replace(path)
+        changed.append(path)
+        temporary_report.replace(report_path)
+        changed.append(report_path)
         for dependent in dependents:
             dependent.unlink(missing_ok=True)
-        temporary.replace(path)
-        temporary_report.replace(report_path)
+            changed.append(dependent)
+    except (Exception, KeyboardInterrupt):
+        for target in reversed(changed):
+            if previous[target] is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_bytes(previous[target])
+        raise
     finally:
         temporary.unlink(missing_ok=True)
         temporary_report.unlink(missing_ok=True)
@@ -73,6 +85,30 @@ def _save_original(raw: Path, content: bytes | pd.DataFrame, provenance: dict) -
 
 def _window(settings: dict) -> dict:
     return {"history_start": settings["shiller"]["history_start"], **settings["validation"]}
+
+
+def _check_spy_original(path: Path, period: dict) -> None:
+    """Comprobar el periodo declarado del original, sin certificar su calendario."""
+    info_path = path.with_name(f"{path.stem}_fuente.json")
+    if not info_path.exists():
+        info_path = path.parent / "manifest.json"  # Originales de la etapa anterior.
+    try:
+        info = json.loads(info_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("No se puede leer la procedencia del original SPY. Conserva junto al Parquet su JSON de procedencia o utiliza una nueva descarga.") from exc
+    if not isinstance(info, dict) or not isinstance(info.get("parameters"), dict):
+        raise ValueError("El JSON de procedencia del original SPY no contiene los parámetros de descarga")
+    parameters = info["parameters"]
+    if (info.get("source", info.get("provider")) != "yahoo" or info.get("instrument") != "SPY"
+            or parameters.get("tickers") != "SPY"):
+        raise ValueError("La procedencia no corresponde a datos de SPY de Yahoo Finance")
+    if any(parameters.get(key) != period[key] for key in ("start", "end")):
+        raise ValueError(
+            f"El periodo del original SPY ({parameters.get('start')} → {parameters.get('end')}, fin exclusivo) "
+            f"no coincide con el solicitado ({period['start']} → {period['end']}). "
+            "Utiliza un original de ese periodo o conserva una copia del original de trabajo "
+            "y retíralo de data/raw/spy.parquet antes de descargar otro. No se han modificado los datos."
+        )
 
 
 def prepare_shiller_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Path | None = None) -> dict:
@@ -184,7 +220,10 @@ def prepare_spy_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Path | 
     root = settings["root"]
     raw = root / "data/raw/spy.parquet"
     selected = _original(raw, file)
-    parameters = {"tickers": "SPY", **settings["spy"], "interval": "1d", "auto_adjust": False,
+    if selected is not None:
+        _check_spy_original(selected, settings["spy"])
+    parameters = {"tickers": "SPY", "start": settings["spy"]["start"], "end": settings["spy"]["end"],
+                  "interval": "1d", "auto_adjust": False,
                   "back_adjust": False, "actions": True, "repair": False, "keepna": True,
                   "rounding": False, "prepost": False, "threads": False, "multi_level_index": False,
                   "ignore_tz": True, "timeout": 30, "progress": False, "group_by": "column"}

@@ -10,3 +10,5 @@ Ejecutar `python -m pytest -q` desde la raíz con el entorno virtual activado. L
 - `test_menu.py`: recorrido guiado de Shiller, entradas ausentes y cancelaciones, SPY con descarga explícita, consultas sin cambios, configuración antigua, errores de TOML y cierre de la entrada.
 
 Se han retirado las pruebas exclusivas del coordinador de ejecuciones, huellas, auditorías, conciliación SSGA y simulador diario porque esas funciones ya no forman parte de la herramienta. Se conservan sus hallazgos en `docs/decisiones.md` y los archivos históricos en sus carpetas originales. Las comprobaciones científicas reutilizadas se han adaptado al flujo actual.
+
+`test_simple_data.py` incluye tres regresiones de la refactorización: rechazo de parámetros adicionales que cambiarían el activo, rechazo del original SPY al cambiar su periodo solicitado y restauración de las salidas al fallar la sustitución de la tabla, del resumen o la retirada de señales. Los fallos de publicación se simulan con una nueva tabla y un resumen diferentes, comprobando que se recuperan exactamente los bytes anteriores.

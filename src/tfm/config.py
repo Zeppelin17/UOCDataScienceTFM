@@ -16,6 +16,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
     content = path.read_bytes()
     config = tomllib.loads(content.decode("utf-8"))
     try:
+        if not isinstance(config.get("spy"), dict) or set(config["spy"]) != {"start", "end"}:
+            raise ValueError("La sección spy solo admite start y end; el activo está fijado en SPY")
         validate_source_url(config["shiller"]["url"])
         preparation_window(config["shiller"]["history_start"], content)
         if config["signals"] != {"basis": "monthly_mean_price", "momentum_non_positive": "cash"}:
