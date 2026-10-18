@@ -9,8 +9,6 @@ import sys
 from tfm.config import DEFAULT_CONFIG, load_config
 from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result
 from tfm.sources.prices import DownloadError
-# Compatibilidad de los comandos anteriores hasta el tercer incremento.
-from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
 
 
 RESULTS = {
@@ -273,93 +271,3 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 print("Revisa el archivo indicado o la conexión si estabas descargando; después repite la opción elegida.")
         if not _pause():
             return 0
-
-
-# Presentación de comandos anteriores; se retirará con ellos en el tercer incremento.
-def show_shiller_result(run_dir: Path) -> None:
-    report = json.loads((run_dir / "quality_report.json").read_bytes())
-    record = json.loads((run_dir / "run.json").read_bytes())
-    interval = report["interval"]
-    print("Preparación de la historia mensual de Shiller terminada.")
-    print(f"Periodo preparado: {report['first_period']} → {report['last_period']} | Meses: {report['rows']}")
-    print(f"Historia previa: {interval['history_start']} → 1926-12 | {report['history_rows']} meses")
-    print(f"Desarrollo: {interval['development_start']} → {interval['development_end']} | {report['development_rows']} meses")
-    print("Evaluación desde 1990: importes excluidos de la tabla preparada.")
-    print("Controles de estructura y cobertura mensual: superados.")
-    for warning in report["warnings"]:
-        print(f"Nota: {warning}")
-    print(f"Tabla mensual: {record['prepared_dir']}/monthly.parquet")
-    print(f"Original archivado: {record['snapshot_dir']}")
-    print(f"Registro: {run_dir / 'run.json'}")
-
-
-def show_shiller_signals_result(run_dir: Path) -> None:
-    summary = json.loads((run_dir / "summary.json").read_bytes())
-    print("Señales mensuales de Shiller generadas; diagnóstico sin simulación de rentabilidades.")
-    print(f"Meses objetivo: {summary['target_start']} → {summary['target_end']} | {summary['rows']} meses")
-    print(f"Historia suficiente para ambas reglas: {summary['both_rules_available']} meses")
-    print(f"Periodo común: {summary['first_common_target']} → {summary['last_common_target']}")
-    print("Señales: +1 largo, -1 corto, 0 efectivo; campo vacío significa historia insuficiente.")
-    for name, label in (("momentum", "Momentum"), ("reversal", "Reversión")):
-        if summary[f"missing_{name}_targets"]:
-            print(f"{label}, meses sin historia suficiente: {', '.join(summary[f'missing_{name}_targets'])}")
-    for warning in summary["warnings"]:
-        print(f"Nota: {warning}")
-    print(f"Tabla para consultar: {run_dir / 'signals.csv'}")
-    print(f"Tabla Parquet: {run_dir / 'signals.parquet'}")
-    print(f"Resumen: {run_dir / 'summary.json'}")
-    print(f"Registro: {run_dir / 'run.json'}")
-
-
-def show_simulation_result(run_dir: Path) -> None:
-    """Resumen común para menú y comando explícito."""
-    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-    print("Simulación de comprar y mantener terminada.")
-    print(f"Periodo efectivo: {summary['first_session']} → {summary['last_session']}")
-    print(f"Entrada al cierre: {summary['entry_at']} | Sesiones: {summary['sessions']}")
-    print(f"Rentabilidad bruta: {summary['gross_total_return']:.2%}")
-    print(f"Rentabilidad neta: {summary['net_total_return']:.2%}")
-    print(f"Capital final neto (inicial = 1): {summary['final_net_capital']:.6f}")
-    print(f"Costes en unidades de capital: {summary['total_cost_amount']:.6f}")
-    print(f"Rotación acumulada: {summary['total_turnover']:.2f}")
-    print(f"Caída máxima neta: {summary['max_drawdown']:.2%}")
-    for message in quality_messages(summary.get("checks", pending_checks())):
-        print(message)
-    for warning in summary["warnings"]:
-        print(f"Nota: {warning}")
-    print(f"Trayectoria: {run_dir / 'equity.parquet'}")
-    print(f"Resumen: {run_dir / 'summary.json'}")
-    print(f"Registro: {run_dir / 'run.json'}")
-
-
-def show_audit_result(run_dir: Path) -> bool:
-    report = json.loads((run_dir / "audit_report.json").read_text(encoding="utf-8"))
-    extended = report["schema_version"] == 2
-    print("Auditoría ejecutada. Alcance: " + ("calendario y distribuciones monetarias." if extended else "calendario de sesiones; no contraste de precios."))
-    interval = report["interval"]
-    print(f"Intervalo completo solicitado: {interval['start']} → {interval['end_exclusive']} (fin exclusivo)")
-    for message in quality_messages(report["checks"]):
-        print(message)
-    calendar = report["checks"]["calendar"]
-    for key, label in (("missing_sessions", "Sesiones ausentes"), ("unexpected_sessions", "Fechas inesperadas")):
-        if calendar[key]:
-            print(f"{label}: {', '.join(calendar[key][:10])}")
-            if len(calendar[key]) > 10:
-                print("La lista completa está en el informe.")
-    print(f"Versión del calendario: {calendar['library_version']} | Sesiones reducidas: {calendar['early_close_sessions']}")
-    print("XNYS es la referencia de sesiones diarias US; no certifica precios ni el horario intradía de SPY.")
-    print(f"Informe: {run_dir / 'audit_report.json'}")
-    print(f"Sesiones esperadas: {run_dir / 'calendar_sessions.parquet'}")
-    print(f"Registro: {run_dir / 'run.json'}")
-    if extended:
-        print("Precios de mercado y ajustes de rentabilidad total permanecen pendientes.")
-        print(f"Comparaciones por evento: {run_dir / 'distribution_comparison.parquet'}")
-        import pandas as pd
-        details = pd.read_parquet(run_dir / "distribution_comparison.parquet")
-        differences = details.loc[details["result"].ne("within_tolerance")]
-        for row in differences.head(10).itertuples():
-            print(f"  {row.observed_at.date()} | Yahoo: {row.yahoo_distribution:.6f} USD | SSGA: {row.ssga_distribution:.6f} USD | {row.result}")
-        if len(differences) > 10:
-            print("La lista completa está en la tabla de comparaciones.")
-        print("Una discrepancia no determina cuál de las fuentes es correcta; no se han reparado los datos.")
-    return not any(check["status"] == "failed" for check in report["checks"].values())

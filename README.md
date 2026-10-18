@@ -1,200 +1,14 @@
 # ¿Invertir o esperar?
 
-Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de aprendizaje automático para reglas de momentum y reversión sobre el S&P 500.
+Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Actualmente prepara Shiller y SPY por separado y calcula señales de Shiller. La simulación de rentabilidades y el entrenamiento de modelos siguen pendientes.
 
-## Flujo simplificado y menú guiado
+## Empezar
 
-El flujo nuevo utiliza **`configs/estudio.toml`**, nombres de archivo fijos y los mismos lectores, controles de datos y fórmulas de señales. Shiller y Yahoo Finance siguen disponibles por separado. El menú utiliza esta configuración única y las salidas fijas. Los comandos anteriores siguen disponibles temporalmente hasta la limpieza del tercer incremento; utilizan sus TOML anteriores.
-
-Con el entorno virtual activado, desde la raíz del proyecto:
+Con el entorno virtual existente activado, desde la raíz del repositorio:
 
 ```bash
-python -m tfm prepare-data
-python -m tfm calculate-signals
+python -m tfm
 ```
-
-El primer comando reutiliza `data/raw/shiller.xls`. Si falta, descarga el Excel configurado. Para comenzar sin red con un original local, ejecuta `python -m tfm prepare-data --file "/ruta/al/original.xls"`. Puedes indicar explícitamente un `original.xls` de las carpetas históricas; no se elige automáticamente ninguno. La importación conserva el archivo histórico y crea el original de trabajo. Los originales existentes no se sustituyen mediante `--file`.
-
-Salidas: `data/processed/shiller_monthly.parquet` y `data/processed/shiller_signals.parquet`. Cada tabla tiene un resumen `.json`; la procedencia se guarda una vez en `data/raw/shiller_fuente.json`. No se crean CSV, carpetas por intento, huellas ni registros de Git. Las tablas se regeneran en el mismo lugar. Preparar datos invalida las señales anteriores; ejecuta después `calculate-signals`. Un fallo de calidad o de escritura de la tabla provisional conserva las salidas válidas anteriores. Cambiar los periodos exige preparar de nuevo antes de calcular señales.
-
-SPY se prepara con `python -m tfm prepare-data --source spy`. Reutiliza `data/raw/spy.parquet` o descarga de Yahoo si falta. Para importar una descarga anterior, añade `--file "/ruta/a/prices.parquet"`; debe ser el original de Yahoo, no la tabla normalizada. Su salida es `data/processed/spy_prices.parquet`, con un resumen y `spy_fuente.json` para la procedencia. Se mantienen los parámetros de descarga anteriores y los controles estructurales; no se afirma haber certificado calendario, ajustes o precios. No se une SPY con Shiller.
-
-Los comandos admiten `--config` para indicar otro `estudio.toml` dentro de `configs/`; las salidas parten de su raíz de proyecto. La configuración predeterminada se localiza desde el paquete, también al ejecutar desde otro directorio.
-
-La evaluación desde 1990 sigue deshabilitada. Las señales de Shiller son un diagnóstico sobre promedios mensuales; no calculan rentabilidades, etiquetas ni modelos. Los datos y resultados históricos permanecen intactos. Las secciones siguientes describen el funcionamiento anterior, pendiente de consolidar al terminar la refactorización.
-
-## Estado del proyecto
-
-El estudio principal sigue la guía 1.B: desarrollo mensual en 1927–1989 y evaluación desde 1990 hasta un corte de 2026 pendiente de fijar. Ya se puede descargar o importar el Excel de Shiller y preparar únicamente 1926–1989, distinguiendo historia previa y desarrollo. Ya se pueden generar señales de momentum y reversión sobre los promedios mensuales; todavía no se simulan sus rentabilidades ni se entrenan modelos.
-
-La exploración previa con SPY conserva descarga, preparación, simulador diario, auditoría de calendario y contraste de distribuciones. Sus resultados y configuraciones se mantienen como planteamiento anterior, separado de la historia mensual. Véase [la fuente y el alcance del nuevo flujo](docs/shiller_monthly.md).
-
-El [protocolo mensual](docs/monthly_protocol.md) documenta las reglas y las decisiones pendientes antes de simular. Se mantiene Shiller como fuente y se distingue el cálculo de señales de una reproducción de operaciones ejecutables.
-
-## Arquitectura
-
-El proyecto sigue un proceso incremental organizado según CRISP-DM: comprensión del problema, comprensión y preparación de datos, modelado, evaluación y entrega reproducible.
-
-```text
-Fuentes → originales → preparación → variables → reglas → señales
-                                              ↓          ↓
-                                          modelo ← etiquetas
-                                              ↓
-                                         decisiones
-                                              ↓
-                        simulador común → evaluación → gráficos
-```
-
-Las reglas originales generan la dirección de las señales. El meta-modelo decide si aceptarlas. Todas las estrategias utilizan el mismo simulador para comparar ejecución, posiciones y costes con criterios consistentes.
-
-## Estructura
-
-```text
-configs/                 Configuración de datos y experimentos
-src/tfm/
-  cli.py                 Comandos locales
-  pipeline.py            Coordinación y registro de ejecuciones
-  sources/               Descarga y procedencia de datos
-  preparation/           Calidad, normalización e integración temporal
-  features/              Variables disponibles en cada decisión
-  signals/               Reglas originales y filtros de referencia
-  labels/                Resultados futuros de las señales para entrenar
-  models/                Entrenamiento y predicción del meta-modelo
-  validation/            Particiones temporales y registro de pruebas
-  backtesting/           Posiciones, ejecución, costes y retornos
-  evaluation/            Métricas, controles de sobreajuste e interpretación
-notebooks/               Exploración y explicación del análisis
-tests/                   Verificaciones temporales y financieras
-data/raw/                Copias originales de las fuentes
-data/processed/          Tablas limpias y normalizadas
-data/datasets/           Conjuntos de variables y etiquetas
-outputs/runs/            Configuración, predicciones y resultados por ejecución
-docs/                    Contratos de datos y plan incremental
-```
-
-Los módulos reutilizables viven en `src/tfm`. Los cuadernos llaman a esos módulos; no deben ser el único lugar donde exista lógica necesaria para reproducir el estudio.
-
-## Datos y reproducibilidad
-
-Se utiliza pandas para el procesamiento y Parquet para persistir tablas. Las nuevas dependencias se añadirán cuando una función las necesite. DuckDB podrá incorporarse si las consultas SQL lo justifican.
-
-- Conservar originales y registrar fuente, fecha de descarga y ajustes.
-- Distinguir fecha observada, fecha disponible, decisión y ejecución.
-- Mantener etiquetas futuras separadas de las variables explicativas.
-- Identificar el activo incluso cuando solo se estudie SPY.
-- Registrar configuraciones, versiones, semillas y particiones por ejecución.
-- No sobrescribir resultados de experimentos anteriores.
-
-El bloque principal de desarrollo es 1927–1989; 1926 se conserva inicialmente como historia previa. Desde 1990 comienza la evaluación, cuyo corte final permanece pendiente. La configuración histórica impide preparar importes desde 1990. Ya se consultó parte de 1993–2020 bajo el planteamiento anterior: no se presenta todo el nuevo periodo de evaluación como nunca examinado. Los resultados de evaluación no se utilizarán para elegir variables, modelos o filtros.
-
-## Entorno local
-
-Se propone Python 3.11 o posterior. Para crear un entorno aislado:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-```
-
-La instalación editable utiliza setuptools como herramienta de construcción. pandas procesa las tablas, PyArrow permite persistir Parquet, exchange_calendars aporta las reglas históricas de sesiones, openpyxl lee el Excel oficial de distribuciones, xlrd lee el XLS original de Shiller y el extra `dev` incorpora pytest. yfinance obtiene la respuesta de Yahoo Finance. Para comprobar que el paquete se importa tras instalarlo:
-
-```bash
-python -c "import tfm; print(tfm.__version__)"
-```
-
-## Desarrollo incremental
-
-1. Primera fuente y reconstrucción de tablas desde originales.
-2. Simulador básico con comprar y mantener y costes (implementado).
-3. Señales de momentum y reversión sobre promedios de Shiller (implementado); simulación mensual pendiente.
-4. Variables de entorno, integración de fuentes y filtros sencillos.
-5. Etiquetas, particiones temporales y registro de configuraciones.
-6. Primer meta-modelo sencillo y predicciones fuera de muestra.
-7. Alternativas justificadas, SHAP y controles DSR/PBO.
-8. Configuración fijada, evaluación final y exportación de resultados.
-
-Consulta `docs/architecture.md` para los contratos y las decisiones pendientes. El [protocolo financiero anterior](docs/financial_protocol.md) describe el primer simulador diario de SPY; el [protocolo mensual propuesto](docs/monthly_protocol.md) prepara el siguiente incremento.
-
-La CLI dispone de un menú interactivo. Su alcance y ampliaciones están descritos en [el plan de la CLI](docs/cli_plan.md).
-
-## Verificación
-
-Los tests se añadirán con cada comportamiento implementado. Priorizarán disponibilidad temporal de datos, ventanas de señales, separación de etiquetas, ejecución y costes, purga de particiones cuando corresponda y un recorrido completo con datos pequeños calculables a mano.
-
-El framework de tests es pytest. Se ejecuta con `python -m pytest -q`. Se mantienen tests esenciales de descarga, preparación y flujo completo; el simulador tiene pruebas esenciales de cálculo, protección temporal y recorrido por CLI y menú.
-
-### Dependencias reproducibles
-
-`requirements-lock.txt` registra las versiones verificadas con Python 3.14 en macOS. Para reproducir ese entorno, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. En otra versión de Python o plataforma, resuelve las dependencias de `pyproject.toml` y valida antes de renovar este archivo.
-
-## Fuente de precios de SPY (exploración anterior)
-
-Yahoo Finance para SPY, limitado inicialmente a 29/01/1993–31/12/2020. Los parámetros explícitos están en `configs/data.toml`. Consulta [la ficha de fuente](docs/data_sources.md) para la comprobación realizada, el tratamiento de ajustes y las verificaciones pendientes. El adaptador de descarga está implementado; la normalización y el informe de calidad también están disponibles.
-
-## Descargar un snapshot de precios
-
-Desde la raíz del repositorio, con el entorno virtual activado:
-
-```bash
-python -c 'from tfm.sources.prices import download_prices; print(download_prices("configs/data.toml"))'
-```
-
-Cada ejecución descarga el periodo configurado y crea un directorio nuevo en `data/raw/yahoo/SPY/<snapshot_id>/`, excluido de Git:
-
-- `prices.parquet`: tabla devuelta por yfinance, con fechas, precios, cierre ajustado y eventos, sin normalización propia.
-- `manifest.json`: parámetros efectivos, configuración, tiempos UTC, versiones de bibliotecas, cobertura y SHA-256 del Parquet.
-
-Los snapshots anteriores no se sobrescriben. Una respuesta vacía, columnas incompatibles o fechas fuera del intervalo generan un error. Si falla la escritura, se elimina el directorio parcial. El manifiesto identifica una descarga terminada. Esto no sustituye el informe de calidad: los valores ausentes, duplicados y la coherencia económica se revisarán en `preparation`.
-
-La copia conserva la salida de yfinance, no el payload HTTP original de Yahoo. Tampoco representa una versión conocida en la fecha histórica. El adaptador está limitado por ahora a SPY diario y exige los parámetros documentados. No impone por sí solo un bloqueo general del periodo final; utiliza el intervalo de la configuración.
-
-Verificación de este incremento: nueve tests sin red y descarga real de 7.033 sesiones entre 29/01/1993 y 31/12/2020. El contraste numérico con otra fuente sigue pendiente.
-
-## Preparar los precios descargados
-
-Sustituye `RUTA_DEL_SNAPSHOT` por el directorio devuelto por la descarga:
-
-```bash
-python -c 'from tfm.preparation.prices import prepare_prices; print(prepare_prices("RUTA_DEL_SNAPSHOT", "data/processed"))'
-```
-
-Se verifica la integridad del original y se guardan una tabla con columnas normalizadas, su informe de calidad y un manifiesto de procedencia en un directorio nuevo. No se modifica el snapshot original ni se rellenan datos ausentes. Un error de calidad impide publicar la tabla y señala la ruta del informe. Consulta [la arquitectura](docs/architecture.md) para el esquema y los controles.
-
-La preparación real de las 7.033 sesiones de SPY pasó los controles implementados. Sigue pendiente verificar el calendario bursátil completo y contrastar precios con otra fuente. El comando completo se describe a continuación.
-
-## Flujo completo desde la terminal
-
-Desde la raíz del repositorio, activa el entorno y ejecuta:
-
-```bash
-source .venv/bin/activate
-python -m tfm prepare-prices --config configs/data.toml
-```
-
-Este comando descarga un nuevo snapshot, prepara los precios y muestra las rutas del resultado y del registro. Para volver a preparar una descarga concreta sin acceder a Yahoo:
-
-```bash
-python -m tfm prepare-prices --config configs/data.toml --snapshot RUTA_DEL_SNAPSHOT
-```
-
-La descarga reutilizada debe tener los mismos parámetros de proveedor, instrumento, periodo y opciones de descarga que la configuración. Las rutas relativas de `--config` y `--snapshot` parten del directorio actual. Las rutas de almacenamiento dentro del TOML parten del padre de la carpeta que contiene la configuración: mantén los TOML en `configs/`. Así se resuelven los datos en el mismo lugar aunque ejecutes el comando desde otro directorio con una ruta absoluta al TOML.
-
-Cada intento tiene su directorio `outputs/runs/<run_id>/`, excluido de Git:
-
-- `run.json`: estado, fase, tiempos UTC, rutas, versiones y commit de Git, con indicación de cambios locales.
-- `config.toml`: copia de la configuración y su huella registrada en `run.json`.
-- En ejecuciones completadas: `source_manifest.json`, `prepared_manifest.json` y `quality_report.json`.
-
-Si falla la descarga o la preparación, el comando devuelve código 1 e indica el registro. Un rechazo de calidad deja también la ruta del informe en `run.json`; los originales se conservan. Las ejecuciones interrumpidas con Ctrl+C se registran como `interrupted`. Una terminación forzada o un fallo del propio almacenamiento puede impedir actualizar el registro y dejarlo en `running`.
-
-No se sobrescriben ejecuciones anteriores ni se elige automáticamente una descarga reciente: la repetición exige indicar el snapshot. El registro de Git identifica la revisión y si había cambios; para reconstruir exactamente el código usado, conserva esos cambios en un commit.
-
-El comando se comprobó con el snapshot real de 7.033 sesiones, sin red y desde fuera del repositorio. No requiere dependencias adicionales a las ya instaladas.
-
-## Menú interactivo
-
-Con el entorno virtual activado, ejecuta `python -m tfm`:
 
 ```text
 1. Preparar datos de Shiller
@@ -205,59 +19,96 @@ Con el entorno virtual activado, ejecuta `python -m tfm`:
 0. Salir
 ```
 
-Cada tarea explica fuente, periodo, entrada, resultado y siguiente paso. Si existe el original de trabajo, lo reutiliza sin descargar. Si falta, permite descargar, importar un archivo propio o elegir por número un original de la etapa anterior, mostrando una fecha legible. No se elige automáticamente la última copia. Seleccionar descargar es explícito y los originales anteriores permanecen intactos.
+Para continuar con los datos que ya tienes, elige **1 → Reutilizar un original de la etapa anterior**, selecciona su número y espera el resumen. Después utiliza **2** para calcular las señales y **3** para consultar resultados y las primeras cinco filas. Los originales anteriores no se modifican.
 
-La opción 3 muestra qué tablas están disponibles y permite consultar un resumen y cinco filas en la terminal, sin modificar ni convertir archivos. Si falta una tabla, su resumen o su configuración ha cambiado, indica qué tarea debe repetirse. `python -m tfm status` ofrece la consulta resumida sin interacción. Las salidas de Shiller y SPY se identifican por separado.
+Cada tarea identifica la fuente, el periodo, la entrada, el resultado y el siguiente paso. Si falta un original, permite descargar, importar un archivo propio o escoger uno anterior por fecha y número. No elige automáticamente la última copia. Si ya existe el original de trabajo, lo reutiliza sin descargar.
 
-0 vuelve desde las selecciones o sale desde el menú principal. Intro cierra un resultado; cancelar una selección con 0 vuelve directamente. Ctrl+C cancela y Ctrl+D cierra el menú. La pantalla se limpia solo en terminales compatibles y los resultados permanecen hasta Intro. La opción 5 muestra los parámetros en lenguaje comprensible; el archivo se vuelve a leer antes de cada tarea. Un TOML inválido permite reintentar después de corregirlo.
+**0** vuelve o sale. **Intro** cierra un resultado. **Ctrl+C** cancela la tarea y **Ctrl+D** cierra el menú. La pantalla se limpia en terminales compatibles y mantiene el resultado hasta Intro. No hay apertura de archivos mediante Finder ni otros gestores del sistema.
 
-No hay navegador de ejecuciones ni apertura de archivos a través del sistema operativo. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.
+## Datos y configuración
 
-Las secciones siguientes describen **comandos del flujo anterior**, conservados temporalmente hasta terminar la refactorización; sus auditorías y simulador diario ya no aparecen en el menú actual.
+Solo hay una configuración: [configs/estudio.toml](configs/estudio.toml). Contiene la fuente de Shiller, los periodos del estudio, las convenciones de las reglas y el periodo diario solicitado para SPY. La opción 5 explica sus valores. El menú vuelve a leer el archivo antes de cada tarea.
 
-## Simular comprar y mantener
+- **Shiller:** historia previa desde 1926, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. P es un precio medio mensual y D es anualizado e interpolado. Todavía está pendiente acordar con el tutor cómo evaluar rentabilidades con esa información.
+- **SPY:** datos diarios del ETF mediante Yahoo Finance y `yfinance`, inicialmente desde 1993 hasta 2020. Se mantienen separados de Shiller y su utilización definitiva sigue pendiente.
 
-Comando anterior, separado del menú actual:
+Las salidas tienen nombres fijos:
 
-```bash
-python -m tfm simulate-buy-and-hold --config configs/buy_and_hold.toml --prepared RUTA_DE_PRECIOS_PREPARADOS
+```text
+data/raw/shiller.xls                    Original de trabajo de Shiller
+data/raw/shiller_fuente.json            Procedencia de ese original
+data/raw/spy.parquet                    Original de trabajo de Yahoo
+data/raw/spy_fuente.json                Procedencia de ese original
+data/processed/shiller_monthly.parquet   Observaciones mensuales preparadas
+data/processed/shiller_signals.parquet   Señales de momentum y reversión
+data/processed/spy_prices.parquet        Precios diarios normalizados
 ```
 
-`RUTA_DE_PRECIOS_PREPARADOS` es un directorio bajo `data/processed/prices/` con Parquet, manifiesto e informe aprobados. Se elige explícitamente; no se descarga nada ni se toma automáticamente la preparación más reciente.
+Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales anteriores cuando termina correctamente. Los fallos de calidad o de escritura de los archivos provisionales conservan las salidas válidas anteriores. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
 
-La configuración independiente `configs/buy_and_hold.toml` contiene inicio y fin **inclusivos**, coste en puntos básicos y las convenciones admitidas. Las fechas deben quedar dentro de la cobertura del archivo. La primera sesión del intervalo es la decisión: se compra al cierre de la segunda y la nueva posición recibe el retorno desde ese cierre. Se requieren al menos tres sesiones. Cambiar el intervalo reinicia la estrategia en efectivo; no arrastra posiciones anteriores. Cuando se comparen anomalías, sus fechas efectivas deberán alinearse con las del benchmark.
+Los originales de trabajo no se sustituyen automáticamente. Si necesitas actualizar uno, conserva primero una copia y retíralo de su ruta de trabajo antes de importar o descargar otro; después regenera los datos preparados y sus señales. Los originales y resultados históricos permanecen en sus carpetas y quedan fuera de Git, igual que los datos nuevos.
 
-El comando anterior utiliza `configs/buy_and_hold.toml`; los parámetros financieros se editan allí. Las rutas de almacenamiento y política declaradas en TOML parten de la raíz del proyecto deducida de `configs/`. Las rutas de `--config` y `--prepared` parten del directorio de ejecución.
+Las comprobaciones detectan problemas de estructura, cobertura mensual, fechas, valores y coherencia de precios. No certifican la exactitud financiera de una fuente. La herramienta no crea CSV, identificadores de ejecución, huellas de integridad, copias de configuraciones ni registros del estado de Git.
 
-La política de desarrollo se lee de `[validation]` en `configs/experiment_base.toml`, mediante `validation.policy_config`; todavía no se interpreta su resto como un experimento ejecutable. Se rechazan intervalos y preparaciones completas que invadan el periodo final. No basta con recortar un archivo que incluya datos reservados. El protocolo de evaluación final se incorporará en otro incremento.
+Las [decisiones y limitaciones](docs/decisiones.md) explican las reglas, las cuestiones metodológicas abiertas y los hallazgos previos que deben conservarse para el TFM.
 
-Convenciones: capital inicial 1, exposición 0/1 sin cortos, efectivo no remunerado, retornos de cierre ajustado como aproximación a rentabilidad total y sin liquidación final automática. No se suman dividendos otra vez. El coste inicial de 5 puntos básicos (0,05 %) es ilustrativo y configurable; no representa una tarifa de bróker verificada. Mantener exposición 1 no genera nuevas compras diarias.
+## Arquitectura
 
-Cada intento deja su registro en `outputs/runs/<run_id>`. Una ejecución completada guarda `config.toml`, `validation_policy.toml`, manifiesto e informe de los precios, `equity.parquet` y `summary.json`. El registro contiene huellas de configuraciones y resultados, versiones y estado de Git. La tabla distingue posiciones antes/después del cierre, retorno bruto/neto, rotación, coste monetario y capital bruto/neto. El resumen añade rentabilidades acumuladas, coste en unidades de capital, rotación y caída máxima neta como magnitud positiva. La caída incluye el capital inicial, por lo que recoge el coste de entrada. La suma de costes monetarios no equivale a la diferencia entre rentabilidades acumuladas.
-
-Los errores e interrupciones se registran y no publican una trayectoria finalizada. No se sobrescriben precios ni ejecuciones anteriores. El calendario se comprueba con una auditoría seleccionada explícitamente; sin ella se muestra pendiente. El contraste numérico con otra fuente sigue pendiente. No se han implementado Sharpe, DSR, PBO ni interpretación de modelos en este incremento.
-
-
-## Auditar las sesiones del calendario
-
-Comando anterior, separado del menú actual:
-
-```bash
-python -m tfm audit-prices --config configs/audit.toml --prepared RUTA_DE_PRECIOS_PREPARADOS
+```text
+Menú o comando → configuración → lectura/descarga → preparación → señales
 ```
 
-Se contrasta **todo el intervalo solicitado del manifiesto**, con final exclusivo, contra XNYS como referencia de sesiones diarias US. No se rellena ni modifica ningún precio. El informe separa calendario de precios, dividendos y ajustes: aprobar calendario no acredita esos otros campos. Funciona sin red después de instalar las dependencias.
+```text
+configs/estudio.toml       Parámetros del estudio
+src/tfm/
+  __main__.py             Entrada de python -m tfm
+  cli.py                  Comandos directos
+  menu.py                 Recorridos guiados y consulta en terminal
+  config.py               Lectura de configuración y comprobaciones
+  data.py                 Coordinación y guardado con rutas fijas
+  sources/                Lectura o descarga de Shiller y Yahoo
+  preparation/            Normalización y calidad de cada fuente
+  signals/                Fórmulas de momentum y reversión
+notebooks/                Exploración y explicaciones, cuando sean necesarias
+tests/                    Pruebas esenciales sin red
+docs/decisiones.md        Supuestos, limitaciones y antecedentes
+```
 
-Para usar el resultado en una simulación, añade `--audit RUTA_DE_EJECUCION_DE_AUDITORIA` al comando `simulate-buy-and-hold`. No se elige automáticamente la última auditoría. Se comprueban huellas, cobertura, configuración/política y versión; se rechazan informes de otra preparación, parciales o con discrepancias. Se copia el informe empleado para conservar su procedencia. Sin auditoría sigue disponible el benchmark exploratorio, con calendario pendiente.
+No requiere servidor, base de datos ni un gestor de experimentos. Los módulos de variables, etiquetas, modelos y evaluación se añadirán cuando los desarrollemos. La lógica reutilizable pertenece a `src/tfm`; los cuadernos pueden utilizarla para explorar y explicar resultados.
 
-Consulta [el alcance, formato y limitaciones de la auditoría](docs/calendar_audit.md). Los informes y resultados anteriores permanecen intactos. Si aparecen discrepancias, se conserva la lista y la ejecución de auditoría puede quedar completada técnicamente con un resultado de calendario fallido; no se presenta como superada.
+## Comandos directos
 
-## Contraste con el emisor
+El menú llama a las mismas funciones que estos comandos:
 
-Los comandos anteriores permiten importar el Excel oficial de State Street y contrastar las distribuciones. Estas tareas ya no aparecen en el menú simplificado. Véase [source_reconciliation.md](docs/source_reconciliation.md) para los comandos, la política de comparación, los resultados reales y las limitaciones pendientes. No se modifican los originales ni se certifican cierres o ajustes a partir de dividendos.
+```bash
+python -m tfm prepare-data
+python -m tfm calculate-signals
+python -m tfm prepare-data --source spy
+python -m tfm status
+```
 
-## Reglas y alcance del estudio mensual
+`prepare-data` reutiliza el original de trabajo o descarga si falta. Para empezar sin red, añade `--file "/ruta/al/original.xls"`; con `--source spy`, indica el Parquet original de Yahoo, con sus columnas originales. Un archivo normalizado no sirve como original de Yahoo.
 
-La opción 1 prepara 768 meses con la configuración actual: 12 de historia previa y 756 de desarrollo. La opción 2 calcula momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La tabla distingue mes de decisión y mes objetivo; +1 propone largo, -1 corto y 0 efectivo. Una señal vacía significa historia insuficiente.
+Los comandos admiten `--config` para indicar un archivo de estudio dentro de `configs/`; las salidas parten de su raíz de proyecto. Sin `--config`, se localiza la configuración desde el paquete. Sin argumentos y sin terminal interactiva, se muestra ayuda y no se esperan respuestas.
 
-Con historia desde enero de 1926 hay 756 meses objetivo de 1927–1989 y 755 comparables para ambas reglas, desde febrero de 1927. Las señales utilizan promedios mensuales, sin dividendos, financiación, costes ni resultados de inversión. La simulación requiere resolver con el tutor el [protocolo mensual](docs/monthly_protocol.md).
+Los comandos antiguos `prepare-prices`, `prepare-shiller`, `build-shiller-signals`, `simulate-buy-and-hold`, `audit-prices` e `import-ssga-dividends` se han retirado. La preparación actual utiliza `prepare-data`; el cálculo de señales, `calculate-signals`. No se incluye todavía un simulador en el flujo actual.
+
+## Entorno y pruebas
+
+Para crear un entorno nuevo, con Python 3.11 o posterior:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+```
+
+En PowerShell, el comando de activación es `.venv\Scripts\Activate.ps1`. El entorno verificado es Python 3.14 en macOS; el archivo `requirements-lock.txt` recoge sus versiones. Para reproducir esas versiones, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. En otra versión de Python o plataforma, utiliza las dependencias de `pyproject.toml` y comprueba el entorno.
+
+Se mantienen pandas, PyArrow, yfinance, xlrd y certifi. Se han retirado las dependencias de auditoría de calendario y del Excel SSGA. Esta limpieza no instala ni desinstala paquetes del entorno existente.
+
+```bash
+python -m pytest -q
+```
+
+Las pruebas cubren los lectores, la separación temporal, las reglas calculables a mano, la preparación, los errores principales y los recorridos del menú. No descargan datos ni alteran archivos del usuario. Véase [tests/README.md](tests/README.md).

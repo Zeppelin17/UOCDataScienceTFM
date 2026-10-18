@@ -1,18 +1,6 @@
-"""Normalización de un snapshot SPY con controles explícitos de calidad."""
-
-from datetime import datetime, timezone
-import hashlib
-from io import BytesIO
-from importlib.metadata import version
-import json
-from pathlib import Path
-import shutil
-from uuid import uuid4
+"""Normalización y comprobaciones estructurales de los datos diarios de SPY."""
 
 import pandas as pd
-
-from tfm.backtesting.engine import validate_prices
-from tfm.preparation.quality import pending_checks
 
 
 COLUMN_NAMES = {
@@ -20,16 +8,10 @@ COLUMN_NAMES = {
     "Adj Close": "adjusted_close", "Volume": "volume",
     "Dividends": "dividends", "Stock Splits": "stock_splits",
 }
-SCHEMA_VERSION = 1
 
 
 class PriceQualityError(ValueError):
-    """Datos rechazados; report_path indica el informe si pudo generarse."""
-
-    def __init__(self, message: str, report_path: Path | None = None):
-        super().__init__(message)
-        self.report_path = report_path
-
+    """El original no tiene una estructura de precios diarios compatible."""
 
 def normalize_prices(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """Cambiar nombres y ordenar sesiones sin imputar ni eliminar filas.
@@ -78,97 +60,6 @@ def normalize_prices(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         "first_session": table["observed_at"].min().isoformat() if table["observed_at"].notna().any() else None,
         "last_session": table["observed_at"].max().isoformat() if table["observed_at"].notna().any() else None,
         "input_was_sorted": frame.index.is_monotonic_increasing,
-        "checks": pending_checks(),
         "warnings": [],
     }
     return table, report
-
-
-def prepare_prices(snapshot_dir: str | Path, processed_root: str | Path) -> Path:
-    """Verificar SHA-256 y publicar una tabla preparada o un informe fallido.
-
-    processed_root es explícito; las rutas relativas parten del directorio
-    de ejecución. Cada intento con estructura válida crea un directorio nuevo.
-    """
-    snapshot_dir = Path(snapshot_dir).resolve()
-    manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
-    if (manifest["schema_version"] != 1 or manifest["provider"] != "yahoo"
-            or manifest["instrument"] != "SPY" or manifest["data_file"] != "prices.parquet"):
-        raise PriceQualityError("El manifiesto no corresponde a un snapshot SPY compatible")
-    data_path = snapshot_dir / "prices.parquet"
-    checksum = hashlib.sha256(data_path.read_bytes()).hexdigest()
-    if checksum != manifest["sha256"]:
-        raise PriceQualityError("SHA-256 incorrecto: el snapshot ha cambiado")
-    frame = pd.read_parquet(data_path)
-    if len(frame) != manifest["rows"]:
-        raise PriceQualityError("El número de filas no coincide con el manifiesto")
-    table, report = normalize_prices(frame)
-    start = pd.Timestamp(manifest["parameters"]["start"])
-    end = pd.Timestamp(manifest["parameters"]["end"])
-    if pd.isna(start) or pd.isna(end) or start >= end:
-        raise PriceQualityError("Intervalo inválido en el manifiesto")
-    outside = int(((table["observed_at"] < start) | (table["observed_at"] >= end)).sum())
-    report["error_counts"]["outside_requested_period"] = outside
-    report["status"] = "failed" if any(report["error_counts"].values()) else "passed"
-    preparation_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex
-    directory = Path(processed_root).resolve() / "prices" / preparation_id
-    directory.mkdir(parents=True, exist_ok=False)
-    try:
-        report["preparation_id"] = preparation_id
-        report_path = directory / "quality_report.json"
-        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        prepared_checksum = None
-        if report["status"] == "passed":
-            output_path = directory / "prices.parquet"
-            table.to_parquet(output_path, engine="pyarrow", index=False)
-            prepared_checksum = hashlib.sha256(output_path.read_bytes()).hexdigest()
-        provenance = {
-            "schema_version": SCHEMA_VERSION, "preparation_id": preparation_id,
-            "created_at_utc": datetime.now(timezone.utc).isoformat(),
-            "status": report["status"], "source_snapshot_dir": str(snapshot_dir),
-            "source_snapshot_id": manifest["snapshot_id"], "source_sha256": checksum,
-            "source_manifest": manifest,
-            "data_file": "prices.parquet" if prepared_checksum else None,
-            "sha256": prepared_checksum, "quality_report": "quality_report.json",
-            "versions": {name: version(name) for name in ("pandas", "pyarrow", "uoc-data-science-tfm")},
-            "normalization_version": 1,
-        }
-        (directory / "manifest.json").write_text(json.dumps(provenance, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    except Exception:
-        shutil.rmtree(directory)
-        raise
-    if report["status"] == "failed":
-        raise PriceQualityError(f"Calidad insuficiente; consulte {report_path}", report_path)
-    return directory
-
-
-def load_prepared_prices(directory: str | Path) -> tuple[pd.DataFrame, bytes, bytes]:
-    """Verificar una preparación sin modificarla; leer los mismos bytes cuya huella se comprueba."""
-    directory = Path(directory)
-    manifest_bytes = (directory / "manifest.json").read_bytes()
-    manifest = json.loads(manifest_bytes)
-    if (manifest["schema_version"] != 1 or manifest["status"] != "passed"
-            or manifest["normalization_version"] != 1 or manifest["data_file"] != "prices.parquet"
-            or manifest["quality_report"] != "quality_report.json"
-            or manifest["source_manifest"]["instrument"] != "SPY"
-            or manifest["source_manifest"]["provider"] != "yahoo"):
-        raise ValueError("La preparación no corresponde a precios SPY compatibles y aprobados")
-    report_bytes = (directory / "quality_report.json").read_bytes()
-    report = json.loads(report_bytes)
-    if report["status"] != "passed" or any(report["error_counts"].values()):
-        raise ValueError("La preparación no ha superado los controles de calidad")
-    content = (directory / "prices.parquet").read_bytes()
-    if hashlib.sha256(content).hexdigest() != manifest["sha256"]:
-        raise ValueError("SHA-256 incorrecto: los precios preparados han cambiado")
-    prices = pd.read_parquet(BytesIO(content))
-    validate_prices(prices)
-    if len(prices) != report["rows"]:
-        raise ValueError("El número de filas no coincide con el informe de calidad")
-    parameters = manifest["source_manifest"]["parameters"]
-    start, end = pd.Timestamp(parameters["start"]), pd.Timestamp(parameters["end"])
-    if (pd.isna(start) or pd.isna(end) or start.tz is not None or end.tz is not None
-            or start != start.normalize() or end != end.normalize() or start >= end):
-        raise ValueError("Intervalo solicitado inválido en el manifiesto")
-    if not ((prices["observed_at"] >= start) & (prices["observed_at"] < end)).all():
-        raise ValueError("La preparación contiene fechas fuera del intervalo solicitado")
-    return prices, manifest_bytes, report_bytes

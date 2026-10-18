@@ -1,21 +1,13 @@
-"""Tabla de observaciones mensuales de Shiller; no precios de ejecución ni retornos."""
+"""Observaciones mensuales de Shiller: selección temporal y controles de datos."""
 
-from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from hashlib import sha256
-from importlib.metadata import version
-from io import BytesIO
-import json
 import math
-from pathlib import Path
-import shutil
-from uuid import uuid4
+import tomllib
 
 import pandas as pd
 import xlrd
 
-from tfm.sources.shiller import INSTRUMENT, load_shiller_snapshot
-from tfm.validation.policy import parse_historical_policy
+from tfm.sources.shiller import INSTRUMENT
 
 
 COLUMNS = ["asset", "period", "price_monthly_mean", "dividend_annualized", "sample_role", "source"]
@@ -23,15 +15,8 @@ LIMITATIONS = [
     "P es un promedio mensual nominal; no un cierre, precio de orden o cierre ajustado de SPY.",
     "D es anualizado e interpolado; no es un pago mensual ni un predictor conocido en tiempo real.",
     "Los controles son de estructura y cobertura; no certifican exactitud, disponibilidad histórica o ejecución.",
-    "Rentabilidades, señales, etiquetas y metodología de ejecución quedan pendientes.",
+    "Las señales se calculan por separado; rentabilidades, etiquetas y ejecución siguen pendientes.",
 ]
-
-
-class ShillerQualityError(ValueError):
-    def __init__(self, message: str, report_path: Path):
-        super().__init__(message)
-        self.report_path = report_path
-
 
 def _month(value) -> str:
     """YYYY.MM numérico: 1926.1 es octubre, no enero."""
@@ -51,8 +36,13 @@ def _month(value) -> str:
     return f"{year:04d}-{month:02d}"
 
 
+
 def preparation_window(history_start: str, policy_bytes: bytes) -> tuple[str, str, str]:
-    policy = parse_historical_policy(policy_bytes)
+    policy = tomllib.loads(policy_bytes.decode("utf-8"))["validation"]
+    expected = {"development_start": "1927-01-01", "development_end": "1989-12-31",
+                "final_test_start": "1990-01-01", "final_test_end": "pending"}
+    if policy != expected:
+        raise ValueError("Este flujo exige desarrollo 1927–1989 y evaluación desde 1990 aún deshabilitada")
     try:
         start = pd.Period(history_start, freq="M")
     except (ValueError, TypeError) as exc:
@@ -60,6 +50,7 @@ def preparation_window(history_start: str, policy_bytes: bytes) -> tuple[str, st
     if str(start) != history_start or not pd.Period("1871-01", freq="M") <= start <= pd.Period("1926-01", freq="M"):
         raise ValueError("La historia previa debe comenzar entre 1871-01 y 1926-01")
     return history_start, policy["development_start"][:7], policy["development_end"][:7]
+
 
 
 def normalize_shiller(content: bytes, *, history_start: str, policy_bytes: bytes) -> tuple[pd.DataFrame, dict]:
@@ -117,85 +108,3 @@ def normalize_shiller(content: bytes, *, history_start: str, policy_bytes: bytes
         "selected_source_columns": ["Date", "P", "D"], "warnings": LIMITATIONS,
     }
     return table, report
-
-
-def prepare_shiller(snapshot_dir: str | Path, processed_root: Path, *, history_start: str, policy_bytes: bytes) -> Path:
-    preparation_window(history_start, policy_bytes)  # Rechazar política/ventana antes de abrir el original.
-    content, source_manifest_bytes = load_shiller_snapshot(snapshot_dir)
-    source_manifest = json.loads(source_manifest_bytes)
-    table, report = normalize_shiller(content, history_start=history_start, policy_bytes=policy_bytes)
-    identifier = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex
-    directory = processed_root / "shiller_monthly" / identifier
-    directory.mkdir(parents=True, exist_ok=False)
-    try:
-        (directory / "source_manifest.json").write_bytes(source_manifest_bytes)
-        (directory / "validation_policy.toml").write_bytes(policy_bytes)
-        report["preparation_id"] = identifier
-        report_path = directory / "quality_report.json"
-        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        if report["status"] == "passed":
-            table.to_parquet(directory / "monthly.parquet", index=False)
-        manifest = {
-            "schema_version": 1, "normalization_version": 1, "kind": "shiller_monthly_observations",
-            "preparation_id": identifier, "created_at_utc": datetime.now(timezone.utc).isoformat(),
-            "status": report["status"], "instrument": INSTRUMENT, "frequency": "monthly",
-            "source_snapshot_dir": str(Path(snapshot_dir).resolve()), "source_snapshot_id": source_manifest["snapshot_id"],
-            "source_sha256": source_manifest["sha256"],
-            "data_file": "monthly.parquet" if report["status"] == "passed" else None,
-            "sha256": sha256((directory / "monthly.parquet").read_bytes()).hexdigest() if report["status"] == "passed" else None,
-            "quality_report": "quality_report.json", "interval": report["interval"],
-            "artifacts_sha256": {name: sha256((directory / name).read_bytes()).hexdigest()
-                                 for name in ("source_manifest.json", "validation_policy.toml", "quality_report.json")},
-            "versions": {name: version(name) for name in ("uoc-data-science-tfm", "pandas", "pyarrow", "xlrd")},
-            "semantics": {"price_monthly_mean": "nominal monthly average index points",
-                          "dividend_annualized": "annualized interpolated dividend index points; not monthly cash payment",
-                          "available_at": None, "point_in_time": False, "execution_price": False},
-        }
-        (directory / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    except (Exception, KeyboardInterrupt):
-        shutil.rmtree(directory)
-        raise
-    if report["status"] != "passed":
-        raise ShillerQualityError(f"Calidad estructural insuficiente; consulte {report_path}", report_path)
-    return directory
-
-
-def load_shiller_monthly(directory: str | Path, policy_bytes: bytes) -> tuple[pd.DataFrame, bytes, bytes]:
-    """Lectura verificada del contrato mensual; no admite las tablas diarias de SPY."""
-    directory = Path(directory)
-    manifest_bytes = (directory / "manifest.json").read_bytes()
-    manifest = json.loads(manifest_bytes)
-    if (manifest["schema_version"] != 1 or manifest["normalization_version"] != 1
-            or manifest["kind"] != "shiller_monthly_observations" or manifest["status"] != "passed"
-            or manifest["instrument"] != INSTRUMENT or manifest["frequency"] != "monthly"
-            or manifest["data_file"] != "monthly.parquet" or manifest["quality_report"] != "quality_report.json"):
-        raise ValueError("La preparación no es una tabla mensual Shiller compatible y aprobada")
-    files = {name: (directory / name).read_bytes() for name in
-             ("source_manifest.json", "validation_policy.toml", "quality_report.json")}
-    if any(sha256(data).hexdigest() != manifest["artifacts_sha256"][name] for name, data in files.items()):
-        raise ValueError("SHA-256 incorrecto en la procedencia o calidad de la tabla mensual")
-    if files["validation_policy.toml"] != policy_bytes:
-        raise ValueError("La tabla mensual utiliza otra política temporal")
-    interval = manifest["interval"]
-    start, development_start, end = preparation_window(interval["history_start"], policy_bytes)
-    if interval != {"history_start": start, "development_start": development_start, "development_end": end}:
-        raise ValueError("El intervalo mensual no coincide con la política")
-    content = (directory / "monthly.parquet").read_bytes()
-    if sha256(content).hexdigest() != manifest["sha256"]:
-        raise ValueError("SHA-256 incorrecto: la tabla mensual ha cambiado")
-    table = pd.read_parquet(BytesIO(content))
-    report = json.loads(files["quality_report.json"])
-    if (report["status"] != "passed" or any(report["error_counts"].values())
-            or report["interval"] != interval or report["rows"] != len(table)
-            or table.columns.tolist() != COLUMNS
-            or table.period.tolist() != pd.period_range(start, end, freq="M").astype(str).tolist()
-            or not table.asset.eq(INSTRUMENT).all() or not table.source.eq("shiller").all()
-            or table.sample_role.tolist() != ["history" if p < development_start else "development" for p in table.period]):
-        raise ValueError("La tabla mensual o su cobertura no cumplen el contrato de desarrollo")
-    for name in ("price_monthly_mean", "dividend_annualized"):
-        values = table[name]
-        if (not pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values)
-                or not values.map(math.isfinite).all()
-                or (values.le(0).any() if name == "price_monthly_mean" else values.lt(0).any())):
-            raise ValueError("Valores mensuales no válidos")
-    return table, manifest_bytes, files["quality_report.json"]
