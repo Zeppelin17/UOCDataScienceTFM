@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
+from tfm import cli
 from tfm.backtesting.buy_and_hold import simulate_buy_and_hold
 from tfm.backtesting.engine import simulate_long_cash
 from tfm.evaluation.simulation import summarize_simulation
@@ -94,7 +94,7 @@ def test_invalid_simulation_records_failure_without_publishing(tmp_path, bad, ca
     assert "Registro:" in capsys.readouterr().err
 
 
-def test_offline_cli_replay_and_menu_use_same_flow(tmp_path, monkeypatch, capsys):
+def test_offline_cli_replay_uses_same_flow(tmp_path, monkeypatch, capsys):
     config, prepared = make_project(tmp_path)
     original_hash = sha256((prepared / "prices.parquet").read_bytes()).hexdigest()
     def no_download(**kwargs):
@@ -113,13 +113,6 @@ def test_offline_cli_replay_and_menu_use_same_flow(tmp_path, monkeypatch, capsys
     runs = list((tmp_path / "outputs/runs").iterdir())
     second = next(path for path in runs if path != first)
     pd.testing.assert_frame_equal(pd.read_parquet(first / "equity.parquet"), pd.read_parquet(second / "equity.parquet"))
-    monkeypatch.chdir(tmp_path)
-    answers = iter(["6", "99", "1", "", "3", "t", "0", "0"])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
-    assert menu.interactive_menu() == 0
-    assert len(list((tmp_path / "outputs/runs").iterdir())) == 3
     assert sha256((prepared / "prices.parquet").read_bytes()).hexdigest() == original_hash
     output = capsys.readouterr().out
     assert "Rotación acumulada: 1.00" in output
-    assert "Configuración independiente de simulación:" in output
-    assert "Comprar y mantener SPY | Terminada" in output

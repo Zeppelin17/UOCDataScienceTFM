@@ -2,9 +2,9 @@
 
 Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de aprendizaje automático para reglas de momentum y reversión sobre el S&P 500.
 
-## Simplificación en curso: primer incremento
+## Flujo simplificado y menú guiado
 
-El flujo nuevo utiliza **`configs/estudio.toml`**, nombres de archivo fijos y los mismos lectores, controles de datos y fórmulas de señales. Shiller y Yahoo Finance siguen disponibles por separado. El menú interactivo y los comandos anteriores se conservan durante esta transición; todavía utilizan los TOML anteriores y se sustituirán en el siguiente incremento.
+El flujo nuevo utiliza **`configs/estudio.toml`**, nombres de archivo fijos y los mismos lectores, controles de datos y fórmulas de señales. Shiller y Yahoo Finance siguen disponibles por separado. El menú utiliza esta configuración única y las salidas fijas. Los comandos anteriores siguen disponibles temporalmente hasta la limpieza del tercer incremento; utilizan sus TOML anteriores.
 
 Con el entorno virtual activado, desde la raíz del proyecto:
 
@@ -194,25 +194,30 @@ El comando se comprobó con el snapshot real de 7.033 sesiones, sin red y desde 
 
 ## Menú interactivo
 
-Desde la raíz del repositorio:
+Con el entorno virtual activado, ejecuta `python -m tfm`:
 
-```bash
-source .venv/bin/activate
-python -m tfm
+```text
+1. Preparar datos de Shiller
+2. Calcular señales de momentum y reversión
+3. Consultar datos y señales preparados
+4. Trabajar con datos de SPY de Yahoo Finance
+5. Ver la configuración del estudio
+0. Salir
 ```
 
-En una terminal aparece un menú para descargar y preparar, escoger una descarga existente por número, consultar ejecuciones, ver la configuración, cambiar configuración o salir. Las acciones utilizan directamente `configs/data.toml`; la opción 4 muestra su contenido sin preguntar. La opción 5 permite elegir otro TOML para esta sesión del menú; Intro o 0 cancela ese cambio. Se muestra el instrumento y el periodo antes de ejecutar. Al elegir una descarga, escribe uno de los números mostrados; 0 vuelve al menú. Al terminar se muestran sesiones, periodo, controles de calidad y rutas de resultados. Ctrl+C cancela la acción y Ctrl+D sale.
+Cada tarea explica fuente, periodo, entrada, resultado y siguiente paso. Si existe el original de trabajo, lo reutiliza sin descargar. Si falta, permite descargar, importar un archivo propio o elegir por número un original de la etapa anterior, mostrando una fecha legible. No se elige automáticamente la última copia. Seleccionar descargar es explícito y los originales anteriores permanecen intactos.
 
-Los comandos con argumentos siguen disponibles. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.
+La opción 3 muestra qué tablas están disponibles y permite consultar un resumen y cinco filas en la terminal, sin modificar ni convertir archivos. Si falta una tabla, su resumen o su configuración ha cambiado, indica qué tarea debe repetirse. `python -m tfm status` ofrece la consulta resumida sin interacción. Las salidas de Shiller y SPY se identifican por separado.
 
-La opción **3** ofrece un historial navegable: muestra Shiller por defecto, las ejecuciones más recientes primero y ocho por página. Selecciona una por número para ver su resumen y mostrar sus archivos en Finder. N/P cambian de página, T incluye las tareas de SPY y D muestra los detalles técnicos dentro de una ejecución. No hace falta copiar rutas ni buscar carpetas por sus identificadores. La consulta y la apertura no generan ni modifican datos.
+0 vuelve desde las selecciones o sale desde el menú principal. Intro cierra un resultado; cancelar una selección con 0 vuelve directamente. Ctrl+C cancela y Ctrl+D cierra el menú. La pantalla se limpia solo en terminales compatibles y los resultados permanecen hasta Intro. La opción 5 muestra los parámetros en lenguaje comprensible; el archivo se vuelve a leer antes de cada tarea. Un TOML inválido permite reintentar después de corregirlo.
 
-El menú limpia la pantalla al cambiar de vista. Los resultados, errores y consultas permanecen visibles hasta pulsar Intro para volver. La limpieza solo se aplica en terminales compatibles; no se introducen códigos de control en salidas redirigidas.
+No hay navegador de ejecuciones ni apertura de archivos a través del sistema operativo. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.
 
+Las secciones siguientes describen **comandos del flujo anterior**, conservados temporalmente hasta terminar la refactorización; sus auditorías y simulador diario ya no aparecen en el menú actual.
 
 ## Simular comprar y mantener
 
-Desde la raíz del repositorio, con el entorno virtual activado, ejecuta `python -m tfm` y elige **6. Simular comprar y mantener**. Selecciona por número una preparación compatible. El menú muestra primero intervalo y coste, y utiliza el mismo flujo que el comando:
+Comando anterior, separado del menú actual:
 
 ```bash
 python -m tfm simulate-buy-and-hold --config configs/buy_and_hold.toml --prepared RUTA_DE_PRECIOS_PREPARADOS
@@ -222,7 +227,7 @@ python -m tfm simulate-buy-and-hold --config configs/buy_and_hold.toml --prepare
 
 La configuración independiente `configs/buy_and_hold.toml` contiene inicio y fin **inclusivos**, coste en puntos básicos y las convenciones admitidas. Las fechas deben quedar dentro de la cobertura del archivo. La primera sesión del intervalo es la decisión: se compra al cierre de la segunda y la nueva posición recibe el retorno desde ese cierre. Se requieren al menos tres sesiones. Cambiar el intervalo reinicia la estrategia en efectivo; no arrastra posiciones anteriores. Cuando se comparen anomalías, sus fechas efectivas deberán alinearse con las del benchmark.
 
-La opción 5 sigue cambiando solo la configuración de datos. La opción 6 utiliza `buy_and_hold.toml` del mismo directorio `configs/` y muestra su ruta; los parámetros financieros se editan allí. Las rutas de almacenamiento y política declaradas en TOML parten de la raíz del proyecto deducida de `configs/`. Las rutas de `--config` y `--prepared` parten del directorio de ejecución.
+El comando anterior utiliza `configs/buy_and_hold.toml`; los parámetros financieros se editan allí. Las rutas de almacenamiento y política declaradas en TOML parten de la raíz del proyecto deducida de `configs/`. Las rutas de `--config` y `--prepared` parten del directorio de ejecución.
 
 La política de desarrollo se lee de `[validation]` en `configs/experiment_base.toml`, mediante `validation.policy_config`; todavía no se interpreta su resto como un experimento ejecutable. Se rechazan intervalos y preparaciones completas que invadan el periodo final. No basta con recortar un archivo que incluya datos reservados. El protocolo de evaluación final se incorporará en otro incremento.
 
@@ -230,12 +235,12 @@ Convenciones: capital inicial 1, exposición 0/1 sin cortos, efectivo no remuner
 
 Cada intento deja su registro en `outputs/runs/<run_id>`. Una ejecución completada guarda `config.toml`, `validation_policy.toml`, manifiesto e informe de los precios, `equity.parquet` y `summary.json`. El registro contiene huellas de configuraciones y resultados, versiones y estado de Git. La tabla distingue posiciones antes/después del cierre, retorno bruto/neto, rotación, coste monetario y capital bruto/neto. El resumen añade rentabilidades acumuladas, coste en unidades de capital, rotación y caída máxima neta como magnitud positiva. La caída incluye el capital inicial, por lo que recoge el coste de entrada. La suma de costes monetarios no equivale a la diferencia entre rentabilidades acumuladas.
 
-Los errores e interrupciones se registran y no publican una trayectoria finalizada. No se sobrescriben precios ni ejecuciones anteriores. El historial del menú identifica descargas y simulaciones y muestra las rutas de sus resultados. El calendario se comprueba con una auditoría seleccionada explícitamente; sin ella se muestra pendiente. El contraste numérico con otra fuente sigue pendiente. No se han implementado Sharpe, DSR, PBO ni interpretación de modelos en este incremento.
+Los errores e interrupciones se registran y no publican una trayectoria finalizada. No se sobrescriben precios ni ejecuciones anteriores. El calendario se comprueba con una auditoría seleccionada explícitamente; sin ella se muestra pendiente. El contraste numérico con otra fuente sigue pendiente. No se han implementado Sharpe, DSR, PBO ni interpretación de modelos en este incremento.
 
 
 ## Auditar las sesiones del calendario
 
-Ejecuta `python -m tfm` y elige **7. Auditar calendario de precios preparados**, o usa:
+Comando anterior, separado del menú actual:
 
 ```bash
 python -m tfm audit-prices --config configs/audit.toml --prepared RUTA_DE_PRECIOS_PREPARADOS
@@ -243,33 +248,16 @@ python -m tfm audit-prices --config configs/audit.toml --prepared RUTA_DE_PRECIO
 
 Se contrasta **todo el intervalo solicitado del manifiesto**, con final exclusivo, contra XNYS como referencia de sesiones diarias US. No se rellena ni modifica ningún precio. El informe separa calendario de precios, dividendos y ajustes: aprobar calendario no acredita esos otros campos. Funciona sin red después de instalar las dependencias.
 
-Para usar el resultado en una simulación, selecciona la auditoría por número en la opción 6 o añade `--audit RUTA_DE_EJECUCION_DE_AUDITORIA` al comando `simulate-buy-and-hold`. No se elige automáticamente la última auditoría. Se comprueban huellas, cobertura, configuración/política y versión; se rechazan informes de otra preparación, parciales o con discrepancias. Se copia el informe empleado para conservar su procedencia. Sin auditoría sigue disponible el benchmark exploratorio, con calendario pendiente.
+Para usar el resultado en una simulación, añade `--audit RUTA_DE_EJECUCION_DE_AUDITORIA` al comando `simulate-buy-and-hold`. No se elige automáticamente la última auditoría. Se comprueban huellas, cobertura, configuración/política y versión; se rechazan informes de otra preparación, parciales o con discrepancias. Se copia el informe empleado para conservar su procedencia. Sin auditoría sigue disponible el benchmark exploratorio, con calendario pendiente.
 
 Consulta [el alcance, formato y limitaciones de la auditoría](docs/calendar_audit.md). Los informes y resultados anteriores permanecen intactos. Si aparecen discrepancias, se conserva la lista y la ejecución de auditoría puede quedar completada técnicamente con un resultado de calendario fallido; no se presenta como superada.
 
 ## Contraste con el emisor
 
-La opción 8 del menú permite importar el Excel oficial de State Street y contrastar todas las distribuciones del desarrollo. La opción 7 sigue auditando solo calendario. Véase [source_reconciliation.md](docs/source_reconciliation.md) para los comandos, la política de comparación, los resultados reales y las limitaciones pendientes. No se modifican los originales ni se certifican cierres o ajustes a partir de dividendos.
+Los comandos anteriores permiten importar el Excel oficial de State Street y contrastar las distribuciones. Estas tareas ya no aparecen en el menú simplificado. Véase [source_reconciliation.md](docs/source_reconciliation.md) para los comandos, la política de comparación, los resultados reales y las limitaciones pendientes. No se modifican los originales ni se certifican cierres o ajustes a partir de dividendos.
 
-## Preparar la historia mensual del estudio principal
+## Reglas y alcance del estudio mensual
 
-```bash
-python -m tfm prepare-shiller
-```
+La opción 1 prepara 768 meses con la configuración actual: 12 de historia previa y 756 de desarrollo. La opción 2 calcula momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La tabla distingue mes de decisión y mes objetivo; +1 propone largo, -1 corto y 0 efectivo. Una señal vacía significa historia insuficiente.
 
-La opción 9 del menú ofrece descarga, importación de un XLS local y reutilización de un original archivado. El resumen debe mostrar 768 meses: 12 de historia previa y 756 de desarrollo. Se conserva P como precio medio mensual y D como dividendo anualizado, sin tratarlos como cierres de ejecución o pagos mensuales. Véanse [los comandos, el contrato y las limitaciones](docs/shiller_monthly.md). La memoria ya recoge ese alcance; la simulación requiere cerrar las decisiones del [protocolo mensual](docs/monthly_protocol.md).
-
-
-## Generar las señales mensuales de Shiller
-
-En el menú `python -m tfm`, elige la **opción 10** y selecciona por número una preparación mensual existente. La opción 9 permite prepararla si todavía no tienes ninguna. No se elige automáticamente la última tabla ni se descargan datos al generar señales.
-
-También puedes ejecutar:
-
-```bash
-python -m tfm build-shiller-signals --prepared RUTA_DE_PREPARACION_SHILLER
-```
-
-La configuración es `configs/shiller_signals.toml`: momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La salida conserva mes de decisión, mes objetivo, indicadores y señales (+1 largo, -1 corto, 0 efectivo). Un campo vacío significa historia insuficiente. Con la preparación desde enero de 1926 hay 756 meses objetivo de 1927–1989 y 755 comparables para ambas reglas, desde febrero de 1927.
-
-Cada ejecución guarda `signals.parquet`, `signals.csv` para consultar la tabla, `summary.json` y la procedencia. Se verifican integridad y política temporal antes de calcular. Son señales sobre promedios mensuales, sin dividendos, financiación, costes ni resultados de inversión. Véase [el contrato y las limitaciones](docs/monthly_protocol.md).
+Con historia desde enero de 1926 hay 756 meses objetivo de 1927–1989 y 755 comparables para ambas reglas, desde febrero de 1927. Las señales utilizan promedios mensuales, sin dividendos, financiación, costes ni resultados de inversión. La simulación requiere resolver con el tutor el [protocolo mensual](docs/monthly_protocol.md).

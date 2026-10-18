@@ -1,5 +1,7 @@
 # Historia mensual de Shiller: estudio principal 1.B
 
+> Documento del flujo anterior: sus comandos se conservan temporalmente. Las referencias a la numeración antigua del menú son históricas; el recorrido actual se describe en [cli_plan.md](cli_plan.md). Los supuestos y hallazgos científicos siguen documentados aquí hasta su consolidación.
+
 ## Decisión y alcance
 
 Se siguen los periodos recomendados por la guía local del TFM: desarrollo **1927–1989** y evaluación desde **1990** hasta un corte de 2026 aún por fijar. Este incremento prepara exclusivamente datos, sin estrategias, etiquetas, modelos, retornos ni simulaciones. La fuente es la serie histórica S&P Composite publicada por Robert J. Shiller, no participaciones de SPY ni una serie idéntica al S&P 500 moderno durante toda su historia.

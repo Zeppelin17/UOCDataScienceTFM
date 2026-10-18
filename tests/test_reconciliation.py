@@ -7,7 +7,7 @@ from openpyxl import Workbook
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
+from tfm import cli
 from tfm.pipeline import import_ssga_reference, run_audit_prices, run_buy_and_hold, PipelineError
 from tfm.preparation.reconciliation import ABSOLUTE_TOLERANCE_USD, reconcile_dividends
 from tfm.sources.ssga import HEADERS, parse_distributions
@@ -74,7 +74,7 @@ def test_all_events_are_compared_coverage_does_not_hide_discrepancies():
     assert check["status"] == "failed" and check["coverage"] == "complete"
 
 
-def test_cli_menu_replay_and_simulation_keep_checks_separate(tmp_path, monkeypatch, capsys):
+def test_cli_replay_and_simulation_keep_checks_separate(tmp_path, monkeypatch, capsys):
     config, simulation, prepared, reference = setup(tmp_path)
     original = (prepared / "prices.parquet").read_bytes()
     args = ["audit-prices", "--config", str(config), "--prepared", str(prepared), "--reference", str(reference)]
@@ -87,10 +87,6 @@ def test_cli_menu_replay_and_simulation_keep_checks_separate(tmp_path, monkeypat
     assert cli.main(["simulate-buy-and-hold", "--config", str(simulation), "--prepared", str(prepared), "--audit", str(run)]) == 0
     assert cli.main(args) == 0
     assert (prepared / "prices.parquet").read_bytes() == original
-    monkeypatch.chdir(tmp_path)
-    answers = iter(["8", "1", "1", "", "0"])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
-    assert menu.interactive_menu() == 0
     output = capsys.readouterr().out
     assert "cobertura completa; concordancia dentro de tolerancia" in output
     assert "Contraste independiente de precios: pendiente" in output

@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
+from tfm import cli
 from tfm.preparation.calendar import audit_calendar
 from test_backtesting import make_project
 
@@ -42,7 +42,7 @@ def project(tmp_path):
     return config, simulation, prepared
 
 
-def test_calendar_audit_cli_replay_menu_and_explicit_simulation(tmp_path, monkeypatch, capsys):
+def test_calendar_audit_cli_replay_and_explicit_simulation(tmp_path, monkeypatch, capsys):
     config, simulation, prepared = project(tmp_path)
     before = (prepared / "quality_report.json").read_bytes()
     args = ["audit-prices", "--config", str(config), "--prepared", str(prepared)]
@@ -61,11 +61,6 @@ def test_calendar_audit_cli_replay_menu_and_explicit_simulation(tmp_path, monkey
     assert (sim_dir / "audit_report.json").read_bytes() == (run / "audit_report.json").read_bytes()
     assert all("calendario" not in w.lower() for w in summary["warnings"])
     assert cli.main(["simulate-buy-and-hold", "--config", str(simulation), "--prepared", str(prepared)]) == 0
-    # Menú: auditoría nueva y selección EXPLÍCITA de una para simular.
-    monkeypatch.chdir(tmp_path)
-    answers = iter(["7", "1", "", "6", "1", "1", "", "0"])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
-    assert menu.interactive_menu() == 0
     output = capsys.readouterr().out
     assert "Calendario: superado" in output
     assert "Contraste independiente de precios: pendiente" in output

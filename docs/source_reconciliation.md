@@ -1,5 +1,7 @@
 # Contraste de distribuciones con State Street
 
+> Documento del flujo anterior: sus comandos se conservan temporalmente. Las referencias a la numeración antigua del menú son históricas; el recorrido actual se describe en [cli_plan.md](cli_plan.md). Los supuestos y hallazgos científicos siguen documentados aquí hasta su consolidación.
+
 ## Alcance de este incremento
 
 Se implementa un contraste numérico real de distribuciones monetarias de SPY contra el listado histórico de su emisor, obtenido sin usar Yahoo. Se conservan por separado dividendos de renta y ganancias de capital. **El contraste independiente de cierres de mercado y de ajustes de rentabilidad total permanece pendiente.** La coincidencia de dividendos no acreditaría esos campos.

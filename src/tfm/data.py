@@ -101,6 +101,8 @@ def load_monthly(settings: dict) -> pd.DataFrame:
         table = pd.read_parquet(path)
     except FileNotFoundError as exc:
         raise ValueError("Faltan datos de Shiller preparados. Ejecuta primero prepare-data.") from exc
+    if not isinstance(report, dict):
+        raise ValueError("El resumen de Shiller no es válido. Vuelve a preparar los datos.")
     if report.get("configuration") != _window(settings):
         raise ValueError("Los periodos han cambiado. Vuelve a preparar los datos antes de calcular señales.")
     months = pd.period_range(settings["shiller"]["history_start"], settings["validation"]["development_end"][:7], freq="M").astype(str).tolist()
@@ -136,6 +138,45 @@ def calculate_signals(config: str | Path = DEFAULT_CONFIG) -> dict:
                "configuration": {**_window(settings), "signals": settings["signals"]},
                "warnings": WARNINGS}
     return _publish(signals, settings["root"] / "data/processed/shiller_signals.parquet", summary)
+
+
+def read_result(settings: dict, name: str) -> tuple[pd.DataFrame, dict]:
+    """Consultar una salida del flujo nuevo y rechazar configuraciones antiguas."""
+    if name not in {"shiller_monthly", "shiller_signals", "spy_prices"}:
+        raise ValueError("Resultado desconocido")
+    path = settings["root"] / "data/processed" / f"{name}.parquet"
+    try:
+        if name == "shiller_monthly":
+            table = load_monthly(settings)
+        else:
+            if name == "shiller_signals":
+                load_monthly(settings)  # Las señales dependen de la preparación actual.
+            table = pd.read_parquet(path)
+        summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        message = ("Faltan los datos de SPY o su resumen. Vuelve a preparar los datos de SPY."
+                   if name == "spy_prices" else
+                   "Faltan las señales de Shiller o su resumen. Vuelve a calcular las señales.")
+        raise ValueError(message) from exc
+    if not isinstance(summary, dict):
+        raise ValueError("El resumen no es válido; regenera el resultado.")
+    expected = (settings["spy"] if name == "spy_prices" else _window(settings))
+    if name == "shiller_signals":
+        expected = {**expected, "signals": settings["signals"]}
+    if summary.get("configuration") != expected:
+        raise ValueError("La configuración ha cambiado; regenera este resultado antes de consultarlo.")
+    required = ({"observed_at", "adjusted_close"} if name == "spy_prices" else
+                {"decision_period", "target_period", "momentum_signal", "reversal_signal", "both_rules_available"}
+                if name == "shiller_signals" else set(COLUMNS))
+    if table.empty or len(table) != summary.get("rows") or not required <= set(table.columns):
+        raise ValueError("La tabla y el resumen no coinciden; regenera el resultado.")
+    if name == "shiller_signals":
+        months = pd.period_range(settings["validation"]["development_start"][:7],
+                                settings["validation"]["development_end"][:7], freq="M").astype(str).tolist()
+        if (table.target_period.tolist() != months
+                or table.both_rules_available.sum() != summary.get("both_rules_available")):
+            raise ValueError("Las señales no cubren los meses esperados; vuelve a calcularlas.")
+    return table, {**summary, "path": str(path)}
 
 
 def prepare_spy_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Path | None = None) -> dict:

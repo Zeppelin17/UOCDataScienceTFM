@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 import xlrd
 
-from tfm import cli, menu
+from tfm import cli
 from tfm.pipeline import run_prepare_shiller, PipelineError
 from tfm.preparation.shiller import COLUMNS, load_shiller_monthly, normalize_shiller
 from tfm.sources.shiller import XLS_SIGNATURE
@@ -93,7 +93,7 @@ def test_bad_quality_records_failure_without_publishing_table(tmp_path, monkeypa
     assert (Path(record["snapshot_dir"]) / "original.xls").read_bytes() == original.read_bytes()
 
 
-def test_import_offline_replay_menu_and_prepared_integrity(tmp_path, monkeypatch, capsys):
+def test_import_offline_replay_and_prepared_integrity(tmp_path, monkeypatch, capsys):
     workbook(monkeypatch)
     config, original = project(tmp_path)
     monkeypatch.setattr("tfm.sources.shiller.urlopen", lambda *args, **kwargs: pytest.fail("No debe acceder a la red"))
@@ -109,10 +109,6 @@ def test_import_offline_replay_menu_and_prepared_integrity(tmp_path, monkeypatch
     for path in (tmp_path / "outputs/runs").glob("*/run.json"):
         result = json.loads(path.read_bytes())
         pd.testing.assert_frame_equal(table, pd.read_parquet(Path(result["prepared_dir"]) / "monthly.parquet"))
-    monkeypatch.chdir(tmp_path)
-    answers = iter(["9", "1", "", "0"])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
-    assert menu.interactive_menu() == 0
     output = capsys.readouterr().out
     assert "756 meses" in output and "precio de orden" in output
     assert "importes excluidos" in output

@@ -1,33 +1,33 @@
-"""Menú local que reutiliza el flujo de datos existente."""
+"""Recorridos guiados del TFM: fuente, tarea, resultado y siguiente paso."""
 
-import hashlib
+from datetime import datetime
 import json
 import os
-import sys
 from pathlib import Path
-import tomllib
+import sys
 
-from tfm.pipeline import (
-    PipelineError, load_audit_config, load_buy_and_hold_config,
-    run_audit_prices, run_buy_and_hold, run_prepare_prices,
-    import_ssga_reference, load_reconciliation_config,
-    load_shiller_config, run_prepare_shiller,
-    load_shiller_signals_config, run_shiller_signals,
-)
+from tfm.config import DEFAULT_CONFIG, load_config
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result
+from tfm.sources.prices import DownloadError
+# Compatibilidad de los comandos anteriores hasta el tercer incremento.
 from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
-from tfm.run_browser import browse_runs, display_time
+
+
+RESULTS = {
+    "shiller_monthly": ("Datos mensuales de Shiller", "1. Preparar datos de Shiller"),
+    "shiller_signals": ("Señales de momentum y reversión", "2. Calcular señales"),
+    "spy_prices": ("Datos diarios del ETF SPY", "4. Trabajar con datos de SPY"),
+}
 
 
 def _clear_screen() -> None:
-    """Limpiar solo la pantalla de una terminal compatible."""
     if sys.stdout.isatty() and os.environ.get("TERM") != "dumb":
         print("\033[2J\033[H", end="", flush=True)
 
 
 def _pause() -> bool:
-    """Conservar la pantalla hasta Intro; devolver False si se cierra la entrada."""
     try:
-        input("\nPulsa Intro para volver al menú…")
+        input("\nPulsa Intro para volver…")
     except KeyboardInterrupt:
         print()
     except EOFError:
@@ -35,71 +35,247 @@ def _pause() -> bool:
     return True
 
 
-def _configuration(path: Path) -> dict:
-    with path.open("rb") as handle:
-        return tomllib.load(handle)
-
-
-def _show_configuration(path: Path, config: dict) -> None:
-    market = config["market"]
-    print(f"Configuración: {path.resolve()}")
-    print(f"{market['instrument']} / {market['provider']} / {market['frequency']}")
-    print(f"Periodo: {market['start']} → {market['end']} (fin exclusivo)")
-
-
-def _snapshots(config_path: Path, config: dict) -> Path | None:
-    raw = Path(config["storage"]["raw"])
-    raw = config_path.resolve().parent.parent / raw
-    items = []
-    for manifest_path in sorted(raw.glob("yahoo/SPY/*/manifest.json")):
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            parameters = manifest["parameters"]
-            first = manifest.get("first_session", parameters["start"])[:10]
-            last = manifest.get("last_session")
-            period = f"{first} → {last[:10]}" if last else f"{first} → {parameters['end']} (fin exclusivo)"
-            downloaded = manifest.get("completed_at_utc", manifest["snapshot_id"])
-            label = f"{manifest['instrument']} | {period} | descarga: {downloaded}"
-            if "rows" in manifest:
-                label += f" | {manifest['rows']} sesiones"
-            items.append((manifest_path.parent, label))
-        except (OSError, ValueError, KeyError, TypeError):
-            print(f"No se pudo leer: {manifest_path}")
-    if not items:
-        print("No hay descargas disponibles.")
-        return None
-    for number, (_, label) in enumerate(items, 1):
-        print(f"{number}. {label}")
-    choices = " o ".join(str(number) for number in range(1, len(items) + 1)) if len(items) <= 3 else f"un número del 1 al {len(items)}"
-    prompt = f"Escribe {choices} para seleccionar una descarga; 0 para volver: "
+def _choice(prompt: str, choices: set[str]) -> str:
     while True:
         answer = input(prompt).strip()
+        if answer in choices:
+            return answer
+        print("Selecciona uno de los números mostrados; 0 permite volver.")
+
+
+def _history(settings: dict, source: str) -> list[Path]:
+    pattern = ("shiller/SHILLER_SP_COMPOSITE/*/original.xls" if source == "shiller"
+               else "yahoo/SPY/*/prices.parquet")
+    return sorted(p for p in (settings["root"] / "data/raw").glob(pattern) if p.is_file())
+
+
+def _select_history(items: list[Path], source: str) -> Path | None:
+    print(f"\nOriginales anteriores de {'Shiller' if source == 'shiller' else 'SPY'}")
+    print("Selecciona la copia que quieras reutilizar. El archivo anterior se conservará.")
+    for number, path in enumerate(items, 1):
+        try:
+            record = json.loads((path.parent / "manifest.json").read_text(encoding="utf-8"))
+            stamp = record.get("archived_at_utc") or record.get("completed_at_utc")
+            date = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone().strftime("%d/%m/%Y %H:%M:%S")
+        except (OSError, ValueError, TypeError, AttributeError):
+            date = "fecha no registrada"
+        print(f"{number}. Original guardado: {date}")
+    print("0. Volver sin preparar datos")
+    answer = _choice("Número de original: ", {"0", *(str(i) for i in range(1, len(items) + 1))})
+    return None if answer == "0" else items[int(answer) - 1]
+
+
+def _select_input(settings: dict, source: str) -> tuple[bool, Path | None]:
+    raw = settings["root"] / "data/raw" / ("shiller.xls" if source == "shiller" else "spy.parquet")
+    if raw.exists():
+        print(f"Origen: original de trabajo guardado en data/raw/{raw.name}.")
+        print("Se reutilizará sin descargar ni sustituir el original.")
+        return True, None
+    print("Todavía no hay un original de trabajo para esta fuente.")
+    items = _history(settings, source)
+    print("1. Descargar de la fuente configurada")
+    print("2. Importar un archivo de mi ordenador")
+    if items:
+        print(f"3. Reutilizar un original de la etapa anterior ({len(items)} disponibles)")
+    print("0. Volver sin preparar datos")
+    answer = _choice("¿De dónde obtenemos los datos? ", {"0", "1", "2"} | ({"3"} if items else set()))
+    if answer == "0":
+        return False, None
+    if answer == "1":
+        print("Origen: descarga del Excel oficial de Shiller." if source == "shiller"
+              else "Origen: Yahoo Finance mediante yfinance.")
+        return True, None
+    if answer == "3":
+        selected = _select_history(items, source)
+        return selected is not None, selected
+    print("Pega la ruta del XLS original de Shiller." if source == "shiller" else
+          "Pega la ruta del Parquet original descargado de Yahoo, con sus columnas originales.")
+    while True:
+        text = input("Ruta del archivo (0 para volver): ").strip().strip("\"'")
+        if text == "0":
+            return False, None
+        path = Path(text).expanduser()
+        if text and path.is_file():
+            print(f"Origen: {path}")
+            return True, path
+        print("No se encuentra ese archivo. Revisa la ruta o escribe 0 para volver.")
+
+
+def show_result(name: str, summary: dict) -> None:
+    print(f"\n{RESULTS[name][0]}")
+    if name == "shiller_monthly":
+        print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['rows']} meses")
+        print(f"Historia previa: {summary['history_rows']} meses | Desarrollo: {summary['development_rows']} meses")
+        print("Sin meses ausentes ni duplicados; valores numéricos dentro de las condiciones exigidas.")
+        print("P es un precio medio mensual; D es anualizado e interpolado, no un pago mensual observado.")
+        print("Siguiente paso: opción 2 para calcular señales. La simulación sigue pendiente de definir con el tutor.")
+    elif name == "shiller_signals":
+        print(f"Meses objetivo: {summary['target_start']} → {summary['target_end']} | {summary['rows']} meses")
+        print(f"Meses con ambas señales disponibles: {summary['both_rules_available']}")
+        print("+1: posición que se beneficiaría de una subida; -1: de una bajada; 0: efectivo.")
+        print("Una señal vacía significa historia insuficiente, no una decisión de permanecer fuera.")
+        for rule, label in (("momentum", "Momentum"), ("reversal", "Reversión")):
+            if summary[f"missing_{rule}_targets"]:
+                print(f"{label}, sin historia suficiente: {', '.join(summary[f'missing_{rule}_targets'])}")
+        print("Señales sobre promedios mensuales, sin simulación de rentabilidades ni entrenamiento de modelos.")
+        print("Siguiente paso: consulta las señales en la opción 3. La simulación sigue pendiente de definir con el tutor.")
+    else:
+        print(f"Periodo: {summary['first_session'][:10]} → {summary['last_session'][:10]} | {summary['rows']} sesiones")
+        print("Controles estructurales superados; calendario, ajustes y exactitud financiera no certificados.")
+        print("SPY se mantiene separado de Shiller; su utilización definitiva en el estudio sigue pendiente.")
+        print("Siguiente paso: consulta la tabla en la opción 3. No se han calculado señales ni rentabilidades de SPY.")
+    print(f"Archivo: data/processed/{Path(summary['path']).name}")
+
+
+def _prepare(config: Path, settings: dict, source: str) -> bool:
+    if source == "shiller":
+        print("Preparar datos de Shiller — estudio mensual")
+        print(f"Periodo: {settings['shiller']['history_start']} → {settings['validation']['development_end'][:7]}.")
+        print("Se leerán únicamente las fechas, precios medios y dividendos anualizados del periodo de desarrollo y su historia previa.")
+        print("La evaluación desde 1990 seguirá excluida de la tabla preparada.")
+    else:
+        print("Trabajar con SPY — ETF, datos diarios de Yahoo Finance")
+        print(f"Periodo: {settings['spy']['start']} → {settings['spy']['end']} (fin exclusivo).")
+        print("Es el trabajo previo con SPY; no se unirá esta serie con Shiller.")
+        print("Su utilización definitiva en el estudio sigue pendiente.")
+    proceed, file = _select_input(settings, source)
+    if not proceed:
+        return False
+    if source == "shiller":
+        print("Se regenerará la tabla mensual. Las señales anteriores de este flujo se retirarán al terminar correctamente.")
+        print("Preparando datos de Shiller…", flush=True)
+        summary = prepare_shiller_data(config, file=file)
+        show_result("shiller_monthly", summary)
+    else:
+        print("Preparando datos diarios de SPY…", flush=True)
+        summary = prepare_spy_data(config, file=file)
+        show_result("spy_prices", summary)
+    print("Consulta los archivos desde la opción 3; los originales anteriores permanecen intactos.")
+    return True
+
+
+def _show_configuration(config: Path, settings: dict) -> None:
+    print("Configuración del estudio")
+    print(f"Archivo: {config}")
+    print(f"Shiller: observaciones mensuales; historia previa desde {settings['shiller']['history_start']}.")
+    print(f"Desarrollo: {settings['validation']['development_start']} → {settings['validation']['development_end']}.")
+    print(f"Evaluación: desde {settings['validation']['final_test_start']}; fecha final pendiente y evaluación deshabilitada.")
+    print("Momentum: P[m−1]/P[m−12]−1; positivo propone largo y no positivo propone efectivo.")
+    print("Reversión: movimiento de un mes; propone operar en el sentido contrario.")
+    print("Ambas señales se asignan al mes posterior a la decisión; todavía no son operaciones simuladas.")
+    print(f"SPY: diario, {settings['spy']['start']} → {settings['spy']['end']} (fin exclusivo), separado de Shiller.")
+    print("Las salidas se regeneran en data/processed con nombres fijos.")
+    print(f"Carpeta del proyecto: {settings['root']}")
+    print("Puedes editar estudio.toml y volver al menú; la configuración se vuelve a leer antes de cada tarea.")
+
+
+def _next_step(settings: dict, name: str) -> str:
+    if name == "shiller_signals":
+        try:
+            load_monthly(settings)
+        except (OSError, ValueError, KeyError, TypeError):
+            return "1. Preparar datos de Shiller; después 2. Calcular señales"
+    return RESULTS[name][1]
+
+
+def show_project_summary(settings: dict) -> None:
+    print("Datos y señales del flujo actual")
+    for name, (label, _) in RESULTS.items():
+        try:
+            _, summary = read_result(settings, name)
+            print(f"  {label}: disponible para consultar ({summary['rows']} filas).")
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"  {label}: pendiente. {exc}")
+            print(f"    Para resolverlo: {_next_step(settings, name)}.")
+    print("Se consultan los archivos de trabajo con nombres fijos; los resultados históricos se conservan en sus carpetas.")
+
+
+def _consult(settings: dict) -> None:
+    names = list(RESULTS)
+    while True:
+        _clear_screen()
+        show_project_summary(settings)
+        print("\n¿Qué quieres ver?")
+        for number, name in enumerate(names, 1):
+            print(f"{number}. {RESULTS[name][0]}")
+        print("0. Volver al menú principal")
+        answer = _choice("Opción: ", {"0", "1", "2", "3"})
         if answer == "0":
-            return None
-        if answer.isdecimal() and 1 <= int(answer) <= len(items):
-            return items[int(answer) - 1][0]
-        print(f"No se ha seleccionado ninguna descarga. {prompt}")
+            return
+        name = names[int(answer) - 1]
+        _clear_screen()
+        try:
+            table, summary = read_result(settings, name)
+            show_result(name, summary)
+            columns = ({"period": "Mes", "price_monthly_mean": "Precio medio", "dividend_annualized": "Dividendo anualizado"}
+                       if name == "shiller_monthly" else
+                       {"decision_period": "Decisión", "target_period": "Mes objetivo", "momentum_signal": "Momentum", "reversal_signal": "Reversión"}
+                       if name == "shiller_signals" else {"observed_at": "Fecha", "adjusted_close": "Cierre ajustado"})
+            print("\nPrimeras cinco filas (consulta sin modificar archivos):")
+            sample = table[list(columns)].head(5).rename(columns=columns).astype("string").fillna("Sin historia")
+            print(sample.to_string(index=False))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"No se puede consultar: {exc}")
+            print(f"Siguiente paso: {_next_step(settings, name)}.")
+        if not _pause():
+            raise EOFError
 
 
-def _show_runs(config_path: Path) -> None:
-    browse_runs(config_path, _clear_screen)
+def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
+    """Elegir una tarea; 0 vuelve, Ctrl+C cancela y EOF cierra el menú."""
+    config_path = Path(config_path).expanduser().resolve()
+    while True:
+        option = ""
+        try:
+            _clear_screen()
+            try:
+                settings = load_config(config_path)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                print(f"No se puede leer la configuración: {exc}")
+                print(f"Revisa {config_path} y guarda los cambios.")
+                print("1. Reintentar después de corregir el archivo\n0. Salir")
+                if _choice("Opción: ", {"0", "1"}) == "0":
+                    return 0
+                continue
+            print("TFM — ¿Invertir o esperar?")
+            print(f"Estudio actual: Shiller mensual; desarrollo {settings['validation']['development_start'][:4]}–{settings['validation']['development_end'][:4]}.")
+            print("Disponible: preparación de datos y cálculo de señales.")
+            print("Pendiente: definir la simulación con el tutor; todavía no hay modelos entrenados.")
+            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n0. Salir")
+            option = _choice("Opción del menú (0–5): ", {"0", "1", "2", "3", "4", "5"})
+            if option == "0":
+                return 0
+            _clear_screen()
+            if option in {"1", "4"}:
+                if not _prepare(config_path, settings, "shiller" if option == "1" else "spy"):
+                    continue
+            elif option == "2":
+                print("Calcular señales de Shiller — momentum 12–1 y reversión de un mes")
+                print("Entrada: data/processed/shiller_monthly.parquet. No se descargarán datos.")
+                print("Se mantienen las reglas originales. Este paso todavía no calcula ganancias ni entrena un modelo.")
+                show_result("shiller_signals", calculate_signals(config_path))
+            elif option == "3":
+                _consult(settings)
+                continue
+            else:
+                _show_configuration(config_path, settings)
+        except EOFError:
+            print("\nMenú cerrado.")
+            return 0
+        except KeyboardInterrupt:
+            print("\nOperación cancelada. Puedes volver a elegir una tarea.")
+        except (DownloadError, OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"No se ha completado la tarea: {exc}")
+            if option == "2":
+                print("Si faltan datos de Shiller, usa la opción 1 antes de calcular señales.")
+                print("Después repite la opción 2. No se han calculado rentabilidades.")
+            else:
+                print("Revisa el archivo indicado o la conexión si estabas descargando; después repite la opción elegida.")
+        if not _pause():
+            return 0
 
 
-def _show_result(run_dir: Path) -> None:
-    report = json.loads((run_dir / "quality_report.json").read_text(encoding="utf-8"))
-    record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
-    print("\nPreparación terminada.")
-    print(f"Sesiones: {report['rows']:,}".replace(",", "."))
-    print(f"Periodo: {report['first_session'][:10]} → {report['last_session'][:10]}")
-    print(f"Controles de calidad: {'superados' if report['status'] == 'passed' else 'no superados'}")
-    for message in quality_messages(report.get("checks", pending_checks())):
-        print(message)
-    for warning in other_warnings(report):
-        print(f"Pendiente: {warning}")
-    print(f"Precios preparados: {record['prepared_dir']}")
-    print(f"Registro de ejecución: {run_dir / 'run.json'}")
-
-
+# Presentación de comandos anteriores; se retirará con ellos en el tercer incremento.
 def show_shiller_result(run_dir: Path) -> None:
     report = json.loads((run_dir / "quality_report.json").read_bytes())
     record = json.loads((run_dir / "run.json").read_bytes())
@@ -133,61 +309,6 @@ def show_shiller_signals_result(run_dir: Path) -> None:
     print(f"Tabla Parquet: {run_dir / 'signals.parquet'}")
     print(f"Resumen: {run_dir / 'summary.json'}")
     print(f"Registro: {run_dir / 'run.json'}")
-
-
-def _select_shiller_preparation(settings: dict) -> Path | None:
-    items = []
-    for path in sorted(settings["processed_root"].glob("shiller_monthly/*/manifest.json")):
-        try:
-            manifest = json.loads(path.read_bytes())
-            interval = manifest["interval"]
-            if (manifest["kind"] != "shiller_monthly_observations" or manifest["status"] != "passed"
-                    or manifest["instrument"] != "SHILLER_SP_COMPOSITE"
-                    or interval["development_start"] != settings["development_start"][:7]
-                    or interval["development_end"] != settings["development_end"][:7]):
-                continue
-            items.append(path.parent)
-            print(f"{len(items)}. Preparada: {display_time(manifest.get('created_at_utc'))} | {interval['history_start']} → {interval['development_end']}")
-        except (OSError, ValueError, KeyError, TypeError):
-            print(f"No se pudo leer la preparación: {path.parent}")
-    if not items:
-        print("No hay preparaciones mensuales compatibles. Prepara Shiller con la opción 9.")
-        return None
-    while True:
-        answer = input(f"Número de preparación (1–{len(items)}; 0 para volver): ").strip()
-        if answer == "0":
-            return None
-        if answer.isdecimal() and 1 <= int(answer) <= len(items):
-            return items[int(answer) - 1]
-        print("Selecciona un número de la lista; no se elige automáticamente la última preparación.")
-
-
-def _select_shiller_input(settings: dict) -> dict | None:
-    items = []
-    for path in sorted(settings["raw_root"].glob("shiller/SHILLER_SP_COMPOSITE/*/manifest.json")):
-        try:
-            manifest = json.loads(path.read_bytes())
-            if (manifest["schema_version"] != 1 or manifest["provider"] != "shiller"
-                    or manifest["instrument"] != "SHILLER_SP_COMPOSITE" or manifest["status"] != "archived"):
-                continue
-            items.append(path.parent)
-            print(f"{len(items)}. Original archivado: {display_time(manifest.get('archived_at_utc'))}")
-        except (OSError, ValueError, KeyError, TypeError):
-            print(f"No se pudo leer el original: {path.parent}")
-    print("D. Descargar una nueva copia del Excel oficial")
-    print("F. Importar un Excel XLS original que ya tienes en el ordenador")
-    while True:
-        answer = input("Número de original, D para descargar, F para importar o 0 para volver: ").strip()
-        if answer == "0":
-            return None
-        if answer.lower() == "d":
-            return {}
-        if answer.lower() == "f":
-            filename = input("Ruta del XLS original (Intro o 0 para volver): ").strip()
-            return None if filename in {"", "0"} else {"file_path": Path(filename).expanduser()}
-        if answer.isdecimal() and 1 <= int(answer) <= len(items):
-            return {"snapshot_dir": items[int(answer) - 1]}
-        print("Selecciona un original de la lista, D, F o 0; no se elige automáticamente.")
 
 
 def show_simulation_result(run_dir: Path) -> None:
@@ -242,235 +363,3 @@ def show_audit_result(run_dir: Path) -> bool:
             print("La lista completa está en la tabla de comparaciones.")
         print("Una discrepancia no determina cuál de las fuentes es correcta; no se han reparado los datos.")
     return not any(check["status"] == "failed" for check in report["checks"].values())
-
-
-def _select_reference(settings: dict, config_path: Path) -> Path | None:
-    items = []
-    for path in sorted(settings["raw_root"].glob("ssga/SPY/*/manifest.json")):
-        try:
-            manifest = json.loads(path.read_bytes())
-            coverage = manifest["coverage"]
-            if manifest["status"] != "completed":
-                continue
-            items.append(path.parent)
-            print(f"{len(items)}. SSGA | {coverage['start']} → {coverage['end_exclusive']} (fin exclusivo) | {manifest['rows']} eventos | {path.parent.name}")
-        except (OSError, ValueError, KeyError, TypeError):
-            print(f"No se pudo leer la referencia: {path.parent}")
-    print("I. Importar otro Excel oficial de distribuciones de State Street")
-    while True:
-        answer = input("Número de referencia, I para importar o 0 para volver: ").strip()
-        if answer == "0":
-            return None
-        if answer.lower() == "i":
-            print("Descarga 'SPDR Historical Distributions XLSX' desde:")
-            print("https://www.ssga.com/us/en/intermediary/resources/documents/etf-dividend-distributions")
-            filename = input("Ruta del Excel (Intro o 0 para volver): ").strip()
-            if filename in {"", "0"}:
-                return None
-            directory = import_ssga_reference(config_path, Path(filename).expanduser())
-            print(f"Referencia importada: {directory}")
-            return directory
-        if answer.isdecimal() and 1 <= int(answer) <= len(items):
-            return items[int(answer) - 1]
-        print("Selecciona una referencia de la lista, I o 0.")
-
-
-def _select_prepared_prices(settings: dict) -> Path | None:
-    items = []
-    for path in sorted(settings["processed_root"].glob("prices/*/manifest.json")):
-        try:
-            manifest = json.loads(path.read_text(encoding="utf-8"))
-            if manifest["status"] != "passed" or manifest["source_manifest"]["instrument"] != "SPY":
-                continue
-            report = json.loads((path.parent / "quality_report.json").read_text(encoding="utf-8"))
-            first, last = report["first_session"][:10], report["last_session"][:10]
-            simulation = settings.get("simulation")
-            if report["status"] != "passed" or last > settings["development_end"]:
-                continue
-            if simulation is not None and (first > simulation["start"] or last < simulation["end"]):
-                continue
-            items.append(path.parent)
-            print(f"{len(items)}. SPY | {first} → {last} | {report['rows']} sesiones | {path.parent.name}")
-        except (OSError, ValueError, KeyError, TypeError):
-            print(f"No se pudo leer la preparación: {path.parent}")
-    if not items:
-        print("No hay precios preparados compatibles. Prepara los datos o revisa el intervalo de la configuración.")
-        return None
-    while True:
-        answer = input(f"Número de preparación (1–{len(items)}; 0 para volver): ").strip()
-        if answer == "0":
-            return None
-        if answer.isdecimal() and 1 <= int(answer) <= len(items):
-            return items[int(answer) - 1]
-        print("Selecciona un número de la lista; 0 para volver.")
-
-
-def _select_audit(prepared: Path, runs_root: Path) -> Path | None:
-    manifest_bytes = (prepared / "manifest.json").read_bytes()
-    manifest = json.loads(manifest_bytes)
-    manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
-    items = []
-    for path in sorted(runs_root.glob("*/run.json")):
-        try:
-            record = json.loads(path.read_bytes())
-            if record.get("command") != "audit-prices" or record["status"] != "completed":
-                continue
-            report = json.loads((path.parent / "audit_report.json").read_bytes())
-            if (report["binding"]["prices_sha256"] != manifest["sha256"]
-                    or report["binding"]["prepared_manifest_sha256"] != manifest_hash):
-                continue
-            items.append(path.parent)
-            print(f"{len(items)}. Auditoría {path.parent.name} | calendario: {report['checks']['calendar']['status']} | dividendos: {report['checks']['dividends']['status']}")
-        except (OSError, ValueError, KeyError, TypeError):
-            continue
-    if not items:
-        print("No hay auditorías disponibles para estos precios; simulación exploratoria con calendario pendiente.")
-        return None
-    while True:
-        answer = input(f"Auditoría (1–{len(items)}; 0 para simular SIN auditoría): ").strip()
-        if answer == "0":
-            return None
-        if answer.isdecimal() and 1 <= int(answer) <= len(items):
-            return items[int(answer) - 1]
-        print("Selecciona una auditoría de la lista o 0; no se elige automáticamente.")
-
-
-def interactive_menu() -> int:
-    """Elegir tareas; Ctrl+C cancela la acción y Ctrl+D sale del menú."""
-    config_path = Path("configs/data.toml")
-    stop = False
-    while not stop:
-        pause = False
-        try:
-            _clear_screen()
-            print(f"Configuración en uso: {config_path} (exploración anterior de SPY)")
-            print("Estudio principal: historia mensual; desarrollo 1927–1989, evaluación desde 1990.")
-            print("¿Qué quieres hacer?\n"
-                  "1. Descargar y preparar precios de SPY (exploración anterior)\n"
-                  "2. Preparar una descarga de SPY existente (exploración anterior)\n"
-                  "3. Consultar ejecuciones anteriores\n"
-                  "4. Ver la configuración de SPY\n"
-                  "5. Cambiar configuración de SPY\n"
-                  "6. Simular comprar y mantener SPY (exploración anterior)\n"
-                  "7. Auditar calendario de SPY (exploración anterior)\n"
-                  "8. Contrastar dividendos de SPY (exploración anterior)\n"
-                  "9. Preparar historia mensual de Shiller (estudio principal)\n"
-                  "10. Generar señales mensuales de Shiller (sin simular rentabilidades)\n"
-                  "0. Salir")
-            option = input("Opción del menú (0–10): ").strip()
-            if option == "0":
-                return 0
-            if option not in {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}:
-                pause = True
-                print("Escribe un número del 0 al 10.")
-                continue
-            pause = True
-            _clear_screen()
-            if option == "10":
-                signals_path = config_path.resolve().parent / "shiller_signals.toml"
-                settings = load_shiller_signals_config(signals_path)
-                print(f"Configuración de señales: {signals_path}")
-                print("Base: promedios mensuales de Shiller. Momentum no positivo: efectivo.")
-                print("Señales para 1927–1989; sin descargas ni simulación de operaciones.")
-                prepared = _select_shiller_preparation(settings)
-                if prepared is not None:
-                    run_dir = run_shiller_signals(signals_path, prepared)
-                    _clear_screen()
-                    show_shiller_signals_result(run_dir)
-                continue
-            if option == "9":
-                monthly_path = config_path.resolve().parent / "shiller_monthly.toml"
-                settings = load_shiller_config(monthly_path)
-                print(f"Configuración del estudio mensual: {monthly_path}")
-                print(f"Historia desde {settings['history_start']} | Desarrollo 1927–1989 | Evaluación desde 1990 excluida")
-                print("P es un promedio mensual y D un importe anualizado interpolado; todavía no se simulan estrategias.")
-                origin = _select_shiller_input(settings)
-                if origin is not None:
-                    run_dir = run_prepare_shiller(monthly_path, **origin)
-                    _clear_screen()
-                    show_shiller_result(run_dir)
-                continue
-            if option == "3":
-                pause = False
-                _show_runs(config_path)
-                continue
-            if option == "8":
-                audit_path = config_path.resolve().parent / "reconciliation.toml"
-                settings = load_reconciliation_config(audit_path)
-                print(f"Configuración de contraste: {audit_path}")
-                print(f"Desarrollo hasta {settings['development_end']}; sin contraste de cierres ni ajustes.")
-                prepared = _select_prepared_prices(settings)
-                if prepared is not None:
-                    reference = _select_reference(settings, audit_path)
-                    if reference is not None:
-                        run_dir = run_audit_prices(audit_path, prepared, reference)
-                        _clear_screen()
-                        show_audit_result(run_dir)
-                continue
-            if option == "7":
-                audit_path = config_path.resolve().parent / "audit.toml"
-                settings = load_audit_config(audit_path)
-                print(f"Configuración de auditoría: {audit_path}")
-                print(f"Calendario de referencia: {settings['calendar']} | Desarrollo hasta {settings['development_end']}")
-                prepared = _select_prepared_prices(settings)
-                if prepared is not None:
-                    run_dir = run_audit_prices(audit_path, prepared)
-                    _clear_screen()
-                    show_audit_result(run_dir)
-                continue
-            if option == "6":
-                simulation_path = config_path.resolve().parent / "buy_and_hold.toml"
-                settings = load_buy_and_hold_config(simulation_path)
-                simulation = settings["simulation"]
-                print(f"Configuración independiente de simulación: {simulation_path}")
-                print(f"SPY | {simulation['start']} → {simulation['end']} (fechas inclusivas)")
-                print(f"Coste por unidad negociada: {simulation['cost_bps']} puntos básicos (escenario ilustrativo)")
-                print(f"Desarrollo hasta: {settings['development_end']} | Política: {settings['policy_path']}")
-                prepared = _select_prepared_prices(settings)
-                if prepared is not None:
-                    audit = _select_audit(prepared, simulation_path.parent.parent / "outputs/runs")
-                    run_dir = run_buy_and_hold(simulation_path, prepared, audit)
-                    _clear_screen()
-                    show_simulation_result(run_dir)
-                continue
-            if option == "5":
-                selected = input("Ruta del archivo TOML (Intro o 0 para volver sin cambiar): ").strip()
-                if selected in {"", "0"}:
-                    pause = False
-                    continue
-                candidate = Path(selected)
-                config = _configuration(candidate)
-                _show_configuration(candidate, config)
-                # Comprobar las rutas necesarias antes de activar la configuración.
-                for key in ("raw", "processed"):
-                    Path(config["storage"][key])
-                config_path = candidate
-                print("Configuración cambiada para esta sesión del menú.")
-                continue
-            config = _configuration(config_path)
-            _show_configuration(config_path, config)
-            if option == "4":
-                print(json.dumps(config, indent=2, ensure_ascii=False))
-                continue
-            snapshot = None
-            if option == "2":
-                snapshot = _snapshots(config_path, config)
-                if snapshot is None:
-                    continue
-            else:
-                print("Descargando una nueva copia y preparando los precios…")
-            run_dir = run_prepare_prices(config_path, snapshot)
-            _clear_screen()
-            _show_result(run_dir)
-        except KeyboardInterrupt:
-            pause = True
-            print("\nAcción cancelada; vuelves al menú.")
-        except EOFError:
-            pause = False
-            print("\nSaliendo.")
-            return 0
-        except (PipelineError, OSError, ValueError, KeyError, TypeError) as exc:
-            print(f"Error: {exc}")
-        finally:
-            stop = pause and not _pause()
-    return 0

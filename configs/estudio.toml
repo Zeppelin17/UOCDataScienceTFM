@@ -1,5 +1,5 @@
 # Configuración del flujo simplificado. Las rutas de salida son fijas.
-# Los TOML anteriores se conservan durante la transición del menú.
+# Los TOML anteriores solo sirven a comandos antiguos, pendientes de retirar.
 
 [shiller]
 # Excel publicado en https://shillerdata.com/ el 17/10/2026.

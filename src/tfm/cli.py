@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from tfm.pipeline import PipelineError, import_ssga_reference, run_audit_prices, run_buy_and_hold, run_prepare_prices, run_prepare_shiller, run_shiller_signals
-from tfm.menu import interactive_menu, show_audit_result, show_simulation_result, show_shiller_result, show_shiller_signals_result
+from tfm.menu import interactive_menu, show_project_summary, show_audit_result, show_simulation_result, show_shiller_result, show_shiller_signals_result
 from tfm.config import DEFAULT_CONFIG, load_config
 from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals
 from tfm.sources.prices import DownloadError
@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     simple_data.add_argument("--file", type=Path, help="Importar un original local si aún no hay uno guardado")
     simple_signals = commands.add_parser("calculate-signals", help="Calcular señales de Shiller sin simular rentabilidades")
     simple_signals.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    status = commands.add_parser("status", help="Consultar qué datos y señales están disponibles, sin modificar archivos")
+    status.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     prepare = commands.add_parser("prepare-prices", help="Descargar y preparar precios con registro de ejecución")
     prepare.add_argument("--config", type=Path, default=Path("configs/data.toml"))
     prepare.add_argument("--snapshot", type=Path, help="Reutilizar una descarga existente sin acceder a la red")
@@ -51,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args = parser.parse_args(arguments)
     try:
+        if args.command == "status":
+            settings = load_config(args.config)
+            show_project_summary(settings)
+            print(f"Carpeta del proyecto: {settings['root']}")
+            print("Abre python -m tfm para consultar las primeras filas desde el menú.")
+            return 0
         if args.command == "prepare-data":
             settings = load_config(args.config)
             filename = "shiller.xls" if args.source == "shiller" else "spy.parquet"

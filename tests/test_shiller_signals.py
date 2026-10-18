@@ -8,7 +8,7 @@ import socket
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
+from tfm import cli
 from tfm.pipeline import PipelineError, run_shiller_signals
 from tfm.signals.shiller import build_price_signals
 from tfm.sources.shiller import INSTRUMENT
@@ -70,7 +70,7 @@ def prepared_project(tmp_path):
     return configs / "shiller_signals.toml", prepared
 
 
-def test_offline_cli_menu_and_explicit_warmup(prepared_project, monkeypatch, capsys):
+def test_offline_cli_and_explicit_warmup(prepared_project, monkeypatch, capsys):
     config, prepared = prepared_project
     root = config.parent.parent
     before = {p.name: p.read_bytes() for p in prepared.iterdir()}
@@ -92,10 +92,7 @@ def test_offline_cli_menu_and_explicit_warmup(prepared_project, monkeypatch, cap
     record = json.loads((run / "run.json").read_bytes())
     for name, expected in record["artifacts_sha256"].items():
         assert sha256((run / name).read_bytes()).hexdigest() == expected
-    monkeypatch.chdir(root)
-    answers = iter(["10", "999", "1", "", "0"])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
-    assert menu.interactive_menu() == 0
+    assert cli.main(["build-shiller-signals", "--config", str(config), "--prepared", str(prepared)]) == 0
     runs = list((root / "outputs/runs").iterdir())
     assert len(runs) == 2
     for repeated in runs:

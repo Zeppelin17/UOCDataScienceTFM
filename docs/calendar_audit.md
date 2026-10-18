@@ -1,5 +1,7 @@
 # Auditoría del calendario de SPY
 
+> Documento del flujo anterior: sus comandos se conservan temporalmente. Las referencias a la numeración antigua del menú son históricas; el recorrido actual se describe en [cli_plan.md](cli_plan.md). Los supuestos y hallazgos científicos siguen documentados aquí hasta su consolidación.
+
 ## Alcance y referencia
 
 La auditoría comprueba la concordancia de las fechas con **XNYS**, calendario de referencia de sesiones regulares de renta variable estadounidense de `exchange_calendars`. No afirma reconstruir los cambios históricos del mercado primario de SPY, verificar el instante de cierre de cada cotización ni certificar sus precios. El emisor identifica actualmente el instrumento en NYSE Arca; se utiliza la referencia US explícita para sesiones diarias, con las limitaciones indicadas. La política elegida y la biblioteca no se cambian para hacer desaparecer discrepancias.

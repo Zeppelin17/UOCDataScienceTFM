@@ -1,67 +1,23 @@
-# Plan de la CLI interactiva
+# CLI guiada del TFM
 
-## Objetivo
+## Recorrido actual
 
-Permitir ejecutar las tareas del TFM eligiendo opciones, sin memorizar comandos. Mantener los comandos explícitos para automatización y reproducción de experimentos.
+Ejecutar `python -m tfm` abre el menú en una terminal. Todas las tareas actuales utilizan `configs/estudio.toml` y llaman a las mismas funciones que los comandos `prepare-data` y `calculate-signals`.
 
-## Estado y decisión actual
+1. **Preparar datos de Shiller.** Explica fuente y ventana histórica. Reutiliza el original de trabajo; si falta, permite descargar, importar un XLS o seleccionar un original anterior por número y fecha legible. Genera `data/processed/shiller_monthly.parquet` y retira las señales del flujo nuevo cuando termina correctamente.
+2. **Calcular señales.** Explica momentum y reversión, utiliza la tabla mensual y genera `shiller_signals.parquet`. No descarga datos ni simula rentabilidades. Expone el calentamiento y la diferencia entre señal ausente y efectivo.
+3. **Consultar datos y señales.** Muestra disponibilidad, filas y pasos pendientes. Permite ver resúmenes y las primeras cinco filas de cada tabla sin modificar archivos. Rechaza resultados con configuración diferente o entradas incompletas. El comando `status` ofrece el resumen sin interacción.
+4. **Trabajar con SPY.** Identifica el ETF y Yahoo Finance, periodo diario con final exclusivo y carácter separado de Shiller. Permite reutilizar, importar o descargar el original de Yahoo. No mezcla series ni ejecuta el simulador anterior.
+5. **Ver configuración.** Presenta periodos, reglas, fuente y carpeta del proyecto con explicaciones. No cambia parámetros. La configuración se vuelve a leer antes de cada tarea.
 
-La CLI existente separa la presentación (`tfm.cli`) del flujo (`tfm.pipeline`) y de los módulos de datos. Esta estructura permite incorporar un menú sin reorganizar la lógica. El menú inicial está implementado en `tfm.menu`, utiliza la biblioteca estándar y reutiliza `run_prepare_prices`. Los comandos existentes se conservan.
+## Navegación
 
-## Menú inicial implementado
+Se elige por número; 0 vuelve o sale. Una selección cancelada vuelve directamente. Los resultados y errores se mantienen hasta Intro. Ctrl+C cancela; Ctrl+D sale, también desde las consultas. Un error de configuración indica el archivo y permite reintentar después de corregirlo. Una entrada incorrecta no inicia descargas ni procesos.
 
-El bloque implementado antes del simulador contempla:
+La pantalla se limpia únicamente en terminales compatibles. No hay dependencias adicionales, explorador de ejecuciones, identificadores largos en las listas ni integración con Finder u otro gestor de archivos. Las tablas se muestran en la terminal y permanecen en sus rutas fijas para consultar con un visor externo si se desea.
 
-1. Abrir un menú al ejecutar `python -m tfm` en una terminal interactiva. Conservar `prepare-prices` y sus argumentos. Sin terminal interactiva, mostrar ayuda y terminar sin esperar entradas.
-2. Ofrecer descargar y preparar precios, preparar una descarga existente, consultar ejecuciones, ver la configuración y salir.
-3. Mostrar los snapshots locales con instrumento, periodo e identificador y permitir seleccionarlos por número. Comprobar compatibilidad con la configuración antes de procesarlos.
-4. Mostrar resumen de ejecuciones con estado y rutas a resultados e informes. No elegir automáticamente la última ejecución ni reutilizarla implícitamente.
-5. Validar las entradas, permitir volver al menú y manejar cancelaciones. Mostrar periodo y configuración antes de una descarga.
-6. Llamar a los mismos flujos existentes, conservando sus registros y controles. Mantener las acciones de consulta como operaciones de lectura.
+## Transición
 
-Usar inicialmente la biblioteca estándar de Python. Añadir solo pruebas esenciales de selección y delegación, manteniendo los tests existentes del flujo como verificación de la lógica de datos.
+Se han retirado `run_browser.py` y sus pruebas, porque su navegación y apertura de carpetas desaparecen. Las pruebas del menú anterior se han sustituido por recorridos del menú guiado; las comprobaciones científicas y las pruebas de los comandos anteriores se conservan. Los comandos de auditoría y simulación siguen disponibles temporalmente hasta el tercer incremento, pero no aparecen en el menú. Sus funciones de presentación se conservan provisionalmente al final de `menu.py`.
 
-## Ampliaciones posteriores
-
-Añadir opciones de anomalías, variables, entrenamiento y evaluación cuando se implementen sus respectivos módulos. Cada acción deberá disponer también de un comando explícito y utilizar el mismo flujo tanto desde el menú como desde la ejecución automatizada.
-
-El menú facilitará seleccionar configuraciones; no introducirá ahora un editor de parámetros ni permitirá saltarse la separación entre desarrollo y evaluación final. Los controles temporales se implementarán en los módulos correspondientes.
-
-## Ajuste de usabilidad implementado
-
-Las acciones usan directamente la configuración activa, inicialmente `configs/data.toml`. La opción 4 la muestra sin preguntas y la opción 5 permite cambiarla explícitamente para la sesión. Una ruta inválida conserva la configuración anterior. La selección de descargas muestra periodo, fecha de descarga y número de sesiones cuando el manifiesto los incluye, con instrucciones sobre los números válidos. El resultado resume sesiones, periodo y controles, junto con las limitaciones pendientes del informe.
-
-
-## Simulación implementada
-
-La opción 6 ejecuta comprar y mantener desde una preparación seleccionada por número, usando `buy_and_hold.toml` situado junto al TOML de datos activo. La configuración de simulación es independiente de la de descarga: muestra su ruta, fechas inclusivas y coste antes de listar las preparaciones. No se realiza una descarga. La verificación completa de integridad y del periodo de desarrollo se hace en el coordinador incluso si se utiliza el comando explícito. Las preparaciones incompatibles por cobertura o periodo se omiten del selector.
-
-El resultado muestra rentabilidad bruta/neta, capital, coste, rotación y caída máxima, además de supuestos y rutas. El historial distingue los comandos y muestra las salidas financieras. El comando reproducible es `python -m tfm simulate-buy-and-hold --config configs/buy_and_hold.toml --prepared RUTA`.
-
-
-## Auditoría de calendario implementada
-
-Opción 7: elige preparación y ejecuta `audit-prices` con `audit.toml`, sin descargas. Muestra intervalo completo, calendario, sesiones esperadas/observadas, faltas y fechas inesperadas, además de los otros campos pendientes. La opción 6 permite elegir explícitamente una auditoría compatible tras seleccionar precios, o 0 para simular sin ella con advertencia. No se utiliza automáticamente la más reciente. El historial distingue estado de ejecución y resultado de auditoría. Los comandos admiten `audit-prices --prepared RUTA` y `simulate-buy-and-hold --prepared RUTA --audit RUTA_AUDITORIA`, con sus configuraciones por defecto habituales.
-
-## Incremento: distribuciones del emisor
-
-Implementados `import-ssga-dividends --file ... --config configs/reconciliation.toml` y `audit-prices --reference ... --config configs/reconciliation.toml`. La opción 8 permite seleccionar una preparación y una referencia existente o importar otro Excel oficial. La opción 7 conserva el calendario y la opción 6 permite seleccionar explícitamente una auditoría v1/v2. Se muestran cobertura, concordancia y discrepancias sin atribuir aprobación a precios o ajustes. Detalles y resultados reales en [source_reconciliation.md](source_reconciliation.md).
-
-## Incremento principal: historia mensual de Shiller
-
-Implementados `prepare-shiller [--config configs/shiller_monthly.toml] [--file XLS | --snapshot DIRECTORIO]` y la opción 9. Sin origen explícito se descarga; el menú exige elegir D, F o un snapshot por número. Se muestran meses de historia/desarrollo y limitaciones. Las opciones previas SPY conservan numeración y se identifican como exploración anterior. Detalles en [shiller_monthly.md](shiller_monthly.md).
-
-## Señales mensuales de Shiller implementadas
-
-La opción 10 permite seleccionar una preparación mensual de Shiller y ejecutar `build-shiller-signals --prepared RUTA`, con `configs/shiller_signals.toml`. Se muestran el periodo objetivo, los meses comparables y los que carecen de historia suficiente. La salida incluye CSV y Parquet, resumen y registro de procedencia; el historial muestra sus rutas. No hay descargas ni selección automática de la última preparación.
-
-Las señales usan promedios mensuales, momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La base y la convención del momentum se muestran expresamente. No se calculan rentabilidades ni se integra la tabla con el simulador diario de SPY. La evaluación desde 1990 sigue excluida. Véase [monthly_protocol.md](monthly_protocol.md).
-
-
-## Historial navegable y acceso a archivos
-
-La opción 3 muestra por defecto las ejecuciones de Shiller, con las más recientes primero. La lista incluye fecha y hora locales, tarea y estado en castellano, ocho entradas por página y selección por número. N/P cambian de página; T alterna entre Shiller y todas las tareas, incluidas las anteriores de SPY. Los identificadores y las rutas completas aparecen únicamente al pedir los detalles técnicos.
-
-Al elegir una ejecución se muestra un resumen del periodo, filas y controles disponibles. Las acciones permiten mostrar el resultado principal, la tabla de entrada, el informe o el original en Finder, así como abrir la carpeta de la ejecución. Solo se ofrecen archivos existentes dentro del proyecto. La apertura se ejecuta únicamente al elegirla, mediante argumentos locales y sin shell; no convierte, modifica ni regenera archivos. Mostrar un Parquet en Finder no garantiza que una extensión concreta lo pueda visualizar.
-
-Volver desde el historial no requiere una pausa adicional. Los selectores de originales y preparaciones de Shiller muestran fechas legibles en lugar de los identificadores largos. Los comandos, los cálculos y los artefactos persistidos conservan su comportamiento.
+No se borran originales, informes ni resultados históricos. La limpieza posterior consolidará la documentación y eliminará módulos y configuraciones del flujo retirado. Las etapas de variables, modelos y evaluación se añadirán cuando estén implementadas.

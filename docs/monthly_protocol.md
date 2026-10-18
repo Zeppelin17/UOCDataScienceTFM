@@ -27,11 +27,11 @@ Las comparaciones posteriores deberán compartir los meses en que todas sus vari
 
 ## Artefactos y reproducción
 
-La configuración independiente está en `configs/shiller_signals.toml`. El menú ofrece selección por número, sin elegir automáticamente la preparación más reciente. No hay descargas durante este flujo.
+El flujo actual utiliza `configs/estudio.toml`, `data/processed/shiller_monthly.parquet` y la opción 2 del menú, o el comando `python -m tfm calculate-signals`. No hay descargas durante este cálculo ni selección de una preparación implícita entre carpetas: se utiliza la tabla de trabajo de nombre fijo.
 
-Cada ejecución conserva configuración, política temporal, manifiesto e informe de la preparación, `signals.parquet`, una copia `signals.csv` para consultar la tabla y `summary.json`. El registro incluye versiones y huellas de los artefactos. Los resultados no sobrescriben preparaciones ni ejecuciones anteriores. Un error de configuración, integridad o cobertura bloquea la generación y se registra; un fallo de publicación elimina salidas parciales.
+Se generan `data/processed/shiller_signals.parquet` y su resumen `.json`. La opción 3 permite consultarlos sin cambios ni conversiones. Se mantienen las comprobaciones de cobertura, calentamiento y configuración temporal. Las señales se regeneran en la misma ruta; volver a preparar la tabla mensual retira las señales anteriores para evitar mezclarlas con una nueva entrada. No se crean CSV, huellas ni registros por intento en este flujo.
 
-El tipo del resumen es `shiller_mean_price_signal_diagnostics`. No contiene precios de ejecución, capital, costes, retornos de cartera ni métricas de rentabilidad. El simulador diario de SPY sigue separado y no admite esta tabla mensual.
+Los comandos anteriores con `shiller_signals.toml` y carpetas por ejecución se conservan temporalmente fuera del menú. Sus resultados históricos permanecen intactos. Las señales actuales siguen siendo un diagnóstico sobre precios medios: no contienen precios de ejecución, capital, costes, retornos de cartera ni métricas de rentabilidad. El simulador diario anterior de SPY sigue separado y no admite esta tabla mensual.
 
 ## Siguiente paso financiero
 
