@@ -23,6 +23,26 @@ REQUIRED_COLUMNS = {
 }
 
 
+def fetch_prices(parameters: dict) -> pd.DataFrame:
+    """Obtener precios de Yahoo sin persistir snapshots ni registros."""
+    start, end = parameters["start"], parameters["end"]
+    try:
+        frame = yf.download(**parameters)
+    except Exception as exc:
+        raise DownloadError("La descarga de Yahoo ha fallado") from exc
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        raise DownloadError("Yahoo no devolvió precios; no se ha creado un snapshot")
+    if isinstance(frame.columns, pd.MultiIndex) or not REQUIRED_COLUMNS.issubset(frame.columns):
+        raise DownloadError("La respuesta no contiene las columnas de precios y eventos esperadas")
+    if not isinstance(frame.index, pd.DatetimeIndex) or frame.index.hasnans or frame.index.tz is not None:
+        raise DownloadError("Se esperaba un índice de fechas de sesión sin zona horaria")
+    if (frame.index < pd.Timestamp(start)).any() or (frame.index >= pd.Timestamp(end)).any():
+        raise DownloadError("La respuesta contiene fechas fuera del periodo solicitado")
+    if any(not pd.api.types.is_numeric_dtype(frame[column]) for column in REQUIRED_COLUMNS):
+        raise DownloadError("La respuesta contiene campos financieros no numéricos")
+    return frame
+
+
 def download_prices(config_path: str | Path) -> Path:
     """Guardar una descarga y su manifiesto; devolver su directorio.
 
@@ -57,20 +77,7 @@ def download_prices(config_path: str | Path) -> Path:
     parameters = {"tickers": market["instrument"], "start": start, "end": end,
                   **options, "progress": False, "group_by": "column"}
     requested_at = datetime.now(timezone.utc).isoformat()
-    try:
-        frame = yf.download(**parameters)
-    except Exception as exc:
-        raise DownloadError("La descarga de Yahoo ha fallado") from exc
-    if not isinstance(frame, pd.DataFrame) or frame.empty:
-        raise DownloadError("Yahoo no devolvió precios; no se ha creado un snapshot")
-    if isinstance(frame.columns, pd.MultiIndex) or not REQUIRED_COLUMNS.issubset(frame.columns):
-        raise DownloadError("La respuesta no contiene las columnas de precios y eventos esperadas")
-    if not isinstance(frame.index, pd.DatetimeIndex) or frame.index.hasnans or frame.index.tz is not None:
-        raise DownloadError("Se esperaba un índice de fechas de sesión sin zona horaria")
-    if (frame.index < pd.Timestamp(start)).any() or (frame.index >= pd.Timestamp(end)).any():
-        raise DownloadError("La respuesta contiene fechas fuera del periodo solicitado")
-    if any(not pd.api.types.is_numeric_dtype(frame[column]) for column in REQUIRED_COLUMNS):
-        raise DownloadError("La respuesta contiene campos financieros no numéricos")
+    frame = fetch_prices(parameters)
     # Ausentes, duplicados y coherencia económica se informarán en preparation.
     raw_root = Path(config["storage"]["raw"])
     if not raw_root.is_absolute():

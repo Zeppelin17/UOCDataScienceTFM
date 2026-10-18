@@ -27,8 +27,8 @@ def validate_source_url(url: str) -> None:
         raise ValueError("Se requiere un enlace HTTPS al ie_data.xls publicado por Shiller")
 
 
-def archive_shiller(raw_root: Path, *, url: str, timeout: float, file: str | Path | None = None) -> Path:
-    """Conservar los bytes completos sin ejecutar fórmulas ni convertir el libro."""
+def fetch_shiller(*, url: str, timeout: float = 30, file: str | Path | None = None) -> tuple[bytes, dict]:
+    """Leer el XLS sin crear carpetas ni manifiestos."""
     validate_source_url(url)
     started = datetime.now(timezone.utc).isoformat()
     if file is None:
@@ -51,6 +51,12 @@ def archive_shiller(raw_root: Path, *, url: str, timeout: float, file: str | Pat
                        "limitation": "El instante es de importación; la URL declarada no autentica el origen del fichero local."}
     if len(content) > MAX_BYTES or not content.startswith(XLS_SIGNATURE):
         raise ValueError("Se esperaba un Excel XLS binario de Shiller de hasta 10 MiB")
+    return content, acquisition
+
+
+def archive_shiller(raw_root: Path, *, url: str, timeout: float, file: str | Path | None = None) -> Path:
+    """Conservar los bytes completos sin ejecutar fórmulas ni convertir el libro."""
+    content, acquisition = fetch_shiller(url=url, timeout=timeout, file=file)
     identifier = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex
     directory = raw_root / "shiller" / INSTRUMENT / identifier
     directory.mkdir(parents=True, exist_ok=False)

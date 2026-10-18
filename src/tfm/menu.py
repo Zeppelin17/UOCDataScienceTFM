@@ -15,6 +15,7 @@ from tfm.pipeline import (
     load_shiller_signals_config, run_shiller_signals,
 )
 from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
+from tfm.run_browser import browse_runs, display_time
 
 
 def _clear_screen() -> None:
@@ -81,33 +82,7 @@ def _snapshots(config_path: Path, config: dict) -> Path | None:
 
 
 def _show_runs(config_path: Path) -> None:
-    runs = config_path.resolve().parent.parent / "outputs/runs"
-    records = sorted(runs.glob("*/run.json"))
-    if not records:
-        print("No hay ejecuciones registradas.")
-    for path in records:
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-            print(f"{record['run_id']} | {record.get('command', 'prepare-prices')} | {record['status']} | {record['stage']}")
-            print(f"  Registro: {path}")
-            if record.get("audit_report_path"):
-                print(f"  Resultado de auditoría: {record['audit_result']}")
-                print(f"  Auditoría: {record['audit_report_path']}")
-            if record.get("signals_path"):
-                print(f"  Señales: {record['signals_path']}")
-                print(f"  CSV: {record['csv_path']}")
-                print(f"  Resumen: {record['summary_path']}")
-            elif record.get("equity_path"):
-                print(f"  Resultado: {record['equity_path']}")
-                print(f"  Resumen: {record['summary_path']}")
-            elif record.get("prepared_dir"):
-                print(f"  Resultado: {record['prepared_dir']}")
-            if record.get("quality_report_path"):
-                print(f"  Informe: {record['quality_report_path']}")
-            if record.get("error"):
-                print(f"  Error: {record['error']['message']}")
-        except (OSError, ValueError, KeyError, TypeError):
-            print(f"No se pudo leer: {path}")
+    browse_runs(config_path, _clear_screen)
 
 
 def _show_result(run_dir: Path) -> None:
@@ -172,7 +147,7 @@ def _select_shiller_preparation(settings: dict) -> Path | None:
                     or interval["development_end"] != settings["development_end"][:7]):
                 continue
             items.append(path.parent)
-            print(f"{len(items)}. Shiller | {interval['history_start']} → {interval['development_end']} | {path.parent.name}")
+            print(f"{len(items)}. Preparada: {display_time(manifest.get('created_at_utc'))} | {interval['history_start']} → {interval['development_end']}")
         except (OSError, ValueError, KeyError, TypeError):
             print(f"No se pudo leer la preparación: {path.parent}")
     if not items:
@@ -196,7 +171,7 @@ def _select_shiller_input(settings: dict) -> dict | None:
                     or manifest["instrument"] != "SHILLER_SP_COMPOSITE" or manifest["status"] != "archived"):
                 continue
             items.append(path.parent)
-            print(f"{len(items)}. Original {path.parent.name} | archivado: {manifest['archived_at_utc']}")
+            print(f"{len(items)}. Original archivado: {display_time(manifest.get('archived_at_utc'))}")
         except (OSError, ValueError, KeyError, TypeError):
             print(f"No se pudo leer el original: {path.parent}")
     print("D. Descargar una nueva copia del Excel oficial")
@@ -416,6 +391,7 @@ def interactive_menu() -> int:
                     show_shiller_result(run_dir)
                 continue
             if option == "3":
+                pause = False
                 _show_runs(config_path)
                 continue
             if option == "8":

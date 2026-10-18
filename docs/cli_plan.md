@@ -56,3 +56,12 @@ Implementados `prepare-shiller [--config configs/shiller_monthly.toml] [--file X
 La opción 10 permite seleccionar una preparación mensual de Shiller y ejecutar `build-shiller-signals --prepared RUTA`, con `configs/shiller_signals.toml`. Se muestran el periodo objetivo, los meses comparables y los que carecen de historia suficiente. La salida incluye CSV y Parquet, resumen y registro de procedencia; el historial muestra sus rutas. No hay descargas ni selección automática de la última preparación.
 
 Las señales usan promedios mensuales, momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La base y la convención del momentum se muestran expresamente. No se calculan rentabilidades ni se integra la tabla con el simulador diario de SPY. La evaluación desde 1990 sigue excluida. Véase [monthly_protocol.md](monthly_protocol.md).
+
+
+## Historial navegable y acceso a archivos
+
+La opción 3 muestra por defecto las ejecuciones de Shiller, con las más recientes primero. La lista incluye fecha y hora locales, tarea y estado en castellano, ocho entradas por página y selección por número. N/P cambian de página; T alterna entre Shiller y todas las tareas, incluidas las anteriores de SPY. Los identificadores y las rutas completas aparecen únicamente al pedir los detalles técnicos.
+
+Al elegir una ejecución se muestra un resumen del periodo, filas y controles disponibles. Las acciones permiten mostrar el resultado principal, la tabla de entrada, el informe o el original en Finder, así como abrir la carpeta de la ejecución. Solo se ofrecen archivos existentes dentro del proyecto. La apertura se ejecuta únicamente al elegirla, mediante argumentos locales y sin shell; no convierte, modifica ni regenera archivos. Mostrar un Parquet en Finder no garantiza que una extensión concreta lo pueda visualizar.
+
+Volver desde el historial no requiere una pausa adicional. Los selectores de originales y preparaciones de Shiller muestran fechas legibles en lugar de los identificadores largos. Los comandos, los cálculos y los artefactos persistidos conservan su comportamiento.

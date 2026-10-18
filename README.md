@@ -2,6 +2,27 @@
 
 Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de aprendizaje automático para reglas de momentum y reversión sobre el S&P 500.
 
+## Simplificación en curso: primer incremento
+
+El flujo nuevo utiliza **`configs/estudio.toml`**, nombres de archivo fijos y los mismos lectores, controles de datos y fórmulas de señales. Shiller y Yahoo Finance siguen disponibles por separado. El menú interactivo y los comandos anteriores se conservan durante esta transición; todavía utilizan los TOML anteriores y se sustituirán en el siguiente incremento.
+
+Con el entorno virtual activado, desde la raíz del proyecto:
+
+```bash
+python -m tfm prepare-data
+python -m tfm calculate-signals
+```
+
+El primer comando reutiliza `data/raw/shiller.xls`. Si falta, descarga el Excel configurado. Para comenzar sin red con un original local, ejecuta `python -m tfm prepare-data --file "/ruta/al/original.xls"`. Puedes indicar explícitamente un `original.xls` de las carpetas históricas; no se elige automáticamente ninguno. La importación conserva el archivo histórico y crea el original de trabajo. Los originales existentes no se sustituyen mediante `--file`.
+
+Salidas: `data/processed/shiller_monthly.parquet` y `data/processed/shiller_signals.parquet`. Cada tabla tiene un resumen `.json`; la procedencia se guarda una vez en `data/raw/shiller_fuente.json`. No se crean CSV, carpetas por intento, huellas ni registros de Git. Las tablas se regeneran en el mismo lugar. Preparar datos invalida las señales anteriores; ejecuta después `calculate-signals`. Un fallo de calidad o de escritura de la tabla provisional conserva las salidas válidas anteriores. Cambiar los periodos exige preparar de nuevo antes de calcular señales.
+
+SPY se prepara con `python -m tfm prepare-data --source spy`. Reutiliza `data/raw/spy.parquet` o descarga de Yahoo si falta. Para importar una descarga anterior, añade `--file "/ruta/a/prices.parquet"`; debe ser el original de Yahoo, no la tabla normalizada. Su salida es `data/processed/spy_prices.parquet`, con un resumen y `spy_fuente.json` para la procedencia. Se mantienen los parámetros de descarga anteriores y los controles estructurales; no se afirma haber certificado calendario, ajustes o precios. No se une SPY con Shiller.
+
+Los comandos admiten `--config` para indicar otro `estudio.toml` dentro de `configs/`; las salidas parten de su raíz de proyecto. La configuración predeterminada se localiza desde el paquete, también al ejecutar desde otro directorio.
+
+La evaluación desde 1990 sigue deshabilitada. Las señales de Shiller son un diagnóstico sobre promedios mensuales; no calculan rentabilidades, etiquetas ni modelos. Los datos y resultados históricos permanecen intactos. Las secciones siguientes describen el funcionamiento anterior, pendiente de consolidar al terminar la refactorización.
+
 ## Estado del proyecto
 
 El estudio principal sigue la guía 1.B: desarrollo mensual en 1927–1989 y evaluación desde 1990 hasta un corte de 2026 pendiente de fijar. Ya se puede descargar o importar el Excel de Shiller y preparar únicamente 1926–1989, distinguiendo historia previa y desarrollo. Ya se pueden generar señales de momentum y reversión sobre los promedios mensuales; todavía no se simulan sus rentabilidades ni se entrenan modelos.
@@ -183,6 +204,8 @@ python -m tfm
 En una terminal aparece un menú para descargar y preparar, escoger una descarga existente por número, consultar ejecuciones, ver la configuración, cambiar configuración o salir. Las acciones utilizan directamente `configs/data.toml`; la opción 4 muestra su contenido sin preguntar. La opción 5 permite elegir otro TOML para esta sesión del menú; Intro o 0 cancela ese cambio. Se muestra el instrumento y el periodo antes de ejecutar. Al elegir una descarga, escribe uno de los números mostrados; 0 vuelve al menú. Al terminar se muestran sesiones, periodo, controles de calidad y rutas de resultados. Ctrl+C cancela la acción y Ctrl+D sale.
 
 Los comandos con argumentos siguen disponibles. Sin argumentos y sin terminal interactiva se muestra ayuda, sin esperar respuestas. No se añaden dependencias para el menú.
+
+La opción **3** ofrece un historial navegable: muestra Shiller por defecto, las ejecuciones más recientes primero y ocho por página. Selecciona una por número para ver su resumen y mostrar sus archivos en Finder. N/P cambian de página, T incluye las tareas de SPY y D muestra los detalles técnicos dentro de una ejecución. No hace falta copiar rutas ni buscar carpetas por sus identificadores. La consulta y la apertura no generan ni modifican datos.
 
 El menú limpia la pantalla al cambiar de vista. Los resultados, errores y consultas permanecen visibles hasta pulsar Intro para volver. La limpieza solo se aplica en terminales compatibles; no se introducen códigos de control en salidas redirigidas.
 

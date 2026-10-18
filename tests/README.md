@@ -17,3 +17,9 @@ La comprobación real del proveedor se realiza manualmente con el comando de des
 `test_calendar_audit.py` comprueba cierres extraordinarios y reducidos, sesiones ausentes en los extremos y fechas inesperadas; auditoría/repetición por CLI, menú y simulación con informe explícito; rechazo de otra preparación, cobertura parcial y discrepancias. Los contrastes numéricos de segunda fuente permanecen no evaluados.
 
 `test_shiller_signals.py` verifica ventanas y ausencia de dependencia de datos posteriores, el recorrido CLI/menú sin red con calentamiento visible, el bloqueo de integridad/política temporal y la limpieza de salidas parciales. No simula rentabilidades ni añade pruebas de modelos.
+
+`test_run_browser.py` verifica paginación, filtros y selección del historial sin modificar archivos, apertura local de Finder sin shell ni rutas externas y regreso al menú sin una pausa adicional.
+
+## Flujo simplificado en transición
+
+`test_simple_data.py` comprueba el recorrido local con configuración única, equivalencia de tablas y señales, reutilización de originales, invalidación de señales, protección temporal y conservación de salidas ante errores. También verifica que SPY mantiene yfinance y sus opciones de descarga. No accede a la red ni altera datos del proyecto. Las pruebas anteriores siguen activas hasta retirar sus respectivos flujos.

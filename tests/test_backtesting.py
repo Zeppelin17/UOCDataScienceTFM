@@ -114,7 +114,7 @@ def test_offline_cli_replay_and_menu_use_same_flow(tmp_path, monkeypatch, capsys
     second = next(path for path in runs if path != first)
     pd.testing.assert_frame_equal(pd.read_parquet(first / "equity.parquet"), pd.read_parquet(second / "equity.parquet"))
     monkeypatch.chdir(tmp_path)
-    answers = iter(["6", "99", "1", "", "3", "", "0"])
+    answers = iter(["6", "99", "1", "", "3", "t", "0", "0"])
     monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
     assert menu.interactive_menu() == 0
     assert len(list((tmp_path / "outputs/runs").iterdir())) == 3
@@ -122,4 +122,4 @@ def test_offline_cli_replay_and_menu_use_same_flow(tmp_path, monkeypatch, capsys
     output = capsys.readouterr().out
     assert "Rotación acumulada: 1.00" in output
     assert "Configuración independiente de simulación:" in output
-    assert "simulate-buy-and-hold | completed" in output
+    assert "Comprar y mantener SPY | Terminada" in output
