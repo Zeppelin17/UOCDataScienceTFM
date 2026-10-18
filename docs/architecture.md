@@ -103,4 +103,11 @@ Los artefactos de auditoría y las simulaciones nuevas no sobrescriben preparaci
 
 El estudio 1.B incorpora `sources.shiller` y `preparation.shiller` con un contrato propio, en lugar de reutilizar cierres ajustados o sesiones SPY. `pipeline.run_prepare_shiller` coordina descarga/importación/repetición sin red y validación temporal. Se añade `load_historical_policy` para la separación 1927–1989 / desde 1990, independiente de `experiment_base.toml`, que permanece como configuración exploratoria anterior.
 
-Los originales completos se aíslan en `data/raw/shiller`; solo se publican meses hasta 1989 y columnas Date/P/D, con roles de historia previa y desarrollo. El lector mensual comprueba integridad y contrato para futuras etapas. La opción 9 y el comando `prepare-shiller` comparten el flujo. No se generaliza aún el simulador diario ni se implementan señales o retornos de promedios mensuales. Contrato, errores y límites en [shiller_monthly.md](shiller_monthly.md).
+Los originales completos se aíslan en `data/raw/shiller`; solo se publican meses hasta 1989 y columnas Date/P/D, con roles de historia previa y desarrollo. El lector mensual comprueba integridad y contrato para futuras etapas. La opción 9 y el comando `prepare-shiller` comparten el flujo. No se generaliza aún el simulador diario ni se calculan retornos de cartera sobre promedios mensuales. Contrato, errores y límites en [shiller_monthly.md](shiller_monthly.md).
+
+
+## Señales mensuales de Shiller
+
+`signals.shiller.build_price_signals` calcula las dos reglas sobre P, sin consultar D, resultados futuros ni precios de ejecución. `pipeline.run_shiller_signals` verifica la preparación mediante el lector mensual existente, limita los meses objetivo al desarrollo y publica CSV, Parquet y resumen con huellas y procedencia. `load_shiller_signals_config` exige la base mensual y la convención largo/efectivo del momentum, declaradas en `configs/shiller_signals.toml`.
+
+CLI y opción 10 del menú comparten ese coordinador. Las salidas se identifican como `shiller_mean_price_signal_diagnostics`; no son entradas del simulador diario. Los ausentes de calentamiento permanecen ausentes y la decisión se separa del mes objetivo. No se modifican los originales ni las preparaciones. Véase [monthly_protocol.md](monthly_protocol.md).

@@ -4,7 +4,7 @@
 
 Se siguen los periodos recomendados por la guía local del TFM: desarrollo **1927–1989** y evaluación desde **1990** hasta un corte de 2026 aún por fijar. Este incremento prepara exclusivamente datos, sin estrategias, etiquetas, modelos, retornos ni simulaciones. La fuente es la serie histórica S&P Composite publicada por Robert J. Shiller, no participaciones de SPY ni una serie idéntica al S&P 500 moderno durante toda su historia.
 
-Shiller es una candidata para el análisis mensual de historia larga propuesto en la guía. **La idoneidad de las rentabilidades y la ejecución para un backtest queda pendiente del protocolo financiero.** Importar una tabla no resuelve esa decisión. La memoria todavía contiene el planteamiento SPY/desarrollo hasta 2020 y deberá actualizarse expresamente antes de presentar el nuevo diseño como documentado.
+Shiller se mantiene como fuente de partida del análisis mensual, siguiendo la guía. **La idoneidad de las rentabilidades y la ejecución para un backtest queda pendiente del protocolo financiero.** La memoria ya recoge el alcance histórico y las limitaciones de esta fuente. El [protocolo mensual](monthly_protocol.md) documenta las señales implementadas sobre precios medios y los supuestos que deben resolverse antes de simular.
 
 La fuente oficial es https://shillerdata.com/ y su enlace `ie_data.xls`. La configuración conserva el enlace publicado al revisarlo el 17/10/2026. Si cambia la ubicación, debe actualizarse explícitamente el TOML con el enlace oficial; no hay búsqueda silenciosa de espejos o sustitución de fuente. Cada adquisición registra el enlace concreto y su destino resuelto, tiempo UTC y SHA-256.
 
@@ -87,3 +87,5 @@ Ya se examinó parte de 1993–2020 para construir la herramienta anterior. El n
 ## Verificación real
 
 El archivo revisado el 17/10/2026 (`SHA-256 98a54927942e842ec07ffe73000998e793953708c345b6b27bb363e9ada8366a`) contiene etiquetas mensuales desde 1871-01 hasta 2026-10. La preparación real produce 768 filas entre 1926-01 y 1989-12: 12 de historia y 756 de desarrollo, sin meses ausentes/duplicados ni errores estructurales. No se interpreta esa comprobación como validación económica. El recorrido se verifica también con importación local y repetición sin red; las pruebas esenciales cubren selección temporal/de columnas, lectura de octubre, integridad y errores bloqueantes.
+
+La opción 10 y `build-shiller-signals --prepared RUTA` generan señales de diagnóstico desde una preparación existente, sin modificar este contrato ni utilizar D para calcularlas. Detalles en [monthly_protocol.md](monthly_protocol.md).

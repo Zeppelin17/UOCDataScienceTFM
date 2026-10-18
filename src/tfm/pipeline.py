@@ -25,6 +25,7 @@ from tfm.sources.shiller import INSTRUMENT, archive_shiller, load_shiller_snapsh
 from tfm.preparation.shiller import load_shiller_monthly, preparation_window, prepare_shiller
 from tfm.sources.ssga import import_reference, load_reference
 from tfm.preparation.reconciliation import ABSOLUTE_TOLERANCE_USD, RECONCILIATION_VERSION, reconcile_dividends
+from tfm.signals.shiller import BASIS, WARNINGS as SIGNAL_WARNINGS, build_price_signals
 
 
 class PipelineError(RuntimeError):
@@ -494,4 +495,106 @@ def run_prepare_shiller(config_path: str | Path, *, snapshot_dir: str | Path | N
         raise PipelineError(f"{exc}\nRegistro: {record_path}", run_dir) from exc
     record["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
     _write_record(record_path, record)
+    return run_dir
+
+
+def load_shiller_signals_config(config_path: str | Path) -> dict:
+    """Convenciones fijas y política de desarrollo para señales sin simulación."""
+    path = Path(config_path).resolve()
+    content = path.read_bytes()
+    config = tomllib.loads(content.decode("utf-8"))
+    expected = {"instrument": INSTRUMENT, "basis": BASIS, "momentum_non_positive": "cash"}
+    if any(not isinstance(config.get(section), dict) for section in ("signals", "validation", "storage")):
+        raise ValueError("Se requieren las secciones signals, validation y storage")
+    if (set(config) != {"signals", "validation", "storage"} or config["signals"] != expected
+            or set(config["validation"]) != {"policy_config"}
+            or set(config["storage"]) != {"processed"}):
+        raise ValueError("Se requiere la configuración de señales fijas de Shiller sobre promedios mensuales")
+    if any(not isinstance(value, str) or not value.strip()
+           for value in (config["validation"]["policy_config"], config["storage"]["processed"])):
+        raise ValueError("Las rutas de política y almacenamiento deben ser cadenas no vacías")
+    root = path.parent.parent
+    policy_path = (root / config["validation"]["policy_config"]).resolve()
+    policy_bytes, policy = load_historical_policy(policy_path)
+    return {"root": root, "config_bytes": content, "signals": expected,
+            "policy_path": policy_path, "policy_bytes": policy_bytes, **policy,
+            "processed_root": (root / config["storage"]["processed"]).resolve()}
+
+
+def run_shiller_signals(config_path: str | Path, prepared_dir: str | Path) -> Path:
+    """Generar señales de diagnóstico desde una preparación explícita, sin red."""
+    config_path, prepared_dir = Path(config_path).resolve(), Path(prepared_dir).resolve()
+    root = config_path.parent.parent
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex
+    run_dir = root / "outputs" / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=False)
+    record_path = run_dir / "run.json"
+    record = {"schema_version": 1, "run_id": run_id, "command": "build-shiller-signals",
+              "started_at_utc": datetime.now(timezone.utc).isoformat(), "status": "running",
+              "stage": "configuration", "git": _git_state(root), "config_path": str(config_path),
+              "prepared_dir": str(prepared_dir),
+              "versions": {name: version(name) for name in ("uoc-data-science-tfm", "pandas", "pyarrow")}}
+    _write_record(record_path, record)
+    outputs = ("signals.parquet", "signals.csv", "summary.json")
+    try:
+        (run_dir / "config.toml").write_bytes(config_path.read_bytes())
+        settings = load_shiller_signals_config(config_path)
+        (run_dir / "config.toml").write_bytes(settings["config_bytes"])
+        (run_dir / "validation_policy.toml").write_bytes(settings["policy_bytes"])
+        record.update({"config_sha256": hashlib.sha256(settings["config_bytes"]).hexdigest(),
+                       "policy_sha256": hashlib.sha256(settings["policy_bytes"]).hexdigest(),
+                       "stage": "prepared_validation"})
+        _write_record(record_path, record)
+        monthly, manifest_bytes, report_bytes = load_shiller_monthly(prepared_dir, settings["policy_bytes"])
+        source_bytes = (prepared_dir / "source_manifest.json").read_bytes()
+        if hashlib.sha256(source_bytes).hexdigest() != json.loads(manifest_bytes)["artifacts_sha256"]["source_manifest.json"]:
+            raise ValueError("La procedencia de la preparación ha cambiado")
+        (run_dir / "source_manifest.json").write_bytes(source_bytes)
+        (run_dir / "prepared_manifest.json").write_bytes(manifest_bytes)
+        (run_dir / "quality_report.json").write_bytes(report_bytes)
+        record.update({"prepared_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+                       "quality_report_sha256": hashlib.sha256(report_bytes).hexdigest(), "stage": "signals"})
+        _write_record(record_path, record)
+        signals = build_price_signals(monthly)
+        first, last = settings["development_start"][:7], settings["development_end"][:7]
+        signals = signals.loc[signals.target_period.between(first, last)].reset_index(drop=True)
+        expected_months = pd.period_range(first, last, freq="M").astype(str).tolist()
+        if signals.target_period.tolist() != expected_months:
+            raise ValueError("No se cubren todos los meses objetivo del desarrollo")
+        common = signals.loc[signals.both_rules_available, "target_period"]
+        if common.empty:
+            raise ValueError("No hay meses con historia suficiente para las dos reglas")
+        summary = {"schema_version": 1, "kind": "shiller_mean_price_signal_diagnostics",
+                   "instrument": INSTRUMENT, "basis": BASIS, "rows": len(signals),
+                   "target_start": first, "target_end": last,
+                   "both_rules_available": len(common), "first_common_target": common.iloc[0],
+                   "last_common_target": common.iloc[-1],
+                   "missing_momentum_targets": signals.loc[signals.momentum_signal.isna(), "target_period"].tolist(),
+                   "missing_reversal_targets": signals.loc[signals.reversal_signal.isna(), "target_period"].tolist(),
+                   "rules": {**settings["signals"], "momentum": "P[m-1] / P[m-12] - 1",
+                             "reversal": "P[m] / P[m-1] - 1", "target": "m+1"},
+                   "binding": {"prepared_manifest_sha256": record["prepared_manifest_sha256"],
+                               "monthly_sha256": json.loads(manifest_bytes)["sha256"]},
+                   "warnings": SIGNAL_WARNINGS}
+        record["stage"] = "publication"
+        _write_record(record_path, record)
+        signals.to_parquet(run_dir / "signals.parquet", index=False)
+        signals.to_csv(run_dir / "signals.csv", index=False)
+        (run_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        record.update({"signals_path": str(run_dir / "signals.parquet"),
+                       "csv_path": str(run_dir / "signals.csv"), "summary_path": str(run_dir / "summary.json"),
+                       "artifacts_sha256": {name: hashlib.sha256((run_dir / name).read_bytes()).hexdigest()
+                                             for name in outputs}, "status": "completed", "stage": "completed"})
+        record["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        _write_record(record_path, record)
+    except (Exception, KeyboardInterrupt) as exc:
+        for name in outputs:
+            (run_dir / name).unlink(missing_ok=True)
+        for key in ("signals_path", "csv_path", "summary_path", "artifacts_sha256"):
+            record.pop(key, None)
+        record["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
+        record["error"] = {"type": type(exc).__name__, "message": str(exc)}
+        record["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        _write_record(record_path, record)
+        raise PipelineError(f"{exc}\nRegistro: {record_path}", run_dir) from exc
     return run_dir

@@ -1,0 +1,12 @@
+[signals]
+instrument = "SHILLER_SP_COMPOSITE"
+# Diagnóstico sobre promedios mensuales; no cierres ni rentabilidades de cartera.
+basis = "monthly_mean_price"
+# La guía prescribe largo con momentum positivo; explicitamos el otro caso.
+momentum_non_positive = "cash"
+
+[validation]
+policy_config = "configs/historical_policy.toml"
+
+[storage]
+processed = "data/processed"

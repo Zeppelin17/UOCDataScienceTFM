@@ -12,6 +12,7 @@ from tfm.pipeline import (
     run_audit_prices, run_buy_and_hold, run_prepare_prices,
     import_ssga_reference, load_reconciliation_config,
     load_shiller_config, run_prepare_shiller,
+    load_shiller_signals_config, run_shiller_signals,
 )
 from tfm.preparation.quality import other_warnings, pending_checks, quality_messages
 
@@ -92,7 +93,11 @@ def _show_runs(config_path: Path) -> None:
             if record.get("audit_report_path"):
                 print(f"  Resultado de auditoría: {record['audit_result']}")
                 print(f"  Auditoría: {record['audit_report_path']}")
-            if record.get("equity_path"):
+            if record.get("signals_path"):
+                print(f"  Señales: {record['signals_path']}")
+                print(f"  CSV: {record['csv_path']}")
+                print(f"  Resumen: {record['summary_path']}")
+            elif record.get("equity_path"):
                 print(f"  Resultado: {record['equity_path']}")
                 print(f"  Resumen: {record['summary_path']}")
             elif record.get("prepared_dir"):
@@ -135,6 +140,51 @@ def show_shiller_result(run_dir: Path) -> None:
     print(f"Tabla mensual: {record['prepared_dir']}/monthly.parquet")
     print(f"Original archivado: {record['snapshot_dir']}")
     print(f"Registro: {run_dir / 'run.json'}")
+
+
+def show_shiller_signals_result(run_dir: Path) -> None:
+    summary = json.loads((run_dir / "summary.json").read_bytes())
+    print("Señales mensuales de Shiller generadas; diagnóstico sin simulación de rentabilidades.")
+    print(f"Meses objetivo: {summary['target_start']} → {summary['target_end']} | {summary['rows']} meses")
+    print(f"Historia suficiente para ambas reglas: {summary['both_rules_available']} meses")
+    print(f"Periodo común: {summary['first_common_target']} → {summary['last_common_target']}")
+    print("Señales: +1 largo, -1 corto, 0 efectivo; campo vacío significa historia insuficiente.")
+    for name, label in (("momentum", "Momentum"), ("reversal", "Reversión")):
+        if summary[f"missing_{name}_targets"]:
+            print(f"{label}, meses sin historia suficiente: {', '.join(summary[f'missing_{name}_targets'])}")
+    for warning in summary["warnings"]:
+        print(f"Nota: {warning}")
+    print(f"Tabla para consultar: {run_dir / 'signals.csv'}")
+    print(f"Tabla Parquet: {run_dir / 'signals.parquet'}")
+    print(f"Resumen: {run_dir / 'summary.json'}")
+    print(f"Registro: {run_dir / 'run.json'}")
+
+
+def _select_shiller_preparation(settings: dict) -> Path | None:
+    items = []
+    for path in sorted(settings["processed_root"].glob("shiller_monthly/*/manifest.json")):
+        try:
+            manifest = json.loads(path.read_bytes())
+            interval = manifest["interval"]
+            if (manifest["kind"] != "shiller_monthly_observations" or manifest["status"] != "passed"
+                    or manifest["instrument"] != "SHILLER_SP_COMPOSITE"
+                    or interval["development_start"] != settings["development_start"][:7]
+                    or interval["development_end"] != settings["development_end"][:7]):
+                continue
+            items.append(path.parent)
+            print(f"{len(items)}. Shiller | {interval['history_start']} → {interval['development_end']} | {path.parent.name}")
+        except (OSError, ValueError, KeyError, TypeError):
+            print(f"No se pudo leer la preparación: {path.parent}")
+    if not items:
+        print("No hay preparaciones mensuales compatibles. Prepara Shiller con la opción 9.")
+        return None
+    while True:
+        answer = input(f"Número de preparación (1–{len(items)}; 0 para volver): ").strip()
+        if answer == "0":
+            return None
+        if answer.isdecimal() and 1 <= int(answer) <= len(items):
+            return items[int(answer) - 1]
+        print("Selecciona un número de la lista; no se elige automáticamente la última preparación.")
 
 
 def _select_shiller_input(settings: dict) -> dict | None:
@@ -330,16 +380,29 @@ def interactive_menu() -> int:
                   "7. Auditar calendario de SPY (exploración anterior)\n"
                   "8. Contrastar dividendos de SPY (exploración anterior)\n"
                   "9. Preparar historia mensual de Shiller (estudio principal)\n"
+                  "10. Generar señales mensuales de Shiller (sin simular rentabilidades)\n"
                   "0. Salir")
-            option = input("Opción del menú (0–9): ").strip()
+            option = input("Opción del menú (0–10): ").strip()
             if option == "0":
                 return 0
-            if option not in {"1", "2", "3", "4", "5", "6", "7", "8", "9"}:
+            if option not in {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}:
                 pause = True
-                print("Escribe un número del 0 al 9.")
+                print("Escribe un número del 0 al 10.")
                 continue
             pause = True
             _clear_screen()
+            if option == "10":
+                signals_path = config_path.resolve().parent / "shiller_signals.toml"
+                settings = load_shiller_signals_config(signals_path)
+                print(f"Configuración de señales: {signals_path}")
+                print("Base: promedios mensuales de Shiller. Momentum no positivo: efectivo.")
+                print("Señales para 1927–1989; sin descargas ni simulación de operaciones.")
+                prepared = _select_shiller_preparation(settings)
+                if prepared is not None:
+                    run_dir = run_shiller_signals(signals_path, prepared)
+                    _clear_screen()
+                    show_shiller_signals_result(run_dir)
+                continue
             if option == "9":
                 monthly_path = config_path.resolve().parent / "shiller_monthly.toml"
                 settings = load_shiller_config(monthly_path)

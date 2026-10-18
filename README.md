@@ -4,9 +4,11 @@ Proyecto de programación del TFM de Ciencia de Datos: evaluación de filtros de
 
 ## Estado del proyecto
 
-El estudio principal sigue la guía 1.B: desarrollo mensual en 1927–1989 y evaluación desde 1990 hasta un corte de 2026 pendiente de fijar. Ya se puede descargar o importar el Excel de Shiller y preparar únicamente 1926–1989, distinguiendo historia previa y desarrollo. No se calculan todavía las anomalías ni se entrenan modelos.
+El estudio principal sigue la guía 1.B: desarrollo mensual en 1927–1989 y evaluación desde 1990 hasta un corte de 2026 pendiente de fijar. Ya se puede descargar o importar el Excel de Shiller y preparar únicamente 1926–1989, distinguiendo historia previa y desarrollo. Ya se pueden generar señales de momentum y reversión sobre los promedios mensuales; todavía no se simulan sus rentabilidades ni se entrenan modelos.
 
 La exploración previa con SPY conserva descarga, preparación, simulador diario, auditoría de calendario y contraste de distribuciones. Sus resultados y configuraciones se mantienen como planteamiento anterior, separado de la historia mensual. Véase [la fuente y el alcance del nuevo flujo](docs/shiller_monthly.md).
+
+El [protocolo mensual](docs/monthly_protocol.md) documenta las reglas y las decisiones pendientes antes de simular. Se mantiene Shiller como fuente y se distingue el cálculo de señales de una reproducción de operaciones ejecutables.
 
 ## Arquitectura
 
@@ -84,14 +86,14 @@ python -c "import tfm; print(tfm.__version__)"
 
 1. Primera fuente y reconstrucción de tablas desde originales.
 2. Simulador básico con comprar y mantener y costes (implementado).
-3. Momentum y reversión con ejemplos verificables.
+3. Señales de momentum y reversión sobre promedios de Shiller (implementado); simulación mensual pendiente.
 4. Variables de entorno, integración de fuentes y filtros sencillos.
 5. Etiquetas, particiones temporales y registro de configuraciones.
 6. Primer meta-modelo sencillo y predicciones fuera de muestra.
 7. Alternativas justificadas, SHAP y controles DSR/PBO.
 8. Configuración fijada, evaluación final y exportación de resultados.
 
-Consulta `docs/architecture.md` para los contratos y las decisiones pendientes. El [protocolo financiero propuesto](docs/financial_protocol.md) concreta las convenciones temporales y el alcance del primer simulador.
+Consulta `docs/architecture.md` para los contratos y las decisiones pendientes. El [protocolo financiero anterior](docs/financial_protocol.md) describe el primer simulador diario de SPY; el [protocolo mensual propuesto](docs/monthly_protocol.md) prepara el siguiente incremento.
 
 La CLI dispone de un menú interactivo. Su alcance y ampliaciones están descritos en [el plan de la CLI](docs/cli_plan.md).
 
@@ -232,4 +234,19 @@ La opción 8 del menú permite importar el Excel oficial de State Street y contr
 python -m tfm prepare-shiller
 ```
 
-La opción 9 del menú ofrece descarga, importación de un XLS local y reutilización de un original archivado. El resumen debe mostrar 768 meses: 12 de historia previa y 756 de desarrollo. Se conserva P como precio medio mensual y D como dividendo anualizado, sin tratarlos como cierres de ejecución o pagos mensuales. Véanse [los comandos, el contrato y las limitaciones](docs/shiller_monthly.md). La memoria y el protocolo financiero deben adaptarse al nuevo diseño antes de simularlo.
+La opción 9 del menú ofrece descarga, importación de un XLS local y reutilización de un original archivado. El resumen debe mostrar 768 meses: 12 de historia previa y 756 de desarrollo. Se conserva P como precio medio mensual y D como dividendo anualizado, sin tratarlos como cierres de ejecución o pagos mensuales. Véanse [los comandos, el contrato y las limitaciones](docs/shiller_monthly.md). La memoria ya recoge ese alcance; la simulación requiere cerrar las decisiones del [protocolo mensual](docs/monthly_protocol.md).
+
+
+## Generar las señales mensuales de Shiller
+
+En el menú `python -m tfm`, elige la **opción 10** y selecciona por número una preparación mensual existente. La opción 9 permite prepararla si todavía no tienes ninguna. No se elige automáticamente la última tabla ni se descargan datos al generar señales.
+
+También puedes ejecutar:
+
+```bash
+python -m tfm build-shiller-signals --prepared RUTA_DE_PREPARACION_SHILLER
+```
+
+La configuración es `configs/shiller_signals.toml`: momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La salida conserva mes de decisión, mes objetivo, indicadores y señales (+1 largo, -1 corto, 0 efectivo). Un campo vacío significa historia insuficiente. Con la preparación desde enero de 1926 hay 756 meses objetivo de 1927–1989 y 755 comparables para ambas reglas, desde febrero de 1927.
+
+Cada ejecución guarda `signals.parquet`, `signals.csv` para consultar la tabla, `summary.json` y la procedencia. Se verifican integridad y política temporal antes de calcular. Son señales sobre promedios mensuales, sin dividendos, financiación, costes ni resultados de inversión. Véase [el contrato y las limitaciones](docs/monthly_protocol.md).

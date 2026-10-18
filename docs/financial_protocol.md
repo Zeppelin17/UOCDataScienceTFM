@@ -1,6 +1,6 @@
 # Protocolo financiero: propuesta inicial
 
-> Este documento conserva el protocolo exploratorio diario de SPY. El estudio principal pasa a historia mensual de Shiller y periodos 1927–1989 / desde 1990. Sus promedios mensuales no son cierres de ejecución; rentabilidades, señales, cortos y ejecución deben definirse en el siguiente paso antes de reutilizar este protocolo. Véase [shiller_monthly.md](shiller_monthly.md).
+> Documento del simulador diario anterior de SPY. El estudio mensual mantiene [Shiller](shiller_monthly.md) y la separación 1927–1989 / desde 1990. Sus señales y las decisiones pendientes antes de simular están en [monthly_protocol.md](monthly_protocol.md). Las convenciones y fechas que siguen se conservan como histórico del flujo SPY; no gobiernan el nuevo estudio.
 
 Estado: primer simulador largo/efectivo y benchmark de comprar y mantener implementados. Las anomalías y sus comparaciones siguen pendientes. Separa lo que pide la guía de las convenciones propuestas para convertirlo en código. Las convenciones deben fijarse antes de comparar estrategias y no seleccionarse por su rendimiento.
 

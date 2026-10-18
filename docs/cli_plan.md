@@ -50,3 +50,9 @@ Implementados `import-ssga-dividends --file ... --config configs/reconciliation.
 ## Incremento principal: historia mensual de Shiller
 
 Implementados `prepare-shiller [--config configs/shiller_monthly.toml] [--file XLS | --snapshot DIRECTORIO]` y la opción 9. Sin origen explícito se descarga; el menú exige elegir D, F o un snapshot por número. Se muestran meses de historia/desarrollo y limitaciones. Las opciones previas SPY conservan numeración y se identifican como exploración anterior. Detalles en [shiller_monthly.md](shiller_monthly.md).
+
+## Señales mensuales de Shiller implementadas
+
+La opción 10 permite seleccionar una preparación mensual de Shiller y ejecutar `build-shiller-signals --prepared RUTA`, con `configs/shiller_signals.toml`. Se muestran el periodo objetivo, los meses comparables y los que carecen de historia suficiente. La salida incluye CSV y Parquet, resumen y registro de procedencia; el historial muestra sus rutas. No hay descargas ni selección automática de la última preparación.
+
+Las señales usan promedios mensuales, momentum 12–1 largo/efectivo y reversión de un mes largo/corto. La base y la convención del momentum se muestran expresamente. No se calculan rentabilidades ni se integra la tabla con el simulador diario de SPY. La evaluación desde 1990 sigue excluida. Véase [monthly_protocol.md](monthly_protocol.md).
