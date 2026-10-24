@@ -21,6 +21,13 @@ final_test_end = "pending"
 basis = "monthly_mean_price"
 momentum_non_positive = "cash"
 
+[simulation]
+# Escenario central hipotético; tasas en decimal, no porcentajes.
+initial_capital = 100.0
+transaction_cost_rate = 0.001 # 0,10 % del importe negociado
+annual_borrow_rate = 0.01 # 1 % anual, aplicado solo a cortos
+include_dividends = true # D/12 es una aproximación, no un pago observado
+
 [spy]
 # Trabajo previo con el ETF, separado del estudio mensual de Shiller.
 # No se unen ambas series ni se entrena un modelo sobre estos datos.

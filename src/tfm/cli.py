@@ -4,9 +4,9 @@ import argparse
 from pathlib import Path
 import sys
 
-from tfm.menu import interactive_menu, show_project_summary
+from tfm.menu import interactive_menu, show_project_summary, show_result
 from tfm.config import DEFAULT_CONFIG, load_config
-from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, prepare_french_data, prepare_return_components
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, prepare_french_data, prepare_return_components, simulate_basic_strategies
 from tfm.sources.prices import DownloadError
 
 
@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     simple_signals.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     components = commands.add_parser("prepare-returns", help="Preparar precio, dividendo aproximado y RF, sin simular estrategias")
     components.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    simulation = commands.add_parser("simulate-baselines", help="Simular comprar y mantener, momentum y reversión hasta 1989")
+    simulation.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     status = commands.add_parser("status", help="Consultar qué datos y señales están disponibles, sin modificar archivos")
     status.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     arguments = sys.argv[1:] if argv is None else argv
@@ -63,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("Controles de estructura superados; calendario y exactitud financiera no certificados.")
                 print("La utilización definitiva de SPY en el estudio sigue pendiente.")
             print(f"Archivo: {result['path']}")
+            return 0
+        if args.command == "simulate-baselines":
+            result = simulate_basic_strategies(args.config)
+            show_result("baseline_simulations", result)
             return 0
         if args.command == "prepare-returns":
             result = prepare_return_components(args.config)

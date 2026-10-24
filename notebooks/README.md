@@ -12,7 +12,7 @@ Si falta el kernel, desde la raíz del proyecto y con `.venv` activado:
 python -m pip install -e ".[notebooks]"
 ```
 
-El extra añade `ipykernel`; no instala JupyterLab ni requiere registrar un kernel global cuando el editor detecta el entorno. El archivo `requirements-lock.txt` mantiene las versiones del flujo base y pytest; este extra se instala por separado.
+El extra añade `ipykernel` y `matplotlib` para el tercer cuaderno; no instala JupyterLab ni requiere registrar un kernel global cuando el editor detecta el entorno. El archivo `requirements-lock.txt` mantiene las versiones del flujo base y pytest; este extra se instala por separado.
 
 Ejecuta las celdas en orden. El cuaderno:
 
@@ -34,3 +34,11 @@ Para comprobar la reproducción, reinicia el kernel y ejecuta todas las celdas. 
 El segundo cuaderno prepara RF de French (descarga el ZIP si falta, o permite importar uno local), prepara la tabla de componentes y muestra las fórmulas para un mes elegido. Conserva las tasas en decimal y convierte a porcentaje únicamente para presentarlas. RF es la alternativa de efectivo: no se suma a los componentes del índice.
 
 También puedes usar la CLI: opciones 6 → 7 → 3. No se aplican aún señales ni costes y no se calculan resultados de estrategias. Repetir el primer notebook regenera Shiller y retira los componentes anteriores, que debes volver a preparar con el segundo.
+
+## Simulación de estrategias básicas
+
+`03_estrategias_basicas.ipynb` requiere Shiller, señales y componentes preparados (notebooks 01 y 02, u opciones 1 → 2 → 6 → 7). Reinicia el kernel después de actualizar el código y selecciona `.venv`. Para disponer de las curvas, instala el extra actualizado con `python -m pip install -e ".[notebooks]"` si aún no tienes matplotlib.
+
+El cuaderno muestra los supuestos antes de ejecutar, llama al mismo simulador que la opción 8 y permite ver el balance de un mes, las curvas de capital/caídas y las métricas de las tres estrategias. La escala logarítmica del gráfico es una opción de presentación, no un cambio de resultados. No se usan datos desde 1990 ni se seleccionan filtros o modelos.
+
+Las simulaciones se guardan con nombres fijos y quedan obsoletas al regenerar cualquiera de sus entradas o modificar los parámetros. El cuaderno no prepara ni descarga fuentes automáticamente. Antes de hacer commit, usa «Clear All Outputs» y guarda el notebook.

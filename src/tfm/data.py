@@ -16,6 +16,11 @@ from tfm.sources.shiller import INSTRUMENT, fetch_shiller
 from tfm.sources.french import fetch_french
 from tfm.preparation.french import normalize_french_rf, validate_rf
 from tfm.returns import COLUMNS as RETURN_COLUMNS, FORMULAS, WARNINGS as RETURN_WARNINGS, build_return_components
+from tfm.simulation import STRATEGIES, WARNINGS as SIMULATION_WARNINGS, simulate_baselines, summarize_baselines
+
+
+def _simulation_paths(processed: Path) -> tuple[Path, Path]:
+    return processed / "baseline_simulations.parquet", processed / "baseline_simulations.json"
 
 
 def _json(path: Path, value: dict) -> None:
@@ -131,7 +136,8 @@ def prepare_shiller_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Pat
     return _publish(table, processed / "shiller_monthly.parquet",
                     {**report, "configuration": _window(settings)},
                     dependents=(processed / "shiller_signals.parquet", processed / "shiller_signals.json",
-                                processed / "monthly_return_components.parquet", processed / "monthly_return_components.json"))
+                                processed / "monthly_return_components.parquet", processed / "monthly_return_components.json",
+                                *_simulation_paths(processed)))
 
 
 def load_monthly(settings: dict) -> pd.DataFrame:
@@ -177,7 +183,8 @@ def calculate_signals(config: str | Path = DEFAULT_CONFIG) -> dict:
                "missing_reversal_targets": signals.loc[signals.reversal_signal.isna(), "target_period"].tolist(),
                "configuration": {**_window(settings), "signals": settings["signals"]},
                "warnings": WARNINGS}
-    return _publish(signals, settings["root"] / "data/processed/shiller_signals.parquet", summary)
+    return _publish(signals, settings["root"] / "data/processed/shiller_signals.parquet", summary,
+                    dependents=_simulation_paths(settings["root"] / "data/processed"))
 
 
 def _rf_configuration(settings: dict) -> dict:
@@ -203,7 +210,7 @@ def prepare_french_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Path
     return _publish(table, processed / "french_rf_monthly.parquet",
                     {**report, "configuration": _rf_configuration(settings)},
                     dependents=(processed / "monthly_return_components.parquet",
-                                processed / "monthly_return_components.json"))
+                                processed / "monthly_return_components.json", *_simulation_paths(processed)))
 
 
 def load_french_rf(settings: dict) -> tuple[pd.DataFrame, dict]:
@@ -232,11 +239,55 @@ def prepare_return_components(config: str | Path = DEFAULT_CONFIG) -> dict:
               "unit": "decimal_monthly_return", "basis": "monthly_mean_price",
               "formulas": FORMULAS, "configuration": _return_configuration(settings),
               "warnings": RETURN_WARNINGS}
-    return _publish(table, settings["root"] / "data/processed/monthly_return_components.parquet", report)
+    return _publish(table, settings["root"] / "data/processed/monthly_return_components.parquet", report,
+                    dependents=_simulation_paths(settings["root"] / "data/processed"))
+
+
+def _simulation_configuration(settings: dict) -> dict:
+    return {"data": _return_configuration(settings), "signals": settings["signals"],
+            "simulation": settings["simulation"]}
+
+
+def simulate_basic_strategies(config: str | Path = DEFAULT_CONFIG) -> dict:
+    settings = load_config(config)
+    components, _ = read_result(settings, "monthly_return_components")
+    signals, _ = read_result(settings, "shiller_signals")
+    table = simulate_baselines(components, signals, settings["simulation"])
+    report = {"status": "passed", "rows": len(table), "months_per_strategy": len(components),
+              "first_period": components.period.iloc[0], "last_period": components.period.iloc[-1],
+              "configuration": _simulation_configuration(settings), "liquidated_at_end": True,
+              "strategies": summarize_baselines(table, settings["simulation"]),
+              "warnings": SIMULATION_WARNINGS}
+    return _publish(table, settings["root"] / "data/processed/baseline_simulations.parquet", report)
 
 
 def read_result(settings: dict, name: str) -> tuple[pd.DataFrame, dict]:
     """Consultar una salida del flujo nuevo y rechazar configuraciones antiguas."""
+    if name == "baseline_simulations":
+        read_result(settings, "monthly_return_components")
+        read_result(settings, "shiller_signals")
+        path = settings["root"] / "data/processed/baseline_simulations.parquet"
+        try:
+            summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+            table = pd.read_parquet(path)
+        except FileNotFoundError as exc:
+            raise ValueError("Falta la simulación básica. Usa la opción 8 o simulate-baselines.") from exc
+        months = pd.period_range(settings["validation"]["development_start"][:7],
+                                settings["validation"]["development_end"][:7], freq="M").astype(str).tolist()
+        required = {"strategy", "period", "decision_period", "position", "capital_start", "capital_end", "net_return",
+                    "price_pnl", "dividend_pnl", "cash_interest", "transaction_cost", "borrow_cost", "liquidation_cost"}
+        if (not isinstance(summary, dict) or summary.get("status") != "passed"
+                or summary.get("configuration") != _simulation_configuration(settings)
+                or summary.get("rows") != len(table) or not required <= set(table)
+                or len(table) != len(months) * len(STRATEGIES)
+                or set(table.strategy) != set(STRATEGIES)
+                or any(table.loc[table.strategy.eq(name), "period"].tolist() != months for name in STRATEGIES)):
+            raise ValueError("La simulación o su configuración no coinciden; vuelve a simular.")
+        numeric = table.drop(columns=["strategy", "period", "decision_period"])
+        if (any(not pd.api.types.is_numeric_dtype(numeric[c]) or not numeric[c].map(math.isfinite).all() for c in numeric)
+                or table.capital_end.le(0).any()):
+            raise ValueError("La simulación contiene importes inválidos; vuelve a simular.")
+        return table, {**summary, "path": str(path)}
     if name == "french_rf_monthly":
         return load_french_rf(settings)
     if name == "monthly_return_components":

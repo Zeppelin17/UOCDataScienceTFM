@@ -1,6 +1,6 @@
 # ¿Invertir o esperar?
 
-Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. La simulación de estrategias y el entrenamiento de modelos siguen pendientes.
+Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Los filtros, el entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
 
 ## Empezar
 
@@ -18,6 +18,7 @@ python -m tfm
 5. Ver la configuración del estudio
 6. Preparar RF de French (rentabilidad del efectivo)
 7. Preparar componentes de rentabilidad mensual
+8. Simular estrategias básicas
 0. Salir
 ```
 
@@ -37,7 +38,7 @@ En un editor compatible con Jupyter, selecciona el intérprete de `.venv` como k
 python -m pip install -e ".[notebooks]"
 ```
 
-Esto añade `ipykernel`, el motor de ejecución; no instala la aplicación completa de JupyterLab. El editor debe tener soporte de notebooks. Ejecuta las celdas en orden y, para comprobar su reproducción, reinicia el kernel y ejecuta todo. La celda de preparación reutiliza el XLS de trabajo o lo descarga si falta; regenera las tablas de trabajo. Consulta [notebooks/README.md](notebooks/README.md) antes de ejecutarla. Los cuadernos se versionan sin salidas ni datos incrustados.
+Esto añade `ipykernel`, el motor de ejecución, y `matplotlib` para las curvas del tercer cuaderno; no instala la aplicación completa de JupyterLab. El editor debe tener soporte de notebooks. Ejecuta las celdas en orden y, para comprobar su reproducción, reinicia el kernel y ejecuta todo. La celda de preparación reutiliza el XLS de trabajo o lo descarga si falta; regenera las tablas de trabajo. Consulta [notebooks/README.md](notebooks/README.md) antes de ejecutarla. Los cuadernos se versionan sin salidas ni datos incrustados.
 
 ## Componentes de rentabilidad mensual
 
@@ -49,13 +50,25 @@ Solo se prepara 1927–1989. Las fechas deben coincidir exactamente: no se relle
 
 Estos componentes todavía **no son resultados de estrategias**: no se aplican señales, posiciones, negociación, préstamo ni costes. Los supuestos y escenarios de préstamo acordados se conservan en `docs/decisiones.md` para el siguiente bloque y la memoria.
 
+## Simular las estrategias básicas
+
+Con Shiller, señales y componentes preparados, ejecuta la **opción 8** o abre [03_estrategias_basicas.ipynb](notebooks/03_estrategias_basicas.ipynb). El simulador no descarga datos ni utiliza importes desde 1990. Guarda las tres cuentas mensuales en `data/processed/baseline_simulations.parquet` y el resumen en su JSON.
+
+La sección `[simulation]` fija capital inicial, coste por importe negociado, préstamo anual e inclusión del dividendo aproximado. Las tasas son decimales: `0.001` representa 0,10 % de negociación; `0.01`, 1 % anual de préstamo. Son escenarios hipotéticos, no tarifas históricas observadas. `include_dividends = false` permite la sensibilidad solo con precios, manteniendo las señales originales.
+
+El objetivo mensual es invertir +100 %, 0 % o −100 % del capital después de comisiones. Se cobran el nominal realmente negociado para alcanzar ese objetivo y la liquidación final. Una posición corta puede necesitar reajuste aunque su señal no cambie. Los dividendos de los largos se reinvierten sin una comisión separada; los cortos deben el dividendo, pagan préstamo sobre el nominal inicial del mes y reciben RF solo por el capital aportado, sin interés adicional sobre los ingresos de la venta corta. No se simulan llamadas de margen intramensuales. Una cuenta que pierde todo su capital detiene la simulación en vez de continuar con capital negativo.
+
+El cuaderno muestra el balance de un mes por estrategia, la curva de capital, drawdown y resumen. Sharpe usa exceso mensual sobre RF y se anualiza con raíz de 12; se deja sin valor si la dispersión es nula. La caída máxima incluye el capital inicial. Las rentabilidades son resultados del desarrollo bajo la aproximación de Shiller, no evidencia de mejora de un filtro ni una evaluación final.
+
+Regenerar Shiller, French, las señales o los componentes retira las simulaciones anteriores. Cambiar los parámetros de simulación obliga a simular de nuevo antes de consultar el resultado, sin exigir volver a descargar o preparar las fuentes.
+
 ## Datos y configuración
 
 Solo hay una configuración: [configs/estudio.toml](configs/estudio.toml). Contiene las fuentes de Shiller y French, los periodos del estudio, las convenciones de las reglas y el periodo diario solicitado para SPY. La opción 5 explica sus valores. El menú vuelve a leer el archivo antes de cada tarea.
 
 La sección `[spy]` solo admite `start` y `end`. El activo está fijado en SPY; otros parámetros se rechazan antes de descargar.
 
-- **Shiller:** historia previa desde diciembre de 1925, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. Es la serie principal del estudio. P es un precio medio mensual y D es anualizado e interpolado. Las variaciones entre promedios se estudiarán como aproximación histórica, no como operaciones ejecutadas a esos precios. Los supuestos concretos de simulación siguen pendientes.
+- **Shiller:** historia previa desde diciembre de 1925, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. Es la serie principal del estudio. P es un precio medio mensual y D es anualizado e interpolado. Las variaciones entre promedios se estudiarán como aproximación histórica, no como operaciones ejecutadas a esos precios. Los supuestos centrales de simulación se documentan en la sección anterior y en `docs/decisiones.md`.
 - **French:** solo RF del ZIP mensual de tres factores, de 1927 a 1989. Se usa para el efectivo; no sustituye al índice por la cartera de mercado de French.
 - **SPY:** datos diarios del ETF mediante Yahoo Finance y `yfinance`, inicialmente desde 1993 hasta 2020. Se mantienen separados de Shiller y su utilización definitiva sigue pendiente.
 
@@ -73,6 +86,7 @@ data/processed/shiller_signals.parquet   Señales de momentum y reversión
 data/processed/spy_prices.parquet        Precios diarios normalizados
 data/processed/french_rf_monthly.parquet RF mensual en decimal
 data/processed/monthly_return_components.parquet  Precio, dividendo aproximado y RF
+data/processed/baseline_simulations.parquet        Cuenta mensual de las tres estrategias
 ```
 
 Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales y los componentes anteriores cuando termina correctamente; preparar French retira los componentes, conservando las señales. Durante la sustitución se conserva en memoria el contenido anterior para restaurar tabla, resumen y señales si ocurre un error. No se crean archivos permanentes de respaldo. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
@@ -102,7 +116,8 @@ src/tfm/
   sources/                Lectura o descarga de Shiller y Yahoo
   preparation/            Normalización y calidad de cada fuente
   signals/                Fórmulas de momentum y reversión
-  returns.py              Componentes de rentabilidad; todavía sin estrategias
+  returns.py              Componentes de rentabilidad
+  simulation.py           Cuenta y resumen de las tres estrategias básicas
 notebooks/                Exploración y explicaciones, cuando sean necesarias
 tests/                    Pruebas esenciales sin red
 docs/decisiones.md        Supuestos, limitaciones y antecedentes
@@ -120,6 +135,7 @@ python -m tfm calculate-signals
 python -m tfm prepare-data --source spy
 python -m tfm prepare-data --source french
 python -m tfm prepare-returns
+python -m tfm simulate-baselines
 python -m tfm status
 ```
 
@@ -127,7 +143,7 @@ python -m tfm status
 
 Los comandos admiten `--config` para indicar un archivo de estudio dentro de `configs/`; las salidas parten de su raíz de proyecto. Sin `--config`, se localiza la configuración desde el paquete. Sin argumentos y sin terminal interactiva, se muestra ayuda y no se esperan respuestas.
 
-Los comandos antiguos `prepare-prices`, `prepare-shiller`, `build-shiller-signals`, `simulate-buy-and-hold`, `audit-prices` e `import-ssga-dividends` se han retirado. La preparación actual utiliza `prepare-data`; el cálculo de señales, `calculate-signals`. No se incluye todavía un simulador en el flujo actual.
+Los comandos antiguos `prepare-prices`, `prepare-shiller`, `build-shiller-signals`, `simulate-buy-and-hold`, `audit-prices` e `import-ssga-dividends` se han retirado. La preparación actual utiliza `prepare-data`; el cálculo de señales, `calculate-signals`. La simulación mensual actual utiliza `simulate-baselines`, con los supuestos de Shiller; no recupera la lógica del simulador diario retirado.
 
 ## Entorno y pruebas
 

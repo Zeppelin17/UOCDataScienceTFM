@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
-notebooks = ["ipykernel>=6,<8"]
+notebooks = ["ipykernel>=6,<8", "matplotlib>=3.10,<4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

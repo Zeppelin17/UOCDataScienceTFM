@@ -12,7 +12,7 @@ WARNINGS = [
     "Las señales utilizan promedios mensuales de Shiller; pueden diferir de las calculadas con cierres.",
     "Momentum positivo propone largo; momentum no positivo propone efectivo, según la configuración explícita.",
     "Las señales ausentes por falta de historia no equivalen a permanecer en efectivo.",
-    "No se han calculado ejecución, dividendos, financiación, costes, rentabilidades ni etiquetas.",
+    "Esta tabla solo contiene señales; sus resultados y costes se calculan en la simulación separada.",
 ]
 
 

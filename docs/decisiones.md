@@ -2,7 +2,7 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y prepara componentes de rentabilidad con RF de French; la evaluación, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
 
 Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. Yahoo Finance aporta observaciones diarias del ETF SPY desde 1993 como fuente auxiliar separada. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
@@ -33,18 +33,25 @@ Momentum excluye el mes más reciente y comprende once variaciones mensuales. El
 
 La señal de momentum para enero de 1927 utiliza diciembre de 1925. Con esa historia previa hay 756 meses objetivo y **756 con ambas señales disponibles**, desde enero de 1927. Las comparaciones futuras deberán compartir fechas y contar también el calentamiento de sus variables. Los meses del calendario no equivalen automáticamente a observaciones utilizables o independientes.
 
-## Decisiones pendientes antes de simular
+## Protocolo de simulación básica
 
-Se ha decidido utilizar Shiller de forma consistente para calcular señales y variaciones entre precios medios mensuales. Los resultados se interpretarán como una aproximación histórica: el promedio siguiente incorpora cotizaciones de diferentes días y no representa un precio al que pudiera ejecutarse una orden. Asignar una señal al mes posterior no convierte esos promedios en precios negociables. Esta limitación afecta especialmente a las relaciones de corto plazo, como la reversión.
+Se utiliza Shiller de forma consistente para calcular señales y variaciones entre precios medios mensuales. Los resultados se interpretan como una aproximación histórica: asignar una señal al mes posterior no convierte esos promedios en precios negociables. La limitación afecta especialmente a las relaciones de corto plazo y se mantiene en etiquetas y reentrenamientos futuros.
 
-Antes de producir resultados de inversión hay que fijar los supuestos de la simulación y definir:
+La simulación comprende comprar y mantener, momentum y reversión en los mismos 756 meses de 1927–1989. Cada cuenta parte de 100 unidades de capital y de exposición cero. En t se aplica la señal decidida en t−1. Las reglas permanecen fijas; no se añade un filtro ni se usa información del resultado de t para decidir la posición.
 
-1. La fórmula de las variaciones entre promedios y, por separado, el tratamiento de los dividendos interpolados, que no son pagos mensuales observados.
-2. La relación entre información disponible, decisión, ejecución y resultado posterior.
-3. Exposición, remuneración del efectivo, cortos, financiación, dividendos debidos y costes.
-4. El alcance de las conclusiones de esta aproximación histórica y sus diferencias frente a operaciones ejecutables.
+El objetivo mensual es q = +1, 0 o −1 sobre el capital después de comisiones. Momentum solo admite +1 y 0; reversión admite los tres estados. Las señales ausentes bloquean el cálculo, sin convertirse en efectivo. Los retornos usados son la variación de precios, el dividendo aproximado opcional y RF, según las fórmulas del apartado siguiente.
 
-No se elige otro proveedor automáticamente ni se presenta una preparación estructural correcta como resolución del problema económico. El simulador diario anterior, limitado a SPY largo/efectivo, se ha retirado del código actual. Su retirada no constituye una implementación del simulador mensual.
+**Cuenta mensual.** Sea E el capital antes de negociar, N el nominal firmado arrastrado del mes anterior y c la tarifa por importe negociado. Para no invertir también el dinero destinado a pagar la comisión, se resuelve T = |q·(E−c·T)−N|. Si A = q·E−N y s = signo(A), entonces T = |A|/(1+s·q·c). Se descuenta c·T y el capital restante B = E−c·T determina el nominal q·B. Esto incluye apertura, cambios de dirección y reajustes de los cortos cuando el nominal ha variado respecto al capital.
+
+La contribución de precio es q·B·r_precio. Si se incluyen dividendos, su contribución es q·B·r_dividendo_aproximado. Los largos reinvierten ese dividendo sin comisión separada de reinversión; su nominal al final del mes coincide con su capital. El efectivo recibe B·RF. Un corto recibe B·RF solo sobre el capital aportado; los ingresos de la venta corta no reciben interés adicional. El corto paga B·b/12 de préstamo (b anual), además del dividendo debido. Su nominal al final es −B·(1+r_precio), pues el dividendo se paga con efectivo, y se usa ese nominal para calcular el reajuste del mes siguiente. No se incorporan los ingresos de vender prestado como beneficio.
+
+En diciembre de 1989 se liquidan todas las posiciones y se cobra c sobre el valor absoluto del nominal final. El efectivo no genera un coste de liquidación. Se detiene el cálculo si el capital resulta no positivo o no finito; no se simulan llamadas de margen o cierres forzosos intramensuales, impuestos ni restricciones históricas de disponibilidad de títulos. La exposición es una convención de la aproximación, no una afirmación sobre instrumentos operables desde 1927.
+
+El escenario central configura c = 0,001 (0,10 %), b = 0,01 (1 % anual) y dividendos incluidos. Los escenarios de negociación previstos son 0 %, 0,10 %, 0,25 % y 0,50 %; los de préstamo se documentan más abajo. Cambiar un parámetro exige regenerar la simulación. La ejecución actual calcula un escenario cada vez; no selecciona automáticamente el más favorable ni aplica una búsqueda de modelos.
+
+**Resumen.** Rentabilidad acumulada = capital final/inicial−1; anualizada = (capital final/inicial)^(12/n)−1. Volatilidad anualizada = desviación típica muestral de retornos mensuales netos por raíz de 12. Sharpe = media del exceso mensual neto sobre RF/desviación típica muestral de ese exceso por raíz de 12, sin valor cuando la dispersión es nula. La caída máxima incluye el capital inicial antes del primer mes. La rotación anualizada suma el nominal de entradas, reajustes y cierre dividido por el capital inicial de cada mes, multiplicando por 12/n; es rotación bruta, sin dividir entre dos. Los costes monetarios se expresan en unidades del capital normalizado, no en euros o dólares invertidos realmente.
+
+Los resultados se guardan en `baseline_simulations.parquet` con sus componentes monetarios y resumen JSON. Regenerar cualquiera de sus entradas los invalida. El simulador diario anterior de SPY continúa retirado; no se mezclan sus convenciones con este simulador mensual.
 
 ## Componentes de rentabilidad implementados
 
@@ -66,13 +73,13 @@ Documentación de la fuente: [French, descripción de los factores](https://mba.
 
 ## Escenarios de coste de préstamo acordados
 
-El 24 de octubre de 2026 se acordó considerar tres escenarios anuales para el préstamo de las posiciones cortas: **0,25 %, 1 % y 3 %**. El 1 % será el escenario central hipotético, el 0,25 % un escenario bajo y el 3 % uno de mayor coste. Se aplicarán únicamente mientras exista exposición corta y deberán mantenerse separados de dividendos debidos, negociación y remuneración del efectivo. Las fórmulas y la base de cálculo de la cuenta corta se concretarán al implementar el protocolo financiero.
+El 24 de octubre de 2026 se acordó considerar tres escenarios anuales para el préstamo de las posiciones cortas: **0,25 %, 1 % y 3 %**. El 1 % será el escenario central hipotético, el 0,25 % un escenario bajo y el 3 % uno de mayor coste. Se aplicarán únicamente mientras exista exposición corta y deberán mantenerse separados de dividendos debidos, negociación y remuneración del efectivo. Se prorratean por mes sobre el nominal inicial de cada posición corta, conforme al protocolo anterior.
 
 La referencia empírica para contextualizar el escenario bajo es Gene D'Avolio (2002), *The market for borrowing stock*, Journal of Financial Economics, 66(2–3), 271–306, DOI [10.1016/S0304-405X(02)00206-4](https://doi.org/10.1016/S0304-405X(02)00206-4). Estudia datos de un intermediario institucional entre abril de 2000 y septiembre de 2001 y encuentra un coste medio ponderado por valor de 25 puntos básicos anuales (0,25 %). No es una tarifa del S&P Composite ni una estimación para 1927–1989.
 
 Los tres valores son **escenarios de simulación**, no costes históricos reconstruidos ni requisitos numéricos de la guía. Una tarifa moderna de un ETF tampoco certifica el coste de una exposición vendedora en toda la historia. La referencia bibliográfica se incorporará a Materiales y métodos cuando se redacten los supuestos; no se añade una nueva serie de mercado ni se cambia Shiller por otro proveedor.
 
-Se comparará la sensibilidad de las conclusiones a estos costes. Cuando proceda, se informará del coste de préstamo a partir del cual desaparece la mejora frente al comparador, sin escoger costes a posteriori para favorecer al filtro ni utilizarlos para reajustar el modelo con la evaluación final. Los demás supuestos del protocolo de simulación siguen pendientes de concretar antes de publicar resultados económicos.
+Se comparará la sensibilidad de las conclusiones a estos costes. Cuando proceda, se informará del coste de préstamo a partir del cual desaparece la mejora frente al comparador, sin escoger costes a posteriori para favorecer al filtro ni utilizarlos para reajustar el modelo con la evaluación final. El protocolo central está descrito arriba; los futuros filtros y modelos se evaluarán bajo los mismos supuestos.
 
 ## Uso conjunto de CLI y notebooks
 

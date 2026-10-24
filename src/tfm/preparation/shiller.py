@@ -15,7 +15,7 @@ LIMITATIONS = [
     "P es un promedio mensual nominal; no un cierre, precio de orden o cierre ajustado de SPY.",
     "D es anualizado e interpolado; no es un pago mensual ni un predictor conocido en tiempo real.",
     "Los controles son de estructura y cobertura; no certifican exactitud, disponibilidad histórica o ejecución.",
-    "Las señales se calculan por separado; rentabilidades, etiquetas y ejecución siguen pendientes.",
+    "Esta tabla contiene observaciones; las señales, componentes y simulaciones se calculan en pasos separados.",
 ]
 
 def _month(value) -> str:
