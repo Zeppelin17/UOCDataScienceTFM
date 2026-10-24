@@ -6,6 +6,7 @@ import tomllib
 
 from tfm.preparation.shiller import preparation_window
 from tfm.sources.shiller import validate_source_url
+from tfm.sources.french import validate_source_url as validate_french_url
 
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "configs/estudio.toml"
@@ -19,6 +20,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         if not isinstance(config.get("spy"), dict) or set(config["spy"]) != {"start", "end"}:
             raise ValueError("La sección spy solo admite start y end; el activo está fijado en SPY")
         validate_source_url(config["shiller"]["url"])
+        validate_french_url(config["french"]["url"])
         preparation_window(config["shiller"]["history_start"], content)
         if config["signals"] != {"basis": "monthly_mean_price", "momentum_non_positive": "cash"}:
             raise ValueError("Las señales requieren promedios mensuales y momentum no positivo en efectivo")

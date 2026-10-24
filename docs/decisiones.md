@@ -2,7 +2,7 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo y calcula señales; la evaluación, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y prepara componentes de rentabilidad con RF de French; la evaluación, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
 
 Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. Yahoo Finance aporta observaciones diarias del ETF SPY desde 1993 como fuente auxiliar separada. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
@@ -45,6 +45,24 @@ Antes de producir resultados de inversión hay que fijar los supuestos de la sim
 4. El alcance de las conclusiones de esta aproximación histórica y sus diferencias frente a operaciones ejecutables.
 
 No se elige otro proveedor automáticamente ni se presenta una preparación estructural correcta como resolución del problema económico. El simulador diario anterior, limitado a SPY largo/efectivo, se ha retirado del código actual. Su retirada no constituye una implementación del simulador mensual.
+
+## Componentes de rentabilidad implementados
+
+Se prepara una tabla de 756 meses, enero de 1927 a diciembre de 1989, sin posiciones, resultados de estrategias, financiación ni costes aplicados. Para cada mes t se conserva P[t-1], P[t] y D[t] y se calculan:
+
+- Variación de precio: `P[t] / P[t-1] - 1`.
+- Dividendo mensual aproximado en puntos del índice: `D[t] / 12`.
+- Rentabilidad por dividendos aproximada: `(D[t] / 12) / P[t-1]`.
+- Rentabilidad total aproximada del índice: suma de los dos componentes de rentabilidad anteriores.
+- Efectivo: `RF[t] / 100`, porque el CSV mensual de French expresa RF en porcentaje. RF ya es mensual, no se anualiza ni se divide entre doce.
+
+RF se obtiene del ZIP CSV mensual de tres factores de la biblioteca de Kenneth French; no se usan Mkt-RF, SMB, HML ni los retornos anuales. El ZIP original se conserva con su procedencia, pero solo se convierten importes RF de 1927–1989. La preparación exige los mismos meses para ambas fuentes, sin rellenar ni eliminar observaciones. RF es el rendimiento observado del mes y no se incorpora como predictor del mismo mes.
+
+Se conserva D sin alterar en la tabla preparada de Shiller. D/12 aparece únicamente en la tabla derivada y está identificado como aproximación contable. La reconstrucción de dividendos y el uso de precios medios impiden equiparar estos resultados con pagos observados, cotizaciones negociables o una fuente histórica con versiones disponibles en tiempo real. Esta limitación también afectará a etiquetas y reentrenamientos posteriores. La tabla incluye RF como alternativa de efectivo; no se suma al rendimiento del índice.
+
+La opción 6 prepara RF; la 7 prepara los componentes sin descargar. Ambas tablas se consultan desde la opción 3. También se pueden preparar y explicar desde `notebooks/02_componentes_de_rentabilidad.ipynb`. Preparar Shiller invalida señales y componentes; preparar French invalida únicamente los componentes.
+
+Documentación de la fuente: [French, descripción de los factores](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/Data_Library/f-f_factors.html). La versión descargada reconstruye la historia y no certifica qué versión estaba disponible entonces. Las fuentes pueden tener distintos últimos meses disponibles; el corte final de 2026 sigue pendiente y deshabilitado.
 
 ## Escenarios de coste de préstamo acordados
 

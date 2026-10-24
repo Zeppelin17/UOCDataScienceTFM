@@ -26,3 +26,11 @@ La preparación **escribe** en las rutas habituales de `data/raw/` y `data/proce
 No se calculan rentabilidades de estrategias, dividendos mensuales aplicados, costes, etiquetas o modelos. Las variaciones que se muestran son los indicadores de precio utilizados para generar señales, no resultados de inversión. El periodo desde 1990 permanece fuera del análisis del cuaderno.
 
 Para comprobar la reproducción, reinicia el kernel y ejecuta todas las celdas. Antes de guardar cambios para Git, limpia las salidas y los contadores de ejecución; no incrustes datos, credenciales ni resultados voluminosos. La primera ejecución puede necesitar acceso a Internet si no hay original de trabajo.
+
+## Componentes de rentabilidad
+
+`02_componentes_de_rentabilidad.ipynb` requiere haber preparado Shiller con el primer notebook o la opción 1. Selecciona `.venv` y reinicia el kernel si ya tenías importado el código antes de actualizarlo.
+
+El segundo cuaderno prepara RF de French (descarga el ZIP si falta, o permite importar uno local), prepara la tabla de componentes y muestra las fórmulas para un mes elegido. Conserva las tasas en decimal y convierte a porcentaje únicamente para presentarlas. RF es la alternativa de efectivo: no se suma a los componentes del índice.
+
+También puedes usar la CLI: opciones 6 → 7 → 3. No se aplican aún señales ni costes y no se calculan resultados de estrategias. Repetir el primer notebook regenera Shiller y retira los componentes anteriores, que debes volver a preparar con el segundo.

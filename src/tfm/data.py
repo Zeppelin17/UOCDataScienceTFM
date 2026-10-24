@@ -13,6 +13,9 @@ from tfm.preparation.shiller import COLUMNS, normalize_shiller
 from tfm.signals.shiller import WARNINGS, build_price_signals
 from tfm.sources.prices import fetch_prices
 from tfm.sources.shiller import INSTRUMENT, fetch_shiller
+from tfm.sources.french import fetch_french
+from tfm.preparation.french import normalize_french_rf, validate_rf
+from tfm.returns import COLUMNS as RETURN_COLUMNS, FORMULAS, WARNINGS as RETURN_WARNINGS, build_return_components
 
 
 def _json(path: Path, value: dict) -> None:
@@ -127,7 +130,8 @@ def prepare_shiller_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Pat
     processed = root / "data/processed"
     return _publish(table, processed / "shiller_monthly.parquet",
                     {**report, "configuration": _window(settings)},
-                    dependents=(processed / "shiller_signals.parquet", processed / "shiller_signals.json"))
+                    dependents=(processed / "shiller_signals.parquet", processed / "shiller_signals.json",
+                                processed / "monthly_return_components.parquet", processed / "monthly_return_components.json"))
 
 
 def load_monthly(settings: dict) -> pd.DataFrame:
@@ -176,8 +180,86 @@ def calculate_signals(config: str | Path = DEFAULT_CONFIG) -> dict:
     return _publish(signals, settings["root"] / "data/processed/shiller_signals.parquet", summary)
 
 
+def _rf_configuration(settings: dict) -> dict:
+    return {"url": settings["french"]["url"],
+            "development_start": settings["validation"]["development_start"],
+            "development_end": settings["validation"]["development_end"]}
+
+
+def _return_configuration(settings: dict) -> dict:
+    return {**_window(settings), "french": _rf_configuration(settings)}
+
+
+def prepare_french_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Path | None = None) -> dict:
+    settings = load_config(config)
+    root = settings["root"]
+    raw = root / "data/raw/french_factors.zip"
+    content, acquisition = fetch_french(url=settings["french"]["url"], file=_original(raw, file))
+    start, end = (settings["validation"][key][:7] for key in ("development_start", "development_end"))
+    table, report = normalize_french_rf(content, start=start, end=end)
+    _save_original(raw, content, {"source": "kenneth_french", "url": settings["french"]["url"],
+                                  "acquisition": acquisition})
+    processed = root / "data/processed"
+    return _publish(table, processed / "french_rf_monthly.parquet",
+                    {**report, "configuration": _rf_configuration(settings)},
+                    dependents=(processed / "monthly_return_components.parquet",
+                                processed / "monthly_return_components.json"))
+
+
+def load_french_rf(settings: dict) -> tuple[pd.DataFrame, dict]:
+    path = settings["root"] / "data/processed/french_rf_monthly.parquet"
+    try:
+        report = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        table = pd.read_parquet(path)
+    except FileNotFoundError as exc:
+        raise ValueError("Falta RF preparado. Usa la opción 6 o prepare-data --source french.") from exc
+    if (not isinstance(report, dict) or report.get("status") != "passed"
+            or report.get("configuration") != _rf_configuration(settings)
+            or report.get("rows") != len(table) or report.get("output_unit") != "decimal_monthly_return"):
+        raise ValueError("RF o su configuración no coinciden; vuelve a preparar French.")
+    start, end = (settings["validation"][key][:7] for key in ("development_start", "development_end"))
+    validate_rf(table, start=start, end=end)
+    return table, {**report, "path": str(path)}
+
+
+def prepare_return_components(config: str | Path = DEFAULT_CONFIG) -> dict:
+    settings = load_config(config)
+    monthly = load_monthly(settings)
+    rf, _ = load_french_rf(settings)
+    start, end = (settings["validation"][key][:7] for key in ("development_start", "development_end"))
+    table = build_return_components(monthly, rf, start=start, end=end)
+    report = {"status": "passed", "rows": len(table), "first_period": start, "last_period": end,
+              "unit": "decimal_monthly_return", "basis": "monthly_mean_price",
+              "formulas": FORMULAS, "configuration": _return_configuration(settings),
+              "warnings": RETURN_WARNINGS}
+    return _publish(table, settings["root"] / "data/processed/monthly_return_components.parquet", report)
+
+
 def read_result(settings: dict, name: str) -> tuple[pd.DataFrame, dict]:
     """Consultar una salida del flujo nuevo y rechazar configuraciones antiguas."""
+    if name == "french_rf_monthly":
+        return load_french_rf(settings)
+    if name == "monthly_return_components":
+        load_monthly(settings)
+        load_french_rf(settings)
+        path = settings["root"] / "data/processed/monthly_return_components.parquet"
+        try:
+            summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+            table = pd.read_parquet(path)
+        except FileNotFoundError as exc:
+            raise ValueError("Faltan componentes de rentabilidad. Usa la opción 7 o prepare-returns.") from exc
+        months = pd.period_range(settings["validation"]["development_start"][:7],
+                                settings["validation"]["development_end"][:7], freq="M").astype(str).tolist()
+        if (not isinstance(summary, dict) or summary.get("status") != "passed"
+                or summary.get("configuration") != _return_configuration(settings)
+                or summary.get("rows") != len(table) or table.columns.tolist() != RETURN_COLUMNS
+                or table.period.tolist() != months or summary.get("unit") != "decimal_monthly_return"):
+            raise ValueError("Los componentes o su configuración no coinciden; vuelve a prepararlos.")
+        numeric = table.drop(columns=["asset", "period", "previous_period"])
+        if any(not pd.api.types.is_numeric_dtype(numeric[c]) or pd.api.types.is_bool_dtype(numeric[c])
+               or not numeric[c].map(math.isfinite).all() for c in numeric):
+            raise ValueError("Los componentes contienen importes inválidos; vuelve a prepararlos.")
+        return table, {**summary, "path": str(path)}
     if name not in {"shiller_monthly", "shiller_signals", "spy_prices"}:
         raise ValueError("Resultado desconocido")
     path = settings["root"] / "data/processed" / f"{name}.parquet"
