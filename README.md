@@ -25,6 +25,18 @@ Cada tarea identifica la fuente, el periodo, la entrada, el resultado y el sigui
 
 **0** vuelve o sale. **Intro** cierra un resultado. **Ctrl+C** cancela la tarea y **Ctrl+D** cierra el menú. La pantalla se limpia en terminales compatibles y mantiene el resultado hasta Intro. No hay apertura de archivos mediante Finder ni otros gestores del sistema.
 
+## Comprender el estudio con un notebook
+
+Abre [01_datos_y_senales.ipynb](notebooks/01_datos_y_senales.ipynb) para preparar Shiller y entender las señales paso a paso. El cuaderno usa las mismas funciones y configuración que la CLI; no es necesario ejecutar antes el menú. Todavía no calcula rentabilidades de estrategias ni entrena modelos.
+
+En un editor compatible con Jupyter, selecciona el intérprete de `.venv` como kernel. El soporte de Python para cuadernos es opcional:
+
+```bash
+python -m pip install -e ".[notebooks]"
+```
+
+Esto añade `ipykernel`, el motor de ejecución; no instala la aplicación completa de JupyterLab. El editor debe tener soporte de notebooks. Ejecuta las celdas en orden y, para comprobar su reproducción, reinicia el kernel y ejecuta todo. La celda de preparación reutiliza el XLS de trabajo o lo descarga si falta; regenera las tablas de trabajo. Consulta [notebooks/README.md](notebooks/README.md) antes de ejecutarla. Los cuadernos se versionan sin salidas ni datos incrustados.
+
 ## Datos y configuración
 
 Solo hay una configuración: [configs/estudio.toml](configs/estudio.toml). Contiene la fuente de Shiller, los periodos del estudio, las convenciones de las reglas y el periodo diario solicitado para SPY. La opción 5 explica sus valores. El menú vuelve a leer el archivo antes de cada tarea.
@@ -107,7 +119,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-En PowerShell, el comando de activación es `.venv\Scripts\Activate.ps1`. El entorno verificado es Python 3.14 en macOS; el archivo `requirements-lock.txt` recoge sus versiones. Para reproducir esas versiones, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. En otra versión de Python o plataforma, utiliza las dependencias de `pyproject.toml` y comprueba el entorno.
+En PowerShell, el comando de activación es `.venv\Scripts\Activate.ps1`. El entorno verificado es Python 3.14 en macOS; el archivo `requirements-lock.txt` recoge sus versiones. Para reproducir esas versiones, instala primero `python -m pip install -r requirements-lock.txt` y después `python -m pip install --no-deps -e .`. Este archivo fija el flujo base y pytest; el soporte opcional de notebooks se instala por separado con `python -m pip install -e ".[notebooks]"`. En otra versión de Python o plataforma, utiliza las dependencias de `pyproject.toml` y comprueba el entorno.
 
 Se mantienen pandas, PyArrow, yfinance, xlrd y certifi. Se han retirado las dependencias de auditoría de calendario y del Excel SSGA. Esta limpieza no instala ni desinstala paquetes del entorno existente.
 

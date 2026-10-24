@@ -46,6 +46,22 @@ Antes de producir resultados de inversión hay que fijar los supuestos de la sim
 
 No se elige otro proveedor automáticamente ni se presenta una preparación estructural correcta como resolución del problema económico. El simulador diario anterior, limitado a SPY largo/efectivo, se ha retirado del código actual. Su retirada no constituye una implementación del simulador mensual.
 
+## Escenarios de coste de préstamo acordados
+
+El 24 de octubre de 2026 se acordó considerar tres escenarios anuales para el préstamo de las posiciones cortas: **0,25 %, 1 % y 3 %**. El 1 % será el escenario central hipotético, el 0,25 % un escenario bajo y el 3 % uno de mayor coste. Se aplicarán únicamente mientras exista exposición corta y deberán mantenerse separados de dividendos debidos, negociación y remuneración del efectivo. Las fórmulas y la base de cálculo de la cuenta corta se concretarán al implementar el protocolo financiero.
+
+La referencia empírica para contextualizar el escenario bajo es Gene D'Avolio (2002), *The market for borrowing stock*, Journal of Financial Economics, 66(2–3), 271–306, DOI [10.1016/S0304-405X(02)00206-4](https://doi.org/10.1016/S0304-405X(02)00206-4). Estudia datos de un intermediario institucional entre abril de 2000 y septiembre de 2001 y encuentra un coste medio ponderado por valor de 25 puntos básicos anuales (0,25 %). No es una tarifa del S&P Composite ni una estimación para 1927–1989.
+
+Los tres valores son **escenarios de simulación**, no costes históricos reconstruidos ni requisitos numéricos de la guía. Una tarifa moderna de un ETF tampoco certifica el coste de una exposición vendedora en toda la historia. La referencia bibliográfica se incorporará a Materiales y métodos cuando se redacten los supuestos; no se añade una nueva serie de mercado ni se cambia Shiller por otro proveedor.
+
+Se comparará la sensibilidad de las conclusiones a estos costes. Cuando proceda, se informará del coste de préstamo a partir del cual desaparece la mejora frente al comparador, sin escoger costes a posteriori para favorecer al filtro ni utilizarlos para reajustar el modelo con la evaluación final. Los demás supuestos del protocolo de simulación siguen pendientes de concretar antes de publicar resultados económicos.
+
+## Uso conjunto de CLI y notebooks
+
+El primer cuaderno, `notebooks/01_datos_y_senales.ipynb`, prepara los datos y explica las señales utilizando `tfm.config` y `tfm.data`, las mismas funciones que utiliza la CLI. No contiene un segundo motor de preparación o de estrategias. La celda de preparación puede descargar el XLS si falta el original de trabajo y regenera las tablas mensuales y de señales en las rutas habituales. Los importes desde 1990 siguen excluidos de la preparación y no se evalúan rentabilidades de estrategias.
+
+Los notebooks se utilizarán para comprender, explorar y explicar el análisis; las funciones reutilizables seguirán en `src/tfm` y la CLI permitirá repetir tareas ya definidas. Los cuadernos se guardarán sin resultados incrustados y se verificarán ejecutando sus celdas en orden desde un estado limpio. `ipykernel` se incorpora como dependencia opcional del entorno de trabajo, sin añadir JupyterLab, gráficos ni gestores de experimentos en este incremento.
+
 ## Exposición previa y hallazgos de SPY
 
 Antes de adoptar la separación histórica de la guía se descargaron y examinaron datos de SPY de **1993–2020**, se realizaron auditorías y un benchmark descriptivo de comprar y mantener. No se entrenó un meta-modelo. Esa exposición debe declararse: el nuevo bloque desde 1990 no se describirá íntegramente como nunca consultado. La selección futura de variables, filtros e hiperparámetros debe basarse en el desarrollo anterior a 1990 con el procedimiento fijado antes de evaluar.
