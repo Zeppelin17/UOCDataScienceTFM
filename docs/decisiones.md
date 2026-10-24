@@ -2,9 +2,9 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Inicialmente se conserva 1926 como historia previa. El código actual prepara el desarrollo y calcula señales; la evaluación, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo y calcula señales; la evaluación, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
 
-Se conservan dos fuentes con funciones diferentes. Shiller permite explorar la historia larga del S&P Composite, con sus antecedentes históricos; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. Yahoo Finance aporta observaciones diarias del ETF SPY desde 1993. No se unen ambas series ni se presentan como intercambiables. Su uso definitivo se concretará con el tutor siguiendo la guía; la simplificación de la herramienta no elimina `yfinance` ni decide esa cuestión.
+Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. Yahoo Finance aporta observaciones diarias del ETF SPY desde 1993 como fuente auxiliar separada. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
 ## Significado de los datos
 
@@ -14,7 +14,7 @@ Shiller publica un XLS con muchos campos y fechas. El lector revisa las fechas y
 - **D:** dividendo anualizado e interpolado, en puntos del índice. No es un pago mensual observado ni una variable conocida necesariamente en tiempo real. No se divide por doce para tratarlo como tal pago.
 - **Disponibilidad:** el archivo actual reconstruye la historia; no acredita cuándo se conoció cada valor o revisión.
 
-El lector interpreta correctamente las fechas numéricas YYYY.MM: por ejemplo, 1926.1 representa octubre. Comprueba cobertura mensual, duplicados, valores finitos, precios positivos y dividendos no negativos. No rellena huecos ni elimina duplicados para conseguir una tabla aceptable. La configuración habitual produce 768 observaciones: 12 de historia previa y 756 de desarrollo.
+El lector interpreta correctamente las fechas numéricas YYYY.MM: por ejemplo, 1926.1 representa octubre. Comprueba cobertura mensual, duplicados, valores finitos, precios positivos y dividendos no negativos. No rellena huecos ni elimina duplicados para conseguir una tabla aceptable. La configuración habitual produce 769 observaciones: 13 de historia previa y 756 de desarrollo.
 
 Yahoo se solicita con `auto_adjust=false`, `back_adjust=false`, `actions=true`, `repair=false` y el resto de opciones explícitas en `data.py`. Se conservan cierre, cierre ajustado y eventos con sus escalas separadas. La copia en Parquet conserva la respuesta del adaptador; no el contenido HTTP original ni una captura conocida en cada fecha histórica. Las comprobaciones actuales revisan estructura y coherencia de los precios, pero no acreditan el calendario completo ni los ajustes o la exactitud del proveedor.
 
@@ -31,18 +31,18 @@ Momentum excluye el mes más reciente y comprende once variaciones mensuales. El
 
 `decision_period` conserva el último mes utilizado y `target_period` el mes posterior. Las señales ausentes por calentamiento permanecen ausentes y no equivalen a efectivo. Solo se publican meses objetivo de 1927–1989: una decisión de diciembre de 1989 dirigida a enero de 1990 queda fuera.
 
-Con historia desde enero de 1926, el momentum para enero de 1927 necesitaría diciembre de 1925. Hay por tanto 756 meses objetivo y **755 con ambas señales disponibles**, desde febrero de 1927. Las comparaciones futuras deberán compartir fechas y contar también el calentamiento de sus variables. Los meses del calendario no equivalen automáticamente a observaciones utilizables o independientes.
+La señal de momentum para enero de 1927 utiliza diciembre de 1925. Con esa historia previa hay 756 meses objetivo y **756 con ambas señales disponibles**, desde enero de 1927. Las comparaciones futuras deberán compartir fechas y contar también el calentamiento de sus variables. Los meses del calendario no equivalen automáticamente a observaciones utilizables o independientes.
 
 ## Decisiones pendientes antes de simular
 
-La principal consulta al tutor se refiere a cómo utilizar Shiller para contrastar el objetivo del TFM. Cocientes entre promedios mensuales no representan por sí solos la rentabilidad de comprar después de decidir: el promedio siguiente incorpora cotizaciones de diferentes días. Asignar una señal al mes posterior no convierte esos promedios en precios negociables. La cuestión afecta especialmente a las relaciones predictivas de corto plazo.
+Se ha decidido utilizar Shiller de forma consistente para calcular señales y variaciones entre precios medios mensuales. Los resultados se interpretarán como una aproximación histórica: el promedio siguiente incorpora cotizaciones de diferentes días y no representa un precio al que pudiera ejecutarse una orden. Asignar una señal al mes posterior no convierte esos promedios en precios negociables. Esta limitación afecta especialmente a las relaciones de corto plazo, como la reversión.
 
-Antes de producir resultados de inversión hay que acordar el alcance de la simulación y definir:
+Antes de producir resultados de inversión hay que fijar los supuestos de la simulación y definir:
 
-1. La construcción de retornos, distinguiendo promedios y cierres, dividendos interpolados y pagos observados.
+1. La fórmula de las variaciones entre promedios y, por separado, el tratamiento de los dividendos interpolados, que no son pagos mensuales observados.
 2. La relación entre información disponible, decisión, ejecución y resultado posterior.
 3. Exposición, remuneración del efectivo, cortos, financiación, dividendos debidos y costes.
-4. Qué conclusiones permite una simulación histórica aproximada y cuáles requieren operaciones ejecutables o datos diferentes.
+4. El alcance de las conclusiones de esta aproximación histórica y sus diferencias frente a operaciones ejecutables.
 
 No se elige otro proveedor automáticamente ni se presenta una preparación estructural correcta como resolución del problema económico. El simulador diario anterior, limitado a SPY largo/efectivo, se ha retirado del código actual. Su retirada no constituye una implementación del simulador mensual.
 

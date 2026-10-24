@@ -106,7 +106,7 @@ def show_result(name: str, summary: dict) -> None:
         print(f"Historia previa: {summary['history_rows']} meses | Desarrollo: {summary['development_rows']} meses")
         print("Sin meses ausentes ni duplicados; valores numéricos dentro de las condiciones exigidas.")
         print("P es un precio medio mensual; D es anualizado e interpolado, no un pago mensual observado.")
-        print("Siguiente paso: opción 2 para calcular señales. La simulación sigue pendiente de definir con el tutor.")
+        print("Siguiente paso: opción 2 para calcular señales. La simulación aún requiere fijar sus supuestos.")
     elif name == "shiller_signals":
         print(f"Meses objetivo: {summary['target_start']} → {summary['target_end']} | {summary['rows']} meses")
         print(f"Meses con ambas señales disponibles: {summary['both_rules_available']}")
@@ -116,7 +116,7 @@ def show_result(name: str, summary: dict) -> None:
             if summary[f"missing_{rule}_targets"]:
                 print(f"{label}, sin historia suficiente: {', '.join(summary[f'missing_{rule}_targets'])}")
         print("Señales sobre promedios mensuales, sin simulación de rentabilidades ni entrenamiento de modelos.")
-        print("Siguiente paso: consulta las señales en la opción 3. La simulación sigue pendiente de definir con el tutor.")
+        print("Siguiente paso: consulta las señales en la opción 3. La simulación aún requiere fijar sus supuestos.")
     else:
         print(f"Periodo: {summary['first_session'][:10]} → {summary['last_session'][:10]} | {summary['rows']} sesiones")
         print("Controles estructurales superados; calendario, ajustes y exactitud financiera no certificados.")
@@ -238,7 +238,7 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
             print("TFM — ¿Invertir o esperar?")
             print(f"Estudio actual: Shiller mensual; desarrollo {settings['validation']['development_start'][:4]}–{settings['validation']['development_end'][:4]}.")
             print("Disponible: preparación de datos y cálculo de señales.")
-            print("Pendiente: definir la simulación con el tutor; todavía no hay modelos entrenados.")
+            print("Pendiente: fijar los supuestos de la simulación; todavía no hay modelos entrenados.")
             print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n0. Salir")
             option = _choice("Opción del menú (0–5): ", {"0", "1", "2", "3", "4", "5"})
             if option == "0":

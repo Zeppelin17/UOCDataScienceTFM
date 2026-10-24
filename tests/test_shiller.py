@@ -21,7 +21,7 @@ class Sheet:
     ncols = 22
 
     def __init__(self, problem=None):
-        self.months = ["1871-01", *pd.period_range("1926-01", "1989-12", freq="M").astype(str), "1990-01", "2026-10"]
+        self.months = ["1871-01", *pd.period_range("1925-12", "1989-12", freq="M").astype(str), "1990-01", "2026-10"]
         self.problem = problem
         if problem == "duplicate":
             self.months.insert(5, self.months[5])
@@ -39,7 +39,7 @@ class Sheet:
 
     def cell(self, row, col):
         period = self.months[row - 8]
-        assert "1926-01" <= period <= "1989-12", "Se han leído importes fuera del desarrollo/historia previa"
+        assert "1925-12" <= period <= "1989-12", "Se han leído importes fuera del desarrollo/historia previa"
         assert col in (1, 2), "Se han leído columnas no autorizadas, incluidas rentabilidades futuras"
         value = 100.0 if col == 1 else 2.4
         if period == "1930-02":
@@ -61,11 +61,11 @@ def workbook(monkeypatch, problem=None):
 
 def test_october_annualized_values_and_strict_column_temporal_selection(monkeypatch):
     workbook(monkeypatch)
-    table, report = normalize_shiller(b"fixture", history_start="1926-01", policy_bytes=POLICY)
+    table, report = normalize_shiller(b"fixture", history_start="1925-12", policy_bytes=POLICY)
     assert table.columns.tolist() == COLUMNS
-    assert table.period.iloc[9] == "1926-10"
+    assert table.period.iloc[10] == "1926-10"
     assert table.dividend_annualized.eq(2.4).all()  # No dividir por 12 ni convertir en pago mensual.
-    assert report["rows"] == 768 and report["history_rows"] == 12 and report["development_rows"] == 756
+    assert report["rows"] == 769 and report["history_rows"] == 13 and report["development_rows"] == 756
     assert table.period.iloc[-1] == "1989-12" and report["status"] == "passed"
 
 

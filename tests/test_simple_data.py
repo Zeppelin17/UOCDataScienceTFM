@@ -35,13 +35,15 @@ def test_offline_cli_has_identical_data_signals_and_stable_paths(study, capsys):
     assert cli.main(["prepare-data", "--config", str(config), "--file", str(original)]) == 0
     assert cli.main(["calculate-signals", "--config", str(config)]) == 0
     settings = load_config(config)
-    expected, _ = normalize_shiller(original.read_bytes(), history_start="1926-01", policy_bytes=config.read_bytes())
+    expected, _ = normalize_shiller(original.read_bytes(), history_start="1925-12", policy_bytes=config.read_bytes())
     pd.testing.assert_frame_equal(load_monthly(settings), expected)
     result = pd.read_parquet(root / "data/processed/shiller_signals.parquet")
     expected_signals = build_price_signals(expected)
     expected_signals = expected_signals.loc[expected_signals.target_period.between("1927-01", "1989-12")].reset_index(drop=True)
     pd.testing.assert_frame_equal(result, expected_signals)
-    assert len(expected) == 768 and len(result) == 756 and result.both_rules_available.sum() == 755
+    assert len(expected) == 769 and len(result) == 756 and result.both_rules_available.sum() == 756
+    assert result.loc[0, "target_period"] == "1927-01"
+    assert result.loc[0, "both_rules_available"]
     assert (root / "data/raw/shiller.xls").read_bytes() == original.read_bytes()
     source = json.loads((root / "data/raw/shiller_fuente.json").read_bytes())
     assert source["acquisition"]["method"] == "local_file_import"
@@ -54,7 +56,7 @@ def test_offline_cli_has_identical_data_signals_and_stable_paths(study, capsys):
     assert not (root / "data/processed/shiller_signals.parquet").exists()
     assert not (root / "data/processed/shiller_signals.json").exists()
     output = capsys.readouterr().out
-    assert "755" in output and "sin simulación" in output and "1927-01" in output
+    assert "756" in output and "sin simulación" in output
 
 
 def test_bad_input_and_failed_write_keep_previous_valid_outputs(study, monkeypatch):
@@ -76,7 +78,7 @@ def test_bad_input_and_failed_write_keep_previous_valid_outputs(study, monkeypat
 def test_changed_periods_and_original_replacement_are_explicit(study):
     config, original = study
     prepare_shiller_data(config, file=original)
-    config.write_text(config.read_text().replace('history_start = "1926-01"', 'history_start = "1925-01"'))
+    config.write_text(config.read_text().replace('history_start = "1925-12"', 'history_start = "1925-01"'))
     with pytest.raises(ValueError, match="periodos han cambiado"):
         calculate_signals(config)
     with pytest.raises(ValueError, match="Ya existe el original"):
@@ -175,4 +177,4 @@ def test_publication_failure_restores_data_summary_and_signals(study, monkeypatc
     with pytest.raises(PermissionError, match="archivo bloqueado"):
         prepare_shiller_data(config)
     assert before == {p: p.read_bytes() for p in (root / "data").rglob("*") if p.is_file()}
-    assert len(load_monthly(load_config(config))) == 768
+    assert len(load_monthly(load_config(config))) == 769

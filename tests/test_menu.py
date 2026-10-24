@@ -43,16 +43,15 @@ def test_guided_shiller_flow_reuses_history_and_explains_signals(study, monkeypa
     assert menu.interactive_menu(config) == 0
     root = config.parent.parent
     signals = pd.read_parquet(root / "data/processed/shiller_signals.parquet")
-    assert len(signals) == 756 and signals.both_rules_available.sum() == 755
+    assert len(signals) == 756 and signals.both_rules_available.sum() == 756
     assert original.read_bytes() == before
     assert (root / "data/raw/shiller.xls").read_bytes() == before
     assert not (root / "outputs").exists()
     output = capsys.readouterr().out
     assert "Estudio actual: Shiller mensual" in output
     assert "Originales anteriores de Shiller" in output and "old_identifier" not in output
-    assert "Meses con ambas señales disponibles: 755" in output
-    assert "Momentum, sin historia suficiente: 1927-01" in output
-    assert "Sin historia" in output and "Primeras cinco filas" in output
+    assert "Meses con ambas señales disponibles: 756" in output
+    assert "1927-01" in output and "Primeras cinco filas" in output
     assert "sin simulación de rentabilidades" in output
     assert "Finder" not in output and "Registro de ejecución" not in output
 
@@ -102,7 +101,7 @@ def test_consultation_and_status_are_read_only_and_reject_old_configuration(stud
     assert menu.interactive_menu(config) == 0
     assert cli.main(["status", "--config", str(config)]) == 0
     assert "disponible para consultar (756 filas)" in capsys.readouterr().out
-    config.write_text(config.read_text().replace('history_start = "1926-01"', 'history_start = "1925-01"'))
+    config.write_text(config.read_text().replace('history_start = "1925-12"', 'history_start = "1925-01"'))
     answer_with(monkeypatch, ["3", "2", "", "0", "0"])
     assert menu.interactive_menu(config) == 0
     output = capsys.readouterr().out

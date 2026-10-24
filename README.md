@@ -31,7 +31,7 @@ Solo hay una configuración: [configs/estudio.toml](configs/estudio.toml). Conti
 
 La sección `[spy]` solo admite `start` y `end`. El activo está fijado en SPY; otros parámetros se rechazan antes de descargar.
 
-- **Shiller:** historia previa desde 1926, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. P es un precio medio mensual y D es anualizado e interpolado. Todavía está pendiente acordar con el tutor cómo evaluar rentabilidades con esa información.
+- **Shiller:** historia previa desde diciembre de 1925, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. Es la serie principal del estudio. P es un precio medio mensual y D es anualizado e interpolado. Las variaciones entre promedios se estudiarán como aproximación histórica, no como operaciones ejecutadas a esos precios. Los supuestos concretos de simulación siguen pendientes.
 - **SPY:** datos diarios del ETF mediante Yahoo Finance y `yfinance`, inicialmente desde 1993 hasta 2020. Se mantienen separados de Shiller y su utilización definitiva sigue pendiente.
 
 Las salidas tienen nombres fijos:
