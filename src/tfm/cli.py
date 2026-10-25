@@ -6,7 +6,7 @@ import sys
 
 from tfm.menu import interactive_menu, show_project_summary, show_result
 from tfm.config import DEFAULT_CONFIG, load_config
-from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity, simulate_bear_filter
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity, simulate_bear_filter, compare_simple_strategies
 from tfm.sources.prices import DownloadError
 
 
@@ -27,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     sensitivity.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     bear = commands.add_parser("simulate-bear-filter", help="Comparar las reglas con un veto bajista basado en los 24 meses anteriores")
     bear.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    comparison = commands.add_parser("compare-simple-strategies", help="Comparar reglas, filtro bajista y ajuste por volatilidad hasta 1989")
+    comparison.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     status = commands.add_parser("status", help="Consultar qué datos y señales están disponibles, sin modificar archivos")
     status.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     arguments = sys.argv[1:] if argv is None else argv
@@ -69,6 +71,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("Controles de estructura superados; calendario y exactitud financiera no certificados.")
                 print("La utilización definitiva de SPY en el estudio sigue pendiente.")
             print(f"Archivo: {result['path']}")
+            return 0
+        if args.command == "compare-simple-strategies":
+            result = compare_simple_strategies(args.config)
+            show_result("simple_comparisons", result)
             return 0
         if args.command == "simulate-bear-filter":
             result = simulate_bear_filter(args.config)

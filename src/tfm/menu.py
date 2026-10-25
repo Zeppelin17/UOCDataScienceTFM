@@ -9,7 +9,7 @@ import sys
 import pandas as pd
 
 from tfm.config import DEFAULT_CONFIG, load_config
-from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity, simulate_bear_filter
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity, simulate_bear_filter, compare_simple_strategies
 from tfm.sources.prices import DownloadError
 
 
@@ -22,6 +22,7 @@ RESULTS = {
     "baseline_simulations": ("Simulación de estrategias básicas", "8. Simular estrategias básicas"),
     "baseline_sensitivity": ("Comparación de costes y dividendos", "9. Comparar costes y dividendos"),
     "bear_filter_simulations": ("Comparación con filtro de mercado bajista", "10. Comparar con filtro bajista"),
+    "simple_comparisons": ("Comparación conjunta de alternativas sencillas", "11. Comparar reglas, filtro bajista y volatilidad"),
 }
 
 
@@ -111,7 +112,22 @@ def _select_input(settings: dict, source: str) -> tuple[bool, Path | None]:
 
 def show_result(name: str, summary: dict) -> None:
     print(f"\n{RESULTS[name][0]}")
-    if name == "bear_filter_simulations":
+    if name == "simple_comparisons":
+        print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por cuenta")
+        params = summary["configuration"]["volatility_scaling"]
+        print(f"Riesgo: {params['lookback_months']} variaciones mensuales previas; objetivo anual {100 * params['target_annual_volatility']:g} %; exposición máxima {100 * params['max_exposure']:g} %.")
+        print("Se comparan ocho cuentas con los mismos costes. Filtro bajista y escalado son alternativas separadas.")
+        rows = [{"Estrategia": row["label"], "Anualizada (%)": round(100 * row["annualized_return"], 3),
+                 "Volatilidad (%)": round(100 * row["annualized_volatility"], 3),
+                 "Caída máx. (%)": round(100 * row["max_drawdown"], 3),
+                 "Sharpe": round(row["sharpe"], 3) if row["sharpe"] is not None else "Sin valor"}
+                for row in summary["strategies"]]
+        print(pd.DataFrame(rows).to_string(index=False))
+        print("El escalado reduce tamaño sin cambiar dirección; el efectivo restante cobra RF y los reajustes tienen coste.")
+        print("Comprar y mantener ajustado permite separar el efecto de gestionar riesgo del efecto de la señal.")
+        print("Objetivo de riesgo orientativo, sin apalancamiento. Adaptaciones a Shiller, no réplicas de artículos.")
+        print("Siguiente paso: notebook 06_ajuste_volatilidad.ipynb. Modelos y evaluación desde 1990 siguen pendientes.")
+    elif name == "bear_filter_simulations":
         print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por cuenta")
         print("Filtro: si P[m]/P[m−24]−1 < 0, permanecer en efectivo en m+1; si no, seguir la señal original.")
         print(f"Meses bajistas: {summary['bear_months']} | Señales bloqueadas: momentum {summary['blocked_momentum_signals']}, reversión {summary['blocked_reversal_signals']}")
@@ -122,7 +138,7 @@ def show_result(name: str, summary: dict) -> None:
         print(pd.DataFrame(rows).to_string(index=False))
         print("Adaptación del indicador de Daniel y Moskowitz a precios medios de Shiller; no réplica del artículo.")
         print("Mismas fechas y costes. El filtro no usa el rebote futuro ni cambia el sentido de una señal.")
-        print("Desarrollo hasta 1989. El ajuste por volatilidad y los modelos siguen pendientes.")
+        print("Desarrollo hasta 1989. La opción 11 añade ajuste por volatilidad; los modelos siguen pendientes.")
         print("Siguiente paso: notebook 05_filtro_bajista.ipynb para entender qué señales se bloquean.")
     elif name == "baseline_sensitivity":
         print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por estrategia")
@@ -235,6 +251,8 @@ def _show_configuration(config: Path, settings: dict) -> None:
     print("Componentes: P[t]/P[t−1]−1, D[t]/12/P[t−1] y RF[t]; aún sin posiciones ni costes.")
     params = settings["simulation"]
     print(f"Simulación: capital {params['initial_capital']:g}, negociación {100 * params['transaction_cost_rate']:g} %, préstamo anual {100 * params['annual_borrow_rate']:g} %.")
+    risk = settings["volatility_scaling"]
+    print(f"Ajuste por volatilidad: {risk['lookback_months']} meses, objetivo anual {100 * risk['target_annual_volatility']:g} %, exposición máxima {100 * risk['max_exposure']:g} %.")
     print("Las salidas se regeneran en data/processed con nombres fijos.")
     print(f"Carpeta del proyecto: {settings['root']}")
     print("Puedes editar estudio.toml y volver al menú; la configuración se vuelve a leer antes de cada tarea.")
@@ -246,6 +264,8 @@ def _next_step(settings: dict, name: str) -> str:
             load_monthly(settings)
         except (OSError, ValueError, KeyError, TypeError):
             return "1. Preparar datos de Shiller; después 2. Calcular señales"
+    if name == "simple_comparisons":
+        return "1. Shiller desde 1924-12, 2. Señales, 6. RF, 7. Componentes; después 11. Comparar alternativas"
     if name == "bear_filter_simulations":
         return "1. Preparar Shiller desde 1924-12, 2. Señales, 6. RF, 7. Componentes; después 10. Comparar con filtro bajista"
     if name in {"baseline_simulations", "baseline_sensitivity"}:
@@ -288,6 +308,7 @@ def _consult(settings: dict) -> None:
                        if name == "shiller_monthly" else
                        {"decision_period": "Decisión", "target_period": "Mes objetivo", "momentum_signal": "Momentum", "reversal_signal": "Reversión"}
                        if name == "shiller_signals" else
+                       {"strategy": "Estrategia", "period": "Mes", "position": "Exposición", "net_return": "Neta (decimal)"} if name == "simple_comparisons" else
                        {"strategy": "Estrategia", "period": "Mes", "bear_market": "Bajista", "position": "Posición", "net_return": "Neta (decimal)"} if name == "bear_filter_simulations" else
                        {"scenario_label": "Escenario", "label": "Estrategia", "annualized_return": "Anualizada (decimal)"} if name == "baseline_sensitivity" else
                        {"strategy": "Estrategia", "period": "Mes", "position": "Posición", "net_return": "Neta (decimal)", "capital_end": "Capital final"} if name == "baseline_simulations" else
@@ -323,10 +344,10 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 continue
             print("TFM — ¿Invertir o esperar?")
             print(f"Estudio actual: Shiller mensual; desarrollo {settings['validation']['development_start'][:4]}–{settings['validation']['development_end'][:4]}.")
-            print("Disponible: datos, reglas básicas, sensibilidad y filtro sencillo de mercado bajista.")
+            print("Disponible: datos, reglas básicas, sensibilidad, filtro bajista y ajuste por volatilidad.")
             print("Desarrollo hasta 1989; evaluación desde 1990 deshabilitada. Todavía no hay filtros entrenados.")
-            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n6. Preparar RF de French (rentabilidad del efectivo)\n7. Preparar componentes de rentabilidad mensual\n8. Simular estrategias básicas\n9. Comparar costes y dividendos\n10. Comparar con filtro bajista\n0. Salir")
-            option = _choice("Opción del menú (0–10): ", {str(i) for i in range(11)})
+            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n6. Preparar RF de French (rentabilidad del efectivo)\n7. Preparar componentes de rentabilidad mensual\n8. Simular estrategias básicas\n9. Comparar costes y dividendos\n10. Comparar con filtro bajista\n11. Comparar reglas, filtro bajista y volatilidad\n0. Salir")
+            option = _choice("Opción del menú (0–11): ", {str(i) for i in range(12)})
             if option == "0":
                 return 0
             _clear_screen()
@@ -364,6 +385,12 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 print("Requiere Shiller preparado desde 1924-12 para comparar todos los meses de 1927–1989.")
                 print("Se guardará una tabla separada con las cinco cuentas y sus decisiones.", flush=True)
                 show_result("bear_filter_simulations", simulate_bear_filter(config_path))
+            elif option == "11":
+                print("Comparación conjunta — reglas originales, veto bajista y ajuste por volatilidad")
+                print("Se mantiene la dirección de cada regla y se reduce el tamaño según el riesgo del índice.")
+                print("Los supuestos están en [volatility_scaling] de estudio.toml. No se descargan datos ni se entrenan modelos.")
+                print("Se guardan ocho cuentas en una tabla separada; no se sustituyen las simulaciones anteriores.", flush=True)
+                show_result("simple_comparisons", compare_simple_strategies(config_path))
             elif option == "3":
                 _consult(settings)
                 continue
@@ -379,7 +406,7 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
             if option == "2":
                 print("Si faltan datos de Shiller, usa la opción 1 antes de calcular señales.")
                 print("Después repite la opción 2. No se han calculado rentabilidades.")
-            elif option in {"8", "9", "10"}:
+            elif option in {"8", "9", "10", "11"}:
                 print("Entradas necesarias: 1. Shiller, 2. Señales, 6. RF y 7. Componentes; después repite esta opción.")
                 print("Si hay insolvencia, revisa el escenario indicado; no se han omitido resultados para completar la tabla.")
             else:

@@ -1,6 +1,6 @@
 # ¿Invertir o esperar?
 
-Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Compara también la sensibilidad a costes y dividendos. Incluye un filtro sencillo de mercado bajista. El ajuste por volatilidad, el entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
+Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Compara también la sensibilidad a costes y dividendos. Incluye un filtro sencillo de mercado bajista. También ajusta la exposición por volatilidad y reúne las alternativas sencillas. El entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
 
 ## Empezar
 
@@ -21,6 +21,7 @@ python -m tfm
 8. Simular estrategias básicas
 9. Comparar costes y dividendos
 10. Comparar con filtro bajista
+11. Comparar reglas, filtro bajista y volatilidad
 0. Salir
 ```
 
@@ -78,11 +79,23 @@ El préstamo no afecta a comprar y mantener ni al momentum actual, porque no ven
 
 La **opción 10**, `python -m tfm simulate-bear-filter` o [05_filtro_bajista.ipynb](notebooks/05_filtro_bajista.ipynb) comparan comprar y mantener, momentum y reversión, y las dos reglas con un filtro. Si `P[m]/P[m-24]-1 < 0`, el filtro deja la señal del mes siguiente en efectivo; con resultado cero o positivo, la acepta. No cambia el sentido de la señal, no mira el rebote futuro y no utiliza dividendos como predictor.
 
-Es una **adaptación del indicador bajista de 24 meses de Daniel y Moskowitz (2016)** a la serie de precios medios de Shiller. El veto y su aplicación a ambas reglas son convenciones explícitas del TFM; no replican la cartera transversal ni la estrategia dinámica del artículo. No se añade un umbral de volatilidad ni se optimiza la ventana. El ajuste por volatilidad sigue pendiente.
+Es una **adaptación del indicador bajista de 24 meses de Daniel y Moskowitz (2016)** a la serie de precios medios de Shiller. El veto y su aplicación a ambas reglas son convenciones explícitas del TFM; no replican la cartera transversal ni la estrategia dinámica del artículo. No se añade un umbral de volatilidad ni se optimiza la ventana. El ajuste por volatilidad se compara por separado en la opción 11.
 
 **Tras actualizar este incremento, repite los notebooks 01 y 02 antes de abrir el 05.** La configuración amplía la historia a diciembre de 1924 para calcular el indicador de enero de 1927 sin perder meses del desarrollo. Son 781 observaciones preparadas: 25 de historia previa y los mismos 756 meses de 1927–1989. No necesitas un nuevo proveedor ni otra descarga si conservas los originales completos. Desde el menú puedes usar **1 → 2 → 6 → 7 → 10** (la opción 6 puede omitirse si RF ya está preparado).
 
 La comparación guarda las cinco cuentas mensuales con sus señales e indicador en `bear_filter_simulations.parquet` y un resumen JSON. Mantiene las cuentas y sensibilidades anteriores mientras sean compatibles con la configuración actual. Si faltan meses de historia, se detiene sin rellenarlos ni acortar la comparación. Al regenerar entradas se retira esta salida; cambiar costes requiere volver a simularla. No se han evaluado meses desde 1990.
+
+## Ajustar exposición por volatilidad y reunir comparadores
+
+La **opción 11**, `python -m tfm compare-simple-strategies` o [06_ajuste_volatilidad.ipynb](notebooks/06_ajuste_volatilidad.ipynb) comparan ocho cuentas en los mismos 756 meses: las tres básicas, las dos con veto bajista y las tres básicas ajustadas por volatilidad. Comprar y mantener ajustado sirve de control para distinguir el efecto de gestionar exposición del efecto de las señales. El veto bajista y el escalado se aplican como alternativas separadas.
+
+En `[volatility_scaling]` se declaran **12 variaciones mensuales anteriores**, objetivo anual **12 %** y exposición máxima **1**. Al decidir en m, se calcula la desviación típica muestral de las variaciones de precio hasta m, anualizada por raíz de 12. La escala es `min(max_exposure, target_annual_volatility / estimated_annual_volatility)` y se aplica a la señal de m+1. Si la estimación es exactamente cero, se usa la exposición máxima. Faltar historia detiene el cálculo; no equivale a riesgo cero. No se estima una constante con toda la muestra ni se buscan parámetros por rentabilidad.
+
+La adaptación usa riesgo mensual del índice e inversa de desviación típica. No replica el riesgo diario de la cartera transversal de Barroso y Santa-Clara ni la regla principal de inversa de varianza de Moreira y Muir. El objetivo es una referencia, no una garantía de volatilidad realizada, especialmente con promedios de Shiller, exposición limitada y señales en efectivo.
+
+El simulador admite posiciones parciales entre −1 y +1. Un largo del 40 % recibe precio y dividendos por ese 40 % y RF por el 60 % restante. Un corto del 40 % paga préstamo y dividendos sobre ese nominal y recibe RF solo por el capital aportado, sin remunerar adicionalmente el ingreso de la venta corta. Se cobran los reajustes de tamaño y la liquidación final; no hay apalancamiento. Las cuentas básicas conservan sus fórmulas y resultados.
+
+Se escriben `simple_comparisons.parquet` y su JSON con las ocho cuentas, riesgo estimado y escala aplicada. Se conservan los otros resultados. Cambiar `[volatility_scaling]` solo exige repetir esta comparación, sin preparar ni descargar fuentes. Regenerar entradas la invalida. Si ya has ejecutado los notebooks 01 y 02 con historia desde diciembre de 1924, abre directamente el 06; no hay otra ampliación histórica ni nuevas dependencias. No se evalúan fechas desde 1990.
 
 ## Datos y configuración
 
@@ -111,6 +124,7 @@ data/processed/monthly_return_components.parquet  Precio, dividendo aproximado y
 data/processed/baseline_simulations.parquet        Cuenta mensual de las tres estrategias
 data/processed/baseline_sensitivity.parquet        Resúmenes comparados de costes y dividendos
 data/processed/bear_filter_simulations.parquet    Cinco cuentas, indicador bajista y señales originales
+data/processed/simple_comparisons.parquet         Ocho cuentas con comparadores de riesgo y régimen
 ```
 
 Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales y los componentes anteriores cuando termina correctamente; preparar French retira los componentes, conservando las señales. Durante la sustitución se conserva en memoria el contenido anterior para restaurar tabla, resumen y señales si ocurre un error. No se crean archivos permanentes de respaldo. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
@@ -144,6 +158,7 @@ src/tfm/
   simulation.py           Cuenta y resumen de las tres estrategias básicas
   sensitivity.py          Escenarios prefijados con el mismo simulador
   comparators.py          Veto bajista de 24 meses y comparación con las reglas originales
+  volatility.py           Riesgo previo, escala sin apalancamiento y comparación conjunta
 notebooks/                Exploración y explicaciones, cuando sean necesarias
 tests/                    Pruebas esenciales sin red
 docs/decisiones.md        Supuestos, limitaciones y antecedentes
@@ -164,6 +179,7 @@ python -m tfm prepare-returns
 python -m tfm simulate-baselines
 python -m tfm analyze-sensitivity
 python -m tfm simulate-bear-filter
+python -m tfm compare-simple-strategies
 python -m tfm status
 ```
 

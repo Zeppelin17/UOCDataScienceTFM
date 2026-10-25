@@ -11,7 +11,7 @@ STRATEGIES = {"buy_and_hold": "Comprar y mantener", "momentum": "Momentum", "rev
 WARNINGS = [
     "Aproximación histórica sobre precios medios de Shiller, no operaciones ejecutables.",
     "Dividendos D/12 reconstruidos; no se acredita disponibilidad histórica de cada revisión.",
-    "Exposición objetivo mensual de +1, 0 o -1 sobre capital después de costes, sin margen intramensual.",
+    "Exposición objetivo mensual entre -1 y +1 sobre capital después de costes, sin margen intramensual; las reglas básicas usan -1, 0 o +1.",
     "El efectivo y el capital aportado a un corto reciben RF; los ingresos de la venta corta no reciben interés adicional.",
     "El préstamo se carga sobre el nominal inicial del corto, a tasa anual/12; tarifas hipotéticas.",
     "Dividendos de largos reinvertidos sin comisión separada; los cortos pagan dividendos y se reajustan mensualmente.",
@@ -62,7 +62,8 @@ def _check_inputs(components: pd.DataFrame, signals: pd.DataFrame) -> None:
             raise ValueError("Las señales deben tener posiciones válidas; un dato ausente no equivale a efectivo")
 
 
-def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, parameters: dict) -> pd.DataFrame:
+def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, parameters: dict, *,
+                       exposure_scale: pd.Series | None = None) -> pd.DataFrame:
     """No descargar ni guardar; decidir exclusivamente con las señales anteriores.
 
     El nominal se ajusta a q * capital después de la comisión. Resolver el
@@ -71,6 +72,14 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
     """
     validate_parameters(parameters)
     _check_inputs(components, signals)
+    if exposure_scale is not None:
+        if (not isinstance(exposure_scale, pd.Series)
+                or exposure_scale.index.tolist() != components.period.tolist()
+                or not pd.api.types.is_numeric_dtype(exposure_scale)
+                or pd.api.types.is_bool_dtype(exposure_scale) or exposure_scale.isna().any()
+                or not exposure_scale.map(math.isfinite).all()
+                or not exposure_scale.between(0, 1).all()):
+            raise ValueError("La escala requiere un valor entre 0 y 1 para cada mes objetivo, en el mismo orden")
     fee = float(parameters["transaction_cost_rate"])
     borrow_monthly = float(parameters["annual_borrow_rate"]) / 12
     records = []
@@ -79,7 +88,8 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
         carried_notional = 0.0
         for i, row in enumerate(components.itertuples(index=False)):
             q = 1 if strategy == "buy_and_hold" else int(signals.iloc[i][f"{strategy}_signal"])
-            # Reversal utiliza el nombre de columna original en inglés.
+            if exposure_scale is not None:
+                q *= float(exposure_scale.iloc[i])
             start = equity
             desired_trade = q * start - carried_notional
             direction = 1 if desired_trade > 0 else -1 if desired_trade < 0 else 0
@@ -91,12 +101,17 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
             dividend_return = float(row.dividend_return_approx) if parameters["include_dividends"] else 0.0
             price_pnl = q * invested * float(row.price_return)
             dividend_pnl = q * invested * dividend_return
-            cash_interest = invested * float(row.rf_return) if q <= 0 else 0.0
-            borrow_cost = invested * borrow_monthly if q == -1 else 0.0
+            cash_interest = invested * (1 - max(q, 0)) * float(row.rf_return)
+            borrow_cost = invested * abs(q) * borrow_monthly if q < 0 else 0.0
             before_close = invested + price_pnl + dividend_pnl + cash_interest - borrow_cost
             # Largo: reinversión del dividendo sin comisión separada. Corto:
             # el dividendo sale de efectivo; el nominal cambia solo con el precio.
-            end_notional = before_close if q == 1 else -invested * (1 + row.price_return) if q == -1 else 0.0
+            if q == 1:
+                end_notional = before_close
+            elif q > 0:
+                end_notional = q * invested + price_pnl + dividend_pnl
+            else:
+                end_notional = q * invested * (1 + row.price_return) if q < 0 else 0.0
             liquidation_notional = abs(end_notional) if i == len(components) - 1 else 0.0
             liquidation_cost = fee * liquidation_notional
             equity = before_close - liquidation_cost

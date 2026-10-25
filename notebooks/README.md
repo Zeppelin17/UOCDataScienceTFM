@@ -56,3 +56,11 @@ La celda de ejecución escribe o sustituye `data/processed/baseline_sensitivity.
 `05_filtro_bajista.ipynb` compara las dos reglas originales y las dos filtradas, junto con comprar y mantener. Primero repite los notebooks 01 y 02: el filtro necesita precios desde diciembre de 1924 y la configuración se ha ampliado para mantener todos los meses de 1927–1989. La historia adicional es calentamiento, no más meses de evaluación. Se reutilizan los originales; no se necesita otra fuente.
 
 Después selecciona `.venv`, reinicia el kernel y ejecuta el 05 en orden. Muestra la regla de 24 meses, ejecuta la misma comparación que la opción 10, explica mayo de 1975 y representa capital y caídas por regla. La ejecución escribe `bear_filter_simulations.parquet` y su JSON, sin descargar ni sobrescribir las otras simulaciones. Es una adaptación declarada del indicador de Daniel y Moskowitz a nuestros datos, no una réplica del artículo. No incluye aún ajuste por volatilidad ni aprendizaje automático. Guarda el notebook sin salidas antes del commit.
+
+## Ajuste por volatilidad y comparación conjunta
+
+`06_ajuste_volatilidad.ipynb` requiere las mismas entradas que el 05: Shiller desde diciembre de 1924, señales y componentes. Si ya las tienes, basta seleccionar `.venv`, reiniciar el kernel y ejecutar el 06. No requiere otra descarga ni nuevas dependencias.
+
+Muestra los parámetros de `[volatility_scaling]`, compara las ocho cuentas, desglosa mayo de 1975 y representa las curvas. La escala depende solo del riesgo anterior y mantiene la dirección original. El objetivo del 12 % es una referencia, no riesgo garantizado ni un parámetro elegido por rentabilidad. Se documentan las diferencias con los artículos de referencia.
+
+La celda de ejecución guarda `simple_comparisons.parquet` y su JSON. Conserva las simulaciones anteriores. Las posiciones parciales remuneran el efectivo restante y pagan los costes del nominal realmente negociado. No se combinan el filtro bajista y el escalado. No hay modelos ni evaluación desde 1990. Guarda el cuaderno sin salidas antes de hacer commit.

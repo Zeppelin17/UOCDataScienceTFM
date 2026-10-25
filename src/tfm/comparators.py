@@ -20,7 +20,7 @@ BEAR_PROTOCOL = {
 BEAR_WARNINGS = [
     "Adaptación del indicador bajista de 24 meses a precios medios de Shiller, sin dividendos como predictor.",
     "El veto a ambas reglas es una convención del TFM, no una réplica de la estrategia dinámica del artículo.",
-    "No se usa el rebote del mes objetivo ni se exige volatilidad alta; el ajuste por volatilidad sigue pendiente.",
+    "El veto no usa el rebote del mes objetivo ni exige volatilidad alta; el ajuste por volatilidad es una alternativa separada.",
 ]
 
 
