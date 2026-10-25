@@ -6,7 +6,7 @@ import sys
 
 from tfm.menu import interactive_menu, show_project_summary, show_result
 from tfm.config import DEFAULT_CONFIG, load_config
-from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity, simulate_bear_filter
 from tfm.sources.prices import DownloadError
 
 
@@ -25,6 +25,8 @@ def main(argv: list[str] | None = None) -> int:
     simulation.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     sensitivity = commands.add_parser("analyze-sensitivity", help="Comparar costes y dividendos, cambiando un supuesto cada vez hasta 1989")
     sensitivity.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    bear = commands.add_parser("simulate-bear-filter", help="Comparar las reglas con un veto bajista basado en los 24 meses anteriores")
+    bear.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     status = commands.add_parser("status", help="Consultar qué datos y señales están disponibles, sin modificar archivos")
     status.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     arguments = sys.argv[1:] if argv is None else argv
@@ -67,6 +69,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("Controles de estructura superados; calendario y exactitud financiera no certificados.")
                 print("La utilización definitiva de SPY en el estudio sigue pendiente.")
             print(f"Archivo: {result['path']}")
+            return 0
+        if args.command == "simulate-bear-filter":
+            result = simulate_bear_filter(args.config)
+            show_result("bear_filter_simulations", result)
             return 0
         if args.command == "analyze-sensitivity":
             result = analyze_sensitivity(args.config)

@@ -50,3 +50,9 @@ Las simulaciones se guardan con nombres fijos y quedan obsoletas al regenerar cu
 Primero muestra todos los escenarios y sus parámetros. Después ejecuta la comparación con el mismo simulador de la opción 9 y presenta una tabla por estrategia y un gráfico de rentabilidades anualizadas. Solo cambia un supuesto cada vez respecto a `[simulation]`: negociación, préstamo anual o inclusión del dividendo aproximado. Con la configuración inicial son siete escenarios y 21 resúmenes.
 
 La celda de ejecución escribe o sustituye `data/processed/baseline_sensitivity.parquet` y su JSON. No descarga, no edita `estudio.toml` y no sobrescribe la cuenta mensual del notebook 03. No selecciona el mejor escenario ni utiliza fechas desde 1990. El cambio de rentabilidad se expresa en puntos porcentuales respecto al central. Se conservan el orden declarado y las limitaciones de Shiller. Limpia las salidas y guarda antes de hacer commit.
+
+## Filtro de mercado bajista
+
+`05_filtro_bajista.ipynb` compara las dos reglas originales y las dos filtradas, junto con comprar y mantener. Primero repite los notebooks 01 y 02: el filtro necesita precios desde diciembre de 1924 y la configuración se ha ampliado para mantener todos los meses de 1927–1989. La historia adicional es calentamiento, no más meses de evaluación. Se reutilizan los originales; no se necesita otra fuente.
+
+Después selecciona `.venv`, reinicia el kernel y ejecuta el 05 en orden. Muestra la regla de 24 meses, ejecuta la misma comparación que la opción 10, explica mayo de 1975 y representa capital y caídas por regla. La ejecución escribe `bear_filter_simulations.parquet` y su JSON, sin descargar ni sobrescribir las otras simulaciones. Es una adaptación declarada del indicador de Daniel y Moskowitz a nuestros datos, no una réplica del artículo. No incluye aún ajuste por volatilidad ni aprendizaje automático. Guarda el notebook sin salidas antes del commit.

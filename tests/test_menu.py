@@ -101,7 +101,7 @@ def test_consultation_and_status_are_read_only_and_reject_old_configuration(stud
     assert menu.interactive_menu(config) == 0
     assert cli.main(["status", "--config", str(config)]) == 0
     assert "disponible para consultar (756 filas)" in capsys.readouterr().out
-    config.write_text(config.read_text().replace('history_start = "1925-12"', 'history_start = "1925-01"'))
+    config.write_text(config.read_text().replace('history_start = "1924-12"', 'history_start = "1924-01"'))
     answer_with(monkeypatch, ["3", "2", "", "0", "0"])
     assert menu.interactive_menu(config) == 0
     output = capsys.readouterr().out

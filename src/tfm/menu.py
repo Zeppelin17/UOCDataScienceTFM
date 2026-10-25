@@ -9,7 +9,7 @@ import sys
 import pandas as pd
 
 from tfm.config import DEFAULT_CONFIG, load_config
-from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity, simulate_bear_filter
 from tfm.sources.prices import DownloadError
 
 
@@ -21,6 +21,7 @@ RESULTS = {
     "monthly_return_components": ("Componentes de rentabilidad mensual", "7. Preparar componentes de rentabilidad"),
     "baseline_simulations": ("Simulación de estrategias básicas", "8. Simular estrategias básicas"),
     "baseline_sensitivity": ("Comparación de costes y dividendos", "9. Comparar costes y dividendos"),
+    "bear_filter_simulations": ("Comparación con filtro de mercado bajista", "10. Comparar con filtro bajista"),
 }
 
 
@@ -110,7 +111,20 @@ def _select_input(settings: dict, source: str) -> tuple[bool, Path | None]:
 
 def show_result(name: str, summary: dict) -> None:
     print(f"\n{RESULTS[name][0]}")
-    if name == "baseline_sensitivity":
+    if name == "bear_filter_simulations":
+        print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por cuenta")
+        print("Filtro: si P[m]/P[m−24]−1 < 0, permanecer en efectivo en m+1; si no, seguir la señal original.")
+        print(f"Meses bajistas: {summary['bear_months']} | Señales bloqueadas: momentum {summary['blocked_momentum_signals']}, reversión {summary['blocked_reversal_signals']}")
+        rows = [{"Estrategia": row["label"], "Anualizada (%)": round(100 * row["annualized_return"], 3),
+                 "Caída máx. (%)": round(100 * row["max_drawdown"], 3),
+                 "Sharpe": round(row["sharpe"], 3) if row["sharpe"] is not None else "Sin valor"}
+                for row in summary["strategies"]]
+        print(pd.DataFrame(rows).to_string(index=False))
+        print("Adaptación del indicador de Daniel y Moskowitz a precios medios de Shiller; no réplica del artículo.")
+        print("Mismas fechas y costes. El filtro no usa el rebote futuro ni cambia el sentido de una señal.")
+        print("Desarrollo hasta 1989. El ajuste por volatilidad y los modelos siguen pendientes.")
+        print("Siguiente paso: notebook 05_filtro_bajista.ipynb para entender qué señales se bloquean.")
+    elif name == "baseline_sensitivity":
         print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por estrategia")
         print(f"{len(summary['scenarios'])} escenarios. Se cambia un supuesto cada vez respecto a estudio.toml.")
         print("El central se conserva; no se ordenan ni seleccionan escenarios por rentabilidad.")
@@ -232,6 +246,8 @@ def _next_step(settings: dict, name: str) -> str:
             load_monthly(settings)
         except (OSError, ValueError, KeyError, TypeError):
             return "1. Preparar datos de Shiller; después 2. Calcular señales"
+    if name == "bear_filter_simulations":
+        return "1. Preparar Shiller desde 1924-12, 2. Señales, 6. RF, 7. Componentes; después 10. Comparar con filtro bajista"
     if name in {"baseline_simulations", "baseline_sensitivity"}:
         return "1. Preparar Shiller, 2. Calcular señales, 6. Preparar RF, 7. Preparar componentes; después " + ("9. Comparar supuestos" if name == "baseline_sensitivity" else "8. Simular")
     if name == "monthly_return_components":
@@ -272,6 +288,7 @@ def _consult(settings: dict) -> None:
                        if name == "shiller_monthly" else
                        {"decision_period": "Decisión", "target_period": "Mes objetivo", "momentum_signal": "Momentum", "reversal_signal": "Reversión"}
                        if name == "shiller_signals" else
+                       {"strategy": "Estrategia", "period": "Mes", "bear_market": "Bajista", "position": "Posición", "net_return": "Neta (decimal)"} if name == "bear_filter_simulations" else
                        {"scenario_label": "Escenario", "label": "Estrategia", "annualized_return": "Anualizada (decimal)"} if name == "baseline_sensitivity" else
                        {"strategy": "Estrategia", "period": "Mes", "position": "Posición", "net_return": "Neta (decimal)", "capital_end": "Capital final"} if name == "baseline_simulations" else
                        {"period": "Mes", "rf_return": "RF (decimal mensual)"} if name == "french_rf_monthly" else
@@ -306,10 +323,10 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 continue
             print("TFM — ¿Invertir o esperar?")
             print(f"Estudio actual: Shiller mensual; desarrollo {settings['validation']['development_start'][:4]}–{settings['validation']['development_end'][:4]}.")
-            print("Disponible: datos, señales, componentes, estrategias básicas y comparación de supuestos.")
+            print("Disponible: datos, reglas básicas, sensibilidad y filtro sencillo de mercado bajista.")
             print("Desarrollo hasta 1989; evaluación desde 1990 deshabilitada. Todavía no hay filtros entrenados.")
-            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n6. Preparar RF de French (rentabilidad del efectivo)\n7. Preparar componentes de rentabilidad mensual\n8. Simular estrategias básicas\n9. Comparar costes y dividendos\n0. Salir")
-            option = _choice("Opción del menú (0–9): ", {str(i) for i in range(10)})
+            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n6. Preparar RF de French (rentabilidad del efectivo)\n7. Preparar componentes de rentabilidad mensual\n8. Simular estrategias básicas\n9. Comparar costes y dividendos\n10. Comparar con filtro bajista\n0. Salir")
+            option = _choice("Opción del menú (0–10): ", {str(i) for i in range(11)})
             if option == "0":
                 return 0
             _clear_screen()
@@ -340,6 +357,13 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 print("También se compara incluir/excluir el dividendo aproximado. El central es estudio.toml.")
                 print("Se guardará una tabla comparativa; la simulación de la opción 8 se conserva.", flush=True)
                 show_result("baseline_sensitivity", analyze_sensitivity(config_path))
+            elif option == "10":
+                print("Comparar con filtro bajista — caída de precios en los 24 meses anteriores")
+                print("Si el indicador es negativo, se ignora la señal y se permanece en efectivo el mes siguiente.")
+                print("Se aplica por separado a momentum y reversión. No se entrenan modelos ni se descargan datos.")
+                print("Requiere Shiller preparado desde 1924-12 para comparar todos los meses de 1927–1989.")
+                print("Se guardará una tabla separada con las cinco cuentas y sus decisiones.", flush=True)
+                show_result("bear_filter_simulations", simulate_bear_filter(config_path))
             elif option == "3":
                 _consult(settings)
                 continue
@@ -355,7 +379,7 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
             if option == "2":
                 print("Si faltan datos de Shiller, usa la opción 1 antes de calcular señales.")
                 print("Después repite la opción 2. No se han calculado rentabilidades.")
-            elif option in {"8", "9"}:
+            elif option in {"8", "9", "10"}:
                 print("Entradas necesarias: 1. Shiller, 2. Señales, 6. RF y 7. Componentes; después repite esta opción.")
                 print("Si hay insolvencia, revisa el escenario indicado; no se han omitido resultados para completar la tabla.")
             else:

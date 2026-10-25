@@ -1,6 +1,6 @@
 # ¿Invertir o esperar?
 
-Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Compara también la sensibilidad a costes y dividendos. Los filtros, el entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
+Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Compara también la sensibilidad a costes y dividendos. Incluye un filtro sencillo de mercado bajista. El ajuste por volatilidad, el entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
 
 ## Empezar
 
@@ -20,6 +20,7 @@ python -m tfm
 7. Preparar componentes de rentabilidad mensual
 8. Simular estrategias básicas
 9. Comparar costes y dividendos
+10. Comparar con filtro bajista
 0. Salir
 ```
 
@@ -73,13 +74,23 @@ Se guardan `baseline_sensitivity.parquet` y su JSON, conservando `baseline_simul
 
 El préstamo no afecta a comprar y mantener ni al momentum actual, porque no venden en corto. Excluir dividendos elimina ingresos de los largos y pagos de los cortos; no es una comisión adicional. La comparación no estudia todas las combinaciones de costes, no elige el escenario más rentable ni demuestra robustez fuera de muestra. Las limitaciones de precios medios y dividendos reconstruidos siguen vigentes. Cambiar la configuración o regenerar entradas obliga a repetir la comparación.
 
+## Comparar con un filtro de mercado bajista
+
+La **opción 10**, `python -m tfm simulate-bear-filter` o [05_filtro_bajista.ipynb](notebooks/05_filtro_bajista.ipynb) comparan comprar y mantener, momentum y reversión, y las dos reglas con un filtro. Si `P[m]/P[m-24]-1 < 0`, el filtro deja la señal del mes siguiente en efectivo; con resultado cero o positivo, la acepta. No cambia el sentido de la señal, no mira el rebote futuro y no utiliza dividendos como predictor.
+
+Es una **adaptación del indicador bajista de 24 meses de Daniel y Moskowitz (2016)** a la serie de precios medios de Shiller. El veto y su aplicación a ambas reglas son convenciones explícitas del TFM; no replican la cartera transversal ni la estrategia dinámica del artículo. No se añade un umbral de volatilidad ni se optimiza la ventana. El ajuste por volatilidad sigue pendiente.
+
+**Tras actualizar este incremento, repite los notebooks 01 y 02 antes de abrir el 05.** La configuración amplía la historia a diciembre de 1924 para calcular el indicador de enero de 1927 sin perder meses del desarrollo. Son 781 observaciones preparadas: 25 de historia previa y los mismos 756 meses de 1927–1989. No necesitas un nuevo proveedor ni otra descarga si conservas los originales completos. Desde el menú puedes usar **1 → 2 → 6 → 7 → 10** (la opción 6 puede omitirse si RF ya está preparado).
+
+La comparación guarda las cinco cuentas mensuales con sus señales e indicador en `bear_filter_simulations.parquet` y un resumen JSON. Mantiene las cuentas y sensibilidades anteriores mientras sean compatibles con la configuración actual. Si faltan meses de historia, se detiene sin rellenarlos ni acortar la comparación. Al regenerar entradas se retira esta salida; cambiar costes requiere volver a simularla. No se han evaluado meses desde 1990.
+
 ## Datos y configuración
 
 Solo hay una configuración: [configs/estudio.toml](configs/estudio.toml). Contiene las fuentes de Shiller y French, los periodos del estudio, las convenciones de las reglas y el periodo diario solicitado para SPY. La opción 5 explica sus valores. El menú vuelve a leer el archivo antes de cada tarea.
 
 La sección `[spy]` solo admite `start` y `end`. El activo está fijado en SPY; otros parámetros se rechazan antes de descargar.
 
-- **Shiller:** historia previa desde diciembre de 1925, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. Es la serie principal del estudio. P es un precio medio mensual y D es anualizado e interpolado. Las variaciones entre promedios se estudiarán como aproximación histórica, no como operaciones ejecutadas a esos precios. Los supuestos centrales de simulación se documentan en la sección anterior y en `docs/decisiones.md`.
+- **Shiller:** historia previa desde diciembre de 1924, desarrollo 1927–1989 y evaluación desde 1990 deshabilitada. Es la serie principal del estudio. P es un precio medio mensual y D es anualizado e interpolado. Las variaciones entre promedios se estudiarán como aproximación histórica, no como operaciones ejecutadas a esos precios. Los supuestos centrales de simulación se documentan en la sección anterior y en `docs/decisiones.md`.
 - **French:** solo RF del ZIP mensual de tres factores, de 1927 a 1989. Se usa para el efectivo; no sustituye al índice por la cartera de mercado de French.
 - **SPY:** datos diarios del ETF mediante Yahoo Finance y `yfinance`, inicialmente desde 1993 hasta 2020. Se mantienen separados de Shiller y su utilización definitiva sigue pendiente.
 
@@ -99,6 +110,7 @@ data/processed/french_rf_monthly.parquet RF mensual en decimal
 data/processed/monthly_return_components.parquet  Precio, dividendo aproximado y RF
 data/processed/baseline_simulations.parquet        Cuenta mensual de las tres estrategias
 data/processed/baseline_sensitivity.parquet        Resúmenes comparados de costes y dividendos
+data/processed/bear_filter_simulations.parquet    Cinco cuentas, indicador bajista y señales originales
 ```
 
 Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales y los componentes anteriores cuando termina correctamente; preparar French retira los componentes, conservando las señales. Durante la sustitución se conserva en memoria el contenido anterior para restaurar tabla, resumen y señales si ocurre un error. No se crean archivos permanentes de respaldo. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
@@ -131,6 +143,7 @@ src/tfm/
   returns.py              Componentes de rentabilidad
   simulation.py           Cuenta y resumen de las tres estrategias básicas
   sensitivity.py          Escenarios prefijados con el mismo simulador
+  comparators.py          Veto bajista de 24 meses y comparación con las reglas originales
 notebooks/                Exploración y explicaciones, cuando sean necesarias
 tests/                    Pruebas esenciales sin red
 docs/decisiones.md        Supuestos, limitaciones y antecedentes
@@ -150,6 +163,7 @@ python -m tfm prepare-data --source french
 python -m tfm prepare-returns
 python -m tfm simulate-baselines
 python -m tfm analyze-sensitivity
+python -m tfm simulate-bear-filter
 python -m tfm status
 ```
 

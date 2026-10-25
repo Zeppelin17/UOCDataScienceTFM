@@ -2,7 +2,7 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1924 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos y un filtro de mercado bajista. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
 
 Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. Yahoo Finance aporta observaciones diarias del ETF SPY desde 1993 como fuente auxiliar separada. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
@@ -14,7 +14,7 @@ Shiller publica un XLS con muchos campos y fechas. El lector revisa las fechas y
 - **D:** dividendo anualizado e interpolado, en puntos del índice. No es un pago mensual observado ni una variable conocida necesariamente en tiempo real. No se divide por doce para tratarlo como tal pago.
 - **Disponibilidad:** el archivo actual reconstruye la historia; no acredita cuándo se conoció cada valor o revisión.
 
-El lector interpreta correctamente las fechas numéricas YYYY.MM: por ejemplo, 1926.1 representa octubre. Comprueba cobertura mensual, duplicados, valores finitos, precios positivos y dividendos no negativos. No rellena huecos ni elimina duplicados para conseguir una tabla aceptable. La configuración habitual produce 769 observaciones: 13 de historia previa y 756 de desarrollo.
+El lector interpreta correctamente las fechas numéricas YYYY.MM: por ejemplo, 1926.1 representa octubre. Comprueba cobertura mensual, duplicados, valores finitos, precios positivos y dividendos no negativos. No rellena huecos ni elimina duplicados para conseguir una tabla aceptable. La configuración habitual produce 781 observaciones: 25 de historia previa y 756 de desarrollo.
 
 Yahoo se solicita con `auto_adjust=false`, `back_adjust=false`, `actions=true`, `repair=false` y el resto de opciones explícitas en `data.py`. Se conservan cierre, cierre ajustado y eventos con sus escalas separadas. La copia en Parquet conserva la respuesta del adaptador; no el contenido HTTP original ni una captura conocida en cada fecha histórica. Las comprobaciones actuales revisan estructura y coherencia de los precios, pero no acreditan el calendario completo ni los ajustes o la exactitud del proveedor.
 
@@ -31,7 +31,7 @@ Momentum excluye el mes más reciente y comprende once variaciones mensuales. El
 
 `decision_period` conserva el último mes utilizado y `target_period` el mes posterior. Las señales ausentes por calentamiento permanecen ausentes y no equivalen a efectivo. Solo se publican meses objetivo de 1927–1989: una decisión de diciembre de 1989 dirigida a enero de 1990 queda fuera.
 
-La señal de momentum para enero de 1927 utiliza diciembre de 1925. Con esa historia previa hay 756 meses objetivo y **756 con ambas señales disponibles**, desde enero de 1927. Las comparaciones futuras deberán compartir fechas y contar también el calentamiento de sus variables. Los meses del calendario no equivalen automáticamente a observaciones utilizables o independientes.
+La señal de momentum para enero de 1927 utiliza diciembre de 1925. Para el filtro bajista de enero de 1927 se necesita, además, diciembre de 1924: la historia previa se amplía sin alterar las fórmulas de las señales. Hay 756 meses objetivo y **756 con ambas señales disponibles**, desde enero de 1927. Las comparaciones futuras deberán compartir fechas y contar también el calentamiento de sus variables. Los meses del calendario no equivalen automáticamente a observaciones utilizables o independientes.
 
 ## Protocolo de simulación básica
 
@@ -59,7 +59,19 @@ La comparación reutiliza el protocolo financiero y las señales del escenario c
 
 Las alternativas se fijan por los escenarios ya acordados, sin búsquedas, ordenación por rentabilidad ni elección posterior de una tarifa. Se conserva una fila por escenario y estrategia, con los supuestos, métricas y diferencia anualizada frente al central, en `baseline_sensitivity.parquet` y su JSON. No se modifican los datos originales, la configuración ni la cuenta mensual de `baseline_simulations`. La tabla se regenera al cambiar entradas o parámetros; una insolvencia detiene la operación sin publicar resultados parciales ni eliminar el escenario desfavorable.
 
-El préstamo solo afecta a reversión cuando está vendida. Excluir dividendos suprime su contribución con signo, por lo que perjudica al largo y puede favorecer al corto. El análisis no cruza todas las combinaciones y no acredita robustez fuera de muestra, disponibilidad histórica de títulos o pagos conocidos en cada fecha. La sensibilidad al retraso de las señales y los comparadores filtrados siguen pendientes. La opción 9 y `notebooks/04_sensibilidad.ipynb` explican esta comparación sin utilizar meses desde 1990.
+El préstamo solo afecta a reversión cuando está vendida. Excluir dividendos suprime su contribución con signo, por lo que perjudica al largo y puede favorecer al corto. El análisis no cruza todas las combinaciones y no acredita robustez fuera de muestra, disponibilidad histórica de títulos o pagos conocidos en cada fecha. La sensibilidad al retraso de las señales y el ajuste por volatilidad siguen pendientes. El filtro bajista se incorpora como comparación separada. La opción 9 y `notebooks/04_sensibilidad.ipynb` explican esta comparación sin utilizar meses desde 1990.
+
+## Comparador de mercado bajista implementado
+
+La guía 1.B incluye una anomalía con regla de mercado bajista de Daniel y Moskowitz. El artículo define un indicador ex ante a partir del retorno acumulado del mercado en los 24 meses anteriores; su análisis del rebote contemporáneo y su estrategia dinámica son cuestiones diferentes. Referencia: Daniel y Moskowitz (2016), *Momentum crashes*, DOI [10.1016/j.jfineco.2015.12.002](https://doi.org/10.1016/j.jfineco.2015.12.002), secciones 3.2–3.5 y 4.
+
+Para el TFM se fija una adaptación: al decidir en m, `bear_market = P[m]/P[m-24]-1 < 0`. Se usan solo precios medios nominales de Shiller, sin dividendos reconstruidos como predictor. Si es bajista, se rechaza la señal de momentum o reversión para m+1 y se mantiene efectivo; en otro caso se conserva la señal, incluido el efectivo que ya propusiera momentum. Un retorno de cero no activa el veto. La ventana de 24 meses, el umbral cero y el veto a ambas reglas se declaran antes de simular; no se ajustan por sus resultados.
+
+El indicador usa una variación de precios entre promedios, no el retorno total de una cartera de mercado del artículo. Tampoco exige volatilidad alta ni conoce el rebote futuro. El veto no replica sus posiciones dinámicas, su cartera transversal o su optimización. Los resultados no permiten atribuir a los autores la utilidad de este comparador concreto. Esta distinción deberá mantenerse en Materiales y métodos.
+
+La historia previa cambia de diciembre de 1925 a diciembre de 1924. La primera decisión, diciembre de 1926, necesita P de diciembre de 1924. Así se mantienen 756 meses comunes para las cinco cuentas, sin recortar el primer año ni interpretar un indicador ausente como alcista. La historia extra es calentamiento, no observaciones adicionales de evaluación. Al actualizar hay que repetir la preparación de Shiller, señales y componentes; RF no necesita años anteriores a 1927.
+
+El comparador reutiliza el mismo simulador, exposición y costes. Se guardan cinco cuentas en `bear_filter_simulations.parquet`: comprar y mantener, momentum, reversión, momentum con filtro y reversión con filtro. Cada fila conserva la señal original, fechas y precios de la ventana y el indicador. Los meses bajistas no equivalen al número de operaciones evitadas: una señal original en efectivo no cuenta como bloqueada. Salir hacia efectivo puede generar costes por cerrar una posición anterior, y el efectivo recibe RF. La tabla y el JSON se invalidan al regenerar entradas o cambiar la configuración. La evaluación desde 1990, el ajuste por volatilidad y los modelos siguen pendientes.
 
 ## Componentes de rentabilidad implementados
 
@@ -119,7 +131,7 @@ No se obtuvo una segunda serie de cierres comparables. Un NAV o una prima/descue
 
 ## Desarrollo posterior
 
-Después de resolver el protocolo financiero se incorporarán progresivamente variables de entorno, filtros sencillos, etiquetas, validación temporal, modelos y evaluación. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.
+Con el protocolo financiero y el primer filtro sencillo implementados, se incorporarán el ajuste por volatilidad, variables de entorno, etiquetas, validación temporal, modelos y evaluación. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.
 
 Se mantendrán las comprobaciones temporales y, cuando proceda, purga y embargo. Clustered MDA precederá a SHAP. El registro científico de configuraciones y pruebas necesarias para DSR/PBO se concretará al desarrollar los experimentos; eliminar registros técnicos de cada preparación no autoriza a omitir alternativas probadas durante la selección de modelos.
 

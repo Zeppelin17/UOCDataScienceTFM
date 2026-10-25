@@ -21,7 +21,7 @@ class Sheet:
     ncols = 22
 
     def __init__(self, problem=None):
-        self.months = ["1871-01", *pd.period_range("1925-12", "1989-12", freq="M").astype(str), "1990-01", "2026-10"]
+        self.months = ["1871-01", *pd.period_range("1924-12", "1989-12", freq="M").astype(str), "1990-01", "2026-10"]
         self.problem = problem
         if problem == "duplicate":
             self.months.insert(5, self.months[5])
@@ -39,7 +39,7 @@ class Sheet:
 
     def cell(self, row, col):
         period = self.months[row - 8]
-        assert "1925-12" <= period <= "1989-12", "Se han leído importes fuera del desarrollo/historia previa"
+        assert "1924-12" <= period <= "1989-12", "Se han leído importes fuera del desarrollo/historia previa"
         assert col in (1, 2), "Se han leído columnas no autorizadas, incluidas rentabilidades futuras"
         value = 100.0 if col == 1 else 2.4
         if period == "1930-02":

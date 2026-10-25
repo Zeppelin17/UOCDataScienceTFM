@@ -122,11 +122,11 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
     return result
 
 
-def summarize_baselines(table: pd.DataFrame, parameters: dict) -> list[dict]:
+def summarize_baselines(table: pd.DataFrame, parameters: dict, *, strategies: dict | None = None) -> list[dict]:
     """Sharpe sobre exceso mensual, drawdown incluyendo el capital inicial."""
     initial = float(parameters["initial_capital"])
     summaries = []
-    for strategy in STRATEGIES:
+    for strategy, label in (STRATEGIES if strategies is None else strategies).items():
         rows = table.loc[table.strategy.eq(strategy)]
         capital = pd.Series([initial, *rows.capital_end.tolist()])
         drawdown = capital / capital.cummax() - 1
@@ -134,7 +134,7 @@ def summarize_baselines(table: pd.DataFrame, parameters: dict) -> list[dict]:
         excess_std = float(excess.std(ddof=1))
         volatility = float(rows.net_return.std(ddof=1)) if len(rows) > 1 else 0.0
         summaries.append({
-            "strategy": strategy, "label": STRATEGIES[strategy], "months": len(rows),
+            "strategy": strategy, "label": label, "months": len(rows),
             "capital_final": float(capital.iloc[-1]),
             "total_return": float(capital.iloc[-1] / initial - 1),
             "annualized_return": math.expm1(math.log(capital.iloc[-1] / initial) * 12 / len(rows)),

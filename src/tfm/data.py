@@ -18,6 +18,7 @@ from tfm.preparation.french import normalize_french_rf, validate_rf
 from tfm.returns import COLUMNS as RETURN_COLUMNS, FORMULAS, WARNINGS as RETURN_WARNINGS, build_return_components
 from tfm.simulation import STRATEGIES, WARNINGS as SIMULATION_WARNINGS, simulate_baselines, summarize_baselines
 from tfm.sensitivity import sensitivity_scenarios, run_sensitivities
+from tfm.comparators import BEAR_STRATEGIES, BEAR_PROTOCOL, BEAR_WARNINGS, simulate_bear_comparison
 
 
 def _simulation_paths(processed: Path) -> tuple[Path, Path]:
@@ -26,6 +27,10 @@ def _simulation_paths(processed: Path) -> tuple[Path, Path]:
 
 def _sensitivity_paths(processed: Path) -> tuple[Path, Path]:
     return processed / "baseline_sensitivity.parquet", processed / "baseline_sensitivity.json"
+
+
+def _bear_paths(processed: Path) -> tuple[Path, Path]:
+    return processed / "bear_filter_simulations.parquet", processed / "bear_filter_simulations.json"
 
 
 def _json(path: Path, value: dict) -> None:
@@ -142,7 +147,7 @@ def prepare_shiller_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Pat
                     {**report, "configuration": _window(settings)},
                     dependents=(processed / "shiller_signals.parquet", processed / "shiller_signals.json",
                                 processed / "monthly_return_components.parquet", processed / "monthly_return_components.json",
-                                *_simulation_paths(processed), *_sensitivity_paths(processed)))
+                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed)))
 
 
 def load_monthly(settings: dict) -> pd.DataFrame:
@@ -190,7 +195,8 @@ def calculate_signals(config: str | Path = DEFAULT_CONFIG) -> dict:
                "warnings": WARNINGS}
     return _publish(signals, settings["root"] / "data/processed/shiller_signals.parquet", summary,
                     dependents=(*_simulation_paths(settings["root"] / "data/processed"),
-                                *_sensitivity_paths(settings["root"] / "data/processed")))
+                                *_sensitivity_paths(settings["root"] / "data/processed"),
+                                *_bear_paths(settings["root"] / "data/processed")))
 
 
 def _rf_configuration(settings: dict) -> dict:
@@ -216,7 +222,7 @@ def prepare_french_data(config: str | Path = DEFAULT_CONFIG, *, file: str | Path
     return _publish(table, processed / "french_rf_monthly.parquet",
                     {**report, "configuration": _rf_configuration(settings)},
                     dependents=(processed / "monthly_return_components.parquet",
-                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed)))
+                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed)))
 
 
 def load_french_rf(settings: dict) -> tuple[pd.DataFrame, dict]:
@@ -247,7 +253,8 @@ def prepare_return_components(config: str | Path = DEFAULT_CONFIG) -> dict:
               "warnings": RETURN_WARNINGS}
     return _publish(table, settings["root"] / "data/processed/monthly_return_components.parquet", report,
                     dependents=(*_simulation_paths(settings["root"] / "data/processed"),
-                                *_sensitivity_paths(settings["root"] / "data/processed")))
+                                *_sensitivity_paths(settings["root"] / "data/processed"),
+                                *_bear_paths(settings["root"] / "data/processed")))
 
 
 def _simulation_configuration(settings: dict) -> dict:
@@ -283,8 +290,53 @@ def analyze_sensitivity(config: str | Path = DEFAULT_CONFIG) -> dict:
     return _publish(table, settings["root"] / "data/processed/baseline_sensitivity.parquet", report)
 
 
+def simulate_bear_filter(config: str | Path = DEFAULT_CONFIG) -> dict:
+    settings = load_config(config)
+    components, _ = read_result(settings, "monthly_return_components")
+    signals, _ = read_result(settings, "shiller_signals")
+    table = simulate_bear_comparison(components, signals, load_monthly(settings), settings["simulation"])
+    context = table.loc[table.strategy.eq("buy_and_hold")]
+    report = {"status": "passed", "rows": len(table), "months_per_strategy": len(components),
+              "first_period": components.period.iloc[0], "last_period": components.period.iloc[-1],
+              "configuration": {**_simulation_configuration(settings), "bear_filter": BEAR_PROTOCOL},
+              "bear_months": int(context.bear_market.sum()),
+              "blocked_momentum_signals": int((context.bear_market & context.original_momentum_signal.ne(0)).sum()),
+              "blocked_reversal_signals": int((context.bear_market & context.original_reversal_signal.ne(0)).sum()),
+              "strategies": summarize_baselines(table, settings["simulation"], strategies=BEAR_STRATEGIES),
+              "warnings": [*SIMULATION_WARNINGS, *BEAR_WARNINGS]}
+    return _publish(table, settings["root"] / "data/processed/bear_filter_simulations.parquet", report)
+
+
 def read_result(settings: dict, name: str) -> tuple[pd.DataFrame, dict]:
     """Consultar una salida del flujo nuevo y rechazar configuraciones antiguas."""
+    if name == "bear_filter_simulations":
+        read_result(settings, "monthly_return_components")
+        read_result(settings, "shiller_signals")
+        path = settings["root"] / "data/processed/bear_filter_simulations.parquet"
+        try:
+            summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+            table = pd.read_parquet(path)
+        except FileNotFoundError as exc:
+            raise ValueError("Falta la comparación con filtro bajista. Usa la opción 10 o simulate-bear-filter.") from exc
+        months = pd.period_range(settings["validation"]["development_start"][:7],
+                                settings["validation"]["development_end"][:7], freq="M").astype(str).tolist()
+        required = {"strategy", "period", "decision_period", "position", "capital_start", "capital_end", "net_return",
+                    "price_pnl", "dividend_pnl", "cash_interest", "transaction_cost", "borrow_cost", "liquidation_cost",
+                    "lookback_start_period", "lookback_start_price", "decision_price", "market_return_24m", "bear_market",
+                    "original_momentum_signal", "original_reversal_signal"}
+        if (not isinstance(summary, dict) or summary.get("status") != "passed"
+                or summary.get("configuration") != {**_simulation_configuration(settings), "bear_filter": BEAR_PROTOCOL}
+                or summary.get("rows") != len(table) or not required <= set(table)
+                or len(table) != len(months) * len(BEAR_STRATEGIES) or set(table.strategy) != set(BEAR_STRATEGIES)
+                or any(table.loc[table.strategy.eq(name), "period"].tolist() != months for name in BEAR_STRATEGIES)):
+            raise ValueError("La comparación bajista o su configuración no coinciden; repite la opción 10.")
+        numeric = table.drop(columns=["strategy", "period", "decision_period", "lookback_start_period", "bear_market"])
+        if (any(not pd.api.types.is_numeric_dtype(numeric[c]) or numeric[c].isna().any()
+                or not numeric[c].map(math.isfinite).all() for c in numeric)
+                or not pd.api.types.is_bool_dtype(table.bear_market) or table.bear_market.isna().any()
+                or table.capital_end.le(0).any()):
+            raise ValueError("La comparación bajista contiene importes inválidos; repite la opción 10.")
+        return table, {**summary, "path": str(path)}
     if name == "baseline_sensitivity":
         read_result(settings, "monthly_return_components")
         read_result(settings, "shiller_signals")
