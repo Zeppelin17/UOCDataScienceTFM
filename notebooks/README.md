@@ -42,3 +42,11 @@ También puedes usar la CLI: opciones 6 → 7 → 3. No se aplican aún señales
 El cuaderno muestra los supuestos antes de ejecutar, llama al mismo simulador que la opción 8 y permite ver el balance de un mes, las curvas de capital/caídas y las métricas de las tres estrategias. La escala logarítmica del gráfico es una opción de presentación, no un cambio de resultados. No se usan datos desde 1990 ni se seleccionan filtros o modelos.
 
 Las simulaciones se guardan con nombres fijos y quedan obsoletas al regenerar cualquiera de sus entradas o modificar los parámetros. El cuaderno no prepara ni descarga fuentes automáticamente. Antes de hacer commit, usa «Clear All Outputs» y guarda el notebook.
+
+## Comparación de costes y dividendos
+
+`04_sensibilidad.ipynb` necesita las mismas entradas preparadas que el notebook 03, aunque no exige ejecutarlo antes. Selecciona `.venv`, reinicia el kernel y ejecuta las celdas en orden. No necesita nuevas dependencias.
+
+Primero muestra todos los escenarios y sus parámetros. Después ejecuta la comparación con el mismo simulador de la opción 9 y presenta una tabla por estrategia y un gráfico de rentabilidades anualizadas. Solo cambia un supuesto cada vez respecto a `[simulation]`: negociación, préstamo anual o inclusión del dividendo aproximado. Con la configuración inicial son siete escenarios y 21 resúmenes.
+
+La celda de ejecución escribe o sustituye `data/processed/baseline_sensitivity.parquet` y su JSON. No descarga, no edita `estudio.toml` y no sobrescribe la cuenta mensual del notebook 03. No selecciona el mejor escenario ni utiliza fechas desde 1990. El cambio de rentabilidad se expresa en puntos porcentuales respecto al central. Se conservan el orden declarado y las limitaciones de Shiller. Limpia las salidas y guarda antes de hacer commit.

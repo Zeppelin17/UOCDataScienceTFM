@@ -9,7 +9,7 @@ import sys
 import pandas as pd
 
 from tfm.config import DEFAULT_CONFIG, load_config
-from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result, prepare_french_data, prepare_return_components, simulate_basic_strategies
+from tfm.data import prepare_shiller_data, prepare_spy_data, calculate_signals, load_monthly, read_result, prepare_french_data, prepare_return_components, simulate_basic_strategies, analyze_sensitivity
 from tfm.sources.prices import DownloadError
 
 
@@ -20,6 +20,7 @@ RESULTS = {
     "french_rf_monthly": ("Rentabilidad del efectivo (RF de French)", "6. Preparar RF de French"),
     "monthly_return_components": ("Componentes de rentabilidad mensual", "7. Preparar componentes de rentabilidad"),
     "baseline_simulations": ("Simulación de estrategias básicas", "8. Simular estrategias básicas"),
+    "baseline_sensitivity": ("Comparación de costes y dividendos", "9. Comparar costes y dividendos"),
 }
 
 
@@ -109,7 +110,23 @@ def _select_input(settings: dict, source: str) -> tuple[bool, Path | None]:
 
 def show_result(name: str, summary: dict) -> None:
     print(f"\n{RESULTS[name][0]}")
-    if name == "baseline_simulations":
+    if name == "baseline_sensitivity":
+        print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por estrategia")
+        print(f"{len(summary['scenarios'])} escenarios. Se cambia un supuesto cada vez respecto a estudio.toml.")
+        print("El central se conserva; no se ordenan ni seleccionan escenarios por rentabilidad.")
+        for strategy in ("buy_and_hold", "momentum", "reversal"):
+            rows = [row for row in summary["comparisons"] if row["strategy"] == strategy]
+            print(f"\n{rows[0]['label']}:")
+            view = [{"Escenario": row["scenario_label"],
+                     "Anualizada (%)": round(100 * row["annualized_return"], 3),
+                     "Cambio (p.p.)": round(100 * row["annualized_return_delta"], 3),
+                     "Caída máx. (%)": round(100 * row["max_drawdown"], 3)} for row in rows]
+            print(pd.DataFrame(view).to_string(index=False))
+        print("Cambio: diferencia de rentabilidad anualizada respecto al central, en puntos porcentuales.")
+        print("El préstamo afecta solo a posiciones cortas. Omitir dividendos también elimina su pago en cortos.")
+        print("Aproximación histórica de desarrollo, sin evaluación desde 1990 ni búsqueda del mejor coste.")
+        print("Siguiente paso: notebook 04_sensibilidad.ipynb para comparar y entender los escenarios.")
+    elif name == "baseline_simulations":
         print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['months_per_strategy']} meses por estrategia")
         params = summary["configuration"]["simulation"]
         print(f"Capital inicial: {params['initial_capital']:g} | Negociación: {100 * params['transaction_cost_rate']:g} % | Préstamo anual: {100 * params['annual_borrow_rate']:g} %")
@@ -120,7 +137,7 @@ def show_result(name: str, summary: dict) -> None:
         print(pd.DataFrame(rows).to_string(index=False))
         print("Aproximación histórica con precios medios y costes hipotéticos; no operaciones ejecutables.")
         print("Son resultados de desarrollo, sin filtros ni evaluación desde 1990.")
-        print("Siguiente paso: notebook 03_estrategias_basicas.ipynb para ver los componentes de cada resultado.")
+        print("Siguiente paso: notebook 03 para entender la cuenta; opción 9 para comparar costes y dividendos.")
     elif name == "shiller_monthly":
         print(f"Periodo: {summary['first_period']} → {summary['last_period']} | {summary['rows']} meses")
         print(f"Historia previa: {summary['history_rows']} meses | Desarrollo: {summary['development_rows']} meses")
@@ -215,8 +232,8 @@ def _next_step(settings: dict, name: str) -> str:
             load_monthly(settings)
         except (OSError, ValueError, KeyError, TypeError):
             return "1. Preparar datos de Shiller; después 2. Calcular señales"
-    if name == "baseline_simulations":
-        return "1. Preparar Shiller, 2. Calcular señales, 6. Preparar RF, 7. Preparar componentes; después 8. Simular"
+    if name in {"baseline_simulations", "baseline_sensitivity"}:
+        return "1. Preparar Shiller, 2. Calcular señales, 6. Preparar RF, 7. Preparar componentes; después " + ("9. Comparar supuestos" if name == "baseline_sensitivity" else "8. Simular")
     if name == "monthly_return_components":
         return "1. Preparar Shiller y 6. Preparar RF; después 7. Preparar componentes"
     return RESULTS[name][1]
@@ -255,6 +272,7 @@ def _consult(settings: dict) -> None:
                        if name == "shiller_monthly" else
                        {"decision_period": "Decisión", "target_period": "Mes objetivo", "momentum_signal": "Momentum", "reversal_signal": "Reversión"}
                        if name == "shiller_signals" else
+                       {"scenario_label": "Escenario", "label": "Estrategia", "annualized_return": "Anualizada (decimal)"} if name == "baseline_sensitivity" else
                        {"strategy": "Estrategia", "period": "Mes", "position": "Posición", "net_return": "Neta (decimal)", "capital_end": "Capital final"} if name == "baseline_simulations" else
                        {"period": "Mes", "rf_return": "RF (decimal mensual)"} if name == "french_rf_monthly" else
                        {"period": "Mes", "price_return": "Precio (decimal)", "dividend_return_approx": "Dividendo aprox. (decimal)",
@@ -288,10 +306,10 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 continue
             print("TFM — ¿Invertir o esperar?")
             print(f"Estudio actual: Shiller mensual; desarrollo {settings['validation']['development_start'][:4]}–{settings['validation']['development_end'][:4]}.")
-            print("Disponible: datos, señales, componentes y simulación de estrategias básicas.")
+            print("Disponible: datos, señales, componentes, estrategias básicas y comparación de supuestos.")
             print("Desarrollo hasta 1989; evaluación desde 1990 deshabilitada. Todavía no hay filtros entrenados.")
-            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n6. Preparar RF de French (rentabilidad del efectivo)\n7. Preparar componentes de rentabilidad mensual\n8. Simular estrategias básicas\n0. Salir")
-            option = _choice("Opción del menú (0–8): ", {str(i) for i in range(9)})
+            print("\n1. Preparar datos de Shiller\n2. Calcular señales de momentum y reversión\n3. Consultar datos y señales preparados\n4. Trabajar con datos de SPY de Yahoo Finance\n5. Ver la configuración del estudio\n6. Preparar RF de French (rentabilidad del efectivo)\n7. Preparar componentes de rentabilidad mensual\n8. Simular estrategias básicas\n9. Comparar costes y dividendos\n0. Salir")
+            option = _choice("Opción del menú (0–9): ", {str(i) for i in range(10)})
             if option == "0":
                 return 0
             _clear_screen()
@@ -315,6 +333,13 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
                 print(f"Supuestos: negociación {100 * params['transaction_cost_rate']:g} %, préstamo anual {100 * params['annual_borrow_rate']:g} %, dividendos {'incluidos' if params['include_dividends'] else 'excluidos'}.")
                 print("Se cobran los reajustes de exposición y el cierre final. Son escenarios hipotéticos.")
                 show_result("baseline_simulations", simulate_basic_strategies(config_path))
+            elif option == "9":
+                print("Comparar costes y dividendos — un supuesto cada vez")
+                print("Entradas: señales y componentes preparados. No se descargan datos ni se cambian las reglas.")
+                print("Negociación: 0 %, 0,10 %, 0,25 % y 0,50 %; préstamo anual: 0,25 %, 1 % y 3 %.")
+                print("También se compara incluir/excluir el dividendo aproximado. El central es estudio.toml.")
+                print("Se guardará una tabla comparativa; la simulación de la opción 8 se conserva.", flush=True)
+                show_result("baseline_sensitivity", analyze_sensitivity(config_path))
             elif option == "3":
                 _consult(settings)
                 continue
@@ -330,6 +355,9 @@ def interactive_menu(config_path: str | Path = DEFAULT_CONFIG) -> int:
             if option == "2":
                 print("Si faltan datos de Shiller, usa la opción 1 antes de calcular señales.")
                 print("Después repite la opción 2. No se han calculado rentabilidades.")
+            elif option in {"8", "9"}:
+                print("Entradas necesarias: 1. Shiller, 2. Señales, 6. RF y 7. Componentes; después repite esta opción.")
+                print("Si hay insolvencia, revisa el escenario indicado; no se han omitido resultados para completar la tabla.")
             else:
                 print("Revisa el archivo indicado o la conexión si estabas descargando; después repite la opción elegida.")
         if not _pause():

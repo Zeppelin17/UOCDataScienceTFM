@@ -1,6 +1,6 @@
 # ¿Invertir o esperar?
 
-Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Los filtros, el entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
+Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Compara también la sensibilidad a costes y dividendos. Los filtros, el entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
 
 ## Empezar
 
@@ -19,6 +19,7 @@ python -m tfm
 6. Preparar RF de French (rentabilidad del efectivo)
 7. Preparar componentes de rentabilidad mensual
 8. Simular estrategias básicas
+9. Comparar costes y dividendos
 0. Salir
 ```
 
@@ -48,7 +49,7 @@ La tabla contiene `price_return = P[t]/P[t-1]-1`, `dividend_return_approx = (D[t
 
 Solo se prepara 1927–1989. Las fechas deben coincidir exactamente: no se rellenan huecos ni se descartan meses para conseguir el cruce. El ZIP original completo de French puede contener fechas posteriores; solo se convierte RF del desarrollo. Los demás factores y la tabla anual no se utilizan. Los dividendos de Shiller siguen siendo anualizados e interpolados; D/12 se etiqueta como aproximación contable, no como un pago observado ni información acreditada en tiempo real.
 
-Estos componentes todavía **no son resultados de estrategias**: no se aplican señales, posiciones, negociación, préstamo ni costes. Los supuestos y escenarios de préstamo acordados se conservan en `docs/decisiones.md` para el siguiente bloque y la memoria.
+Estos componentes todavía **no son resultados de estrategias**: no se aplican señales, posiciones, negociación, préstamo ni costes. Los supuestos y escenarios de préstamo acordados se conservan en `docs/decisiones.md` para las simulaciones y la memoria.
 
 ## Simular las estrategias básicas
 
@@ -61,6 +62,16 @@ El objetivo mensual es invertir +100 %, 0 % o −100 % del capital después de c
 El cuaderno muestra el balance de un mes por estrategia, la curva de capital, drawdown y resumen. Sharpe usa exceso mensual sobre RF y se anualiza con raíz de 12; se deja sin valor si la dispersión es nula. La caída máxima incluye el capital inicial. Las rentabilidades son resultados del desarrollo bajo la aproximación de Shiller, no evidencia de mejora de un filtro ni una evaluación final.
 
 Regenerar Shiller, French, las señales o los componentes retira las simulaciones anteriores. Cambiar los parámetros de simulación obliga a simular de nuevo antes de consultar el resultado, sin exigir volver a descargar o preparar las fuentes.
+
+## Comprobar la sensibilidad a los supuestos
+
+La **opción 9**, `python -m tfm analyze-sensitivity` o [04_sensibilidad.ipynb](notebooks/04_sensibilidad.ipynb) comparan los supuestos usando los mismos componentes, señales, fechas y simulador. No hace falta volver a descargar, editar la configuración entre ejecuciones ni ejecutar antes la opción 8.
+
+Se conserva el central de `[simulation]` y se modifica **un supuesto cada vez**: negociación del 0 %, 0,10 %, 0,25 % y 0,50 %; préstamo anual del 0,25 %, 1 % y 3 %; y la inclusión/exclusión de dividendos aproximados. Los otros valores permanecen como en el central. Con la configuración inicial son **siete escenarios × tres estrategias = 21 resúmenes**; el central no se repite. Si configuras una tarifa central distinta de las previstas, se conserva además de esas alternativas y aumenta el número de escenarios. Las listas prefijadas están en `src/tfm/sensitivity.py`.
+
+Se guardan `baseline_sensitivity.parquet` y su JSON, conservando `baseline_simulations` y todas las fuentes. La tabla incluye cada supuesto, métricas y diferencia de rentabilidad anualizada frente al central. Las tasas se guardan en decimal; para mostrar la diferencia en puntos porcentuales se multiplica por 100. No se guardan cuentas mensuales adicionales. Una cuenta insolvente detiene la comparación completa y conserva la salida anterior; no se omite el escenario problemático.
+
+El préstamo no afecta a comprar y mantener ni al momentum actual, porque no venden en corto. Excluir dividendos elimina ingresos de los largos y pagos de los cortos; no es una comisión adicional. La comparación no estudia todas las combinaciones de costes, no elige el escenario más rentable ni demuestra robustez fuera de muestra. Las limitaciones de precios medios y dividendos reconstruidos siguen vigentes. Cambiar la configuración o regenerar entradas obliga a repetir la comparación.
 
 ## Datos y configuración
 
@@ -87,6 +98,7 @@ data/processed/spy_prices.parquet        Precios diarios normalizados
 data/processed/french_rf_monthly.parquet RF mensual en decimal
 data/processed/monthly_return_components.parquet  Precio, dividendo aproximado y RF
 data/processed/baseline_simulations.parquet        Cuenta mensual de las tres estrategias
+data/processed/baseline_sensitivity.parquet        Resúmenes comparados de costes y dividendos
 ```
 
 Cada tabla preparada tiene un resumen `.json`. Las tablas derivadas se regeneran en sus rutas habituales; preparar Shiller retira las señales y los componentes anteriores cuando termina correctamente; preparar French retira los componentes, conservando las señales. Durante la sustitución se conserva en memoria el contenido anterior para restaurar tabla, resumen y señales si ocurre un error. No se crean archivos permanentes de respaldo. Cambiar la configuración temporal obliga a preparar de nuevo antes de calcular señales.
@@ -118,6 +130,7 @@ src/tfm/
   signals/                Fórmulas de momentum y reversión
   returns.py              Componentes de rentabilidad
   simulation.py           Cuenta y resumen de las tres estrategias básicas
+  sensitivity.py          Escenarios prefijados con el mismo simulador
 notebooks/                Exploración y explicaciones, cuando sean necesarias
 tests/                    Pruebas esenciales sin red
 docs/decisiones.md        Supuestos, limitaciones y antecedentes
@@ -136,6 +149,7 @@ python -m tfm prepare-data --source spy
 python -m tfm prepare-data --source french
 python -m tfm prepare-returns
 python -m tfm simulate-baselines
+python -m tfm analyze-sensitivity
 python -m tfm status
 ```
 

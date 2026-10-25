@@ -2,7 +2,7 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1925 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
 
 Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. Yahoo Finance aporta observaciones diarias del ETF SPY desde 1993 como fuente auxiliar separada. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
@@ -53,6 +53,14 @@ El escenario central configura c = 0,001 (0,10 %), b = 0,01 (1 % anual) y divide
 
 Los resultados se guardan en `baseline_simulations.parquet` con sus componentes monetarios y resumen JSON. Regenerar cualquiera de sus entradas los invalida. El simulador diario anterior de SPY continúa retirado; no se mezclan sus convenciones con este simulador mensual.
 
+## Sensibilidad implementada
+
+La comparación reutiliza el protocolo financiero y las señales del escenario central de `configs/estudio.toml`. Cambia un supuesto cada vez: negociación 0 %, 0,10 %, 0,25 % y 0,50 %; préstamo anual 0,25 %, 1 % y 3 %; y la inclusión de D/12. Mantiene el resto de parámetros. El central se calcula una sola vez: con los valores iniciales son siete escenarios y 21 resúmenes para los mismos 756 meses. Si una tarifa central no está en estas listas, se conserva también. Si el central excluye dividendos, la alternativa los incluye.
+
+Las alternativas se fijan por los escenarios ya acordados, sin búsquedas, ordenación por rentabilidad ni elección posterior de una tarifa. Se conserva una fila por escenario y estrategia, con los supuestos, métricas y diferencia anualizada frente al central, en `baseline_sensitivity.parquet` y su JSON. No se modifican los datos originales, la configuración ni la cuenta mensual de `baseline_simulations`. La tabla se regenera al cambiar entradas o parámetros; una insolvencia detiene la operación sin publicar resultados parciales ni eliminar el escenario desfavorable.
+
+El préstamo solo afecta a reversión cuando está vendida. Excluir dividendos suprime su contribución con signo, por lo que perjudica al largo y puede favorecer al corto. El análisis no cruza todas las combinaciones y no acredita robustez fuera de muestra, disponibilidad histórica de títulos o pagos conocidos en cada fecha. La sensibilidad al retraso de las señales y los comparadores filtrados siguen pendientes. La opción 9 y `notebooks/04_sensibilidad.ipynb` explican esta comparación sin utilizar meses desde 1990.
+
 ## Componentes de rentabilidad implementados
 
 Se prepara una tabla de 756 meses, enero de 1927 a diciembre de 1989, sin posiciones, resultados de estrategias, financiación ni costes aplicados. Para cada mes t se conserva P[t-1], P[t] y D[t] y se calculan:
@@ -79,13 +87,13 @@ La referencia empírica para contextualizar el escenario bajo es Gene D'Avolio (
 
 Los tres valores son **escenarios de simulación**, no costes históricos reconstruidos ni requisitos numéricos de la guía. Una tarifa moderna de un ETF tampoco certifica el coste de una exposición vendedora en toda la historia. La referencia bibliográfica se incorporará a Materiales y métodos cuando se redacten los supuestos; no se añade una nueva serie de mercado ni se cambia Shiller por otro proveedor.
 
-Se comparará la sensibilidad de las conclusiones a estos costes. Cuando proceda, se informará del coste de préstamo a partir del cual desaparece la mejora frente al comparador, sin escoger costes a posteriori para favorecer al filtro ni utilizarlos para reajustar el modelo con la evaluación final. El protocolo central está descrito arriba; los futuros filtros y modelos se evaluarán bajo los mismos supuestos.
+Ya se comparan los resultados de las reglas básicas bajo estos costes; la sensibilidad de las conclusiones de los futuros filtros y modelos sigue pendiente. Cuando proceda, se informará del coste de préstamo a partir del cual desaparece la mejora frente al comparador, sin escoger costes a posteriori para favorecer al filtro ni utilizarlos para reajustar el modelo con la evaluación final. El protocolo central está descrito arriba; los futuros filtros y modelos se evaluarán bajo los mismos supuestos.
 
 ## Uso conjunto de CLI y notebooks
 
 El primer cuaderno, `notebooks/01_datos_y_senales.ipynb`, prepara los datos y explica las señales utilizando `tfm.config` y `tfm.data`, las mismas funciones que utiliza la CLI. No contiene un segundo motor de preparación o de estrategias. La celda de preparación puede descargar el XLS si falta el original de trabajo y regenera las tablas mensuales y de señales en las rutas habituales. Los importes desde 1990 siguen excluidos de la preparación y no se evalúan rentabilidades de estrategias.
 
-Los notebooks se utilizarán para comprender, explorar y explicar el análisis; las funciones reutilizables seguirán en `src/tfm` y la CLI permitirá repetir tareas ya definidas. Los cuadernos se guardarán sin resultados incrustados y se verificarán ejecutando sus celdas en orden desde un estado limpio. `ipykernel` se incorpora como dependencia opcional del entorno de trabajo, sin añadir JupyterLab, gráficos ni gestores de experimentos en este incremento.
+Los notebooks se utilizarán para comprender, explorar y explicar el análisis; las funciones reutilizables seguirán en `src/tfm` y la CLI permitirá repetir tareas ya definidas. Los cuadernos se guardarán sin resultados incrustados y se verificarán ejecutando sus celdas en orden desde un estado limpio. `ipykernel` se incorpora como dependencia opcional del entorno de trabajo, sin añadir JupyterLab ni gestores de experimentos. Los cuadernos posteriores utilizan matplotlib para presentar resultados.
 
 ## Exposición previa y hallazgos de SPY
 
