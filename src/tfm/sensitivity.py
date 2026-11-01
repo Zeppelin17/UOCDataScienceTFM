@@ -10,7 +10,7 @@ BORROW_RATES = (0.0025, 0.01, 0.03)
 
 
 def sensitivity_scenarios(parameters: dict) -> list[dict]:
-    """Cambiar un supuesto cada vez respecto al escenario de estudio.toml.
+    """Cambiar un supuesto cada vez respecto al escenario declarado en el notebook.
 
     El central aparece una sola vez. Si se configura una tarifa distinta de
     las previstas, se conserva también: no se descarta ni se escoge por resultado.

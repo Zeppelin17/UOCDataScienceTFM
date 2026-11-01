@@ -2,7 +2,6 @@
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import math
-import tomllib
 
 import pandas as pd
 import xlrd
@@ -17,6 +16,7 @@ LIMITATIONS = [
     "Los controles son de estructura y cobertura; no certifican exactitud, disponibilidad histórica o ejecución.",
     "Esta tabla contiene observaciones; las señales, componentes y simulaciones se calculan en pasos separados.",
 ]
+
 
 def _month(value) -> str:
     """YYYY.MM numérico: 1926.1 es octubre, no enero."""
@@ -37,24 +37,19 @@ def _month(value) -> str:
 
 
 
-def preparation_window(history_start: str, policy_bytes: bytes | None = None) -> tuple[str, str, str]:
-    expected = {"development_start": "1927-01-01", "development_end": "1989-12-31",
-                "final_test_start": "1990-01-01", "final_test_end": "pending"}
-    policy = tomllib.loads(policy_bytes.decode("utf-8"))["validation"] if policy_bytes is not None else expected
-    if policy != expected:
-        raise ValueError("Este flujo exige desarrollo 1927–1989 y evaluación desde 1990 aún deshabilitada")
+def preparation_window(history_start: str) -> tuple[str, str, str]:
     try:
         start = pd.Period(history_start, freq="M")
     except (ValueError, TypeError) as exc:
         raise ValueError("history_start debe tener formato YYYY-MM") from exc
     if str(start) != history_start or not pd.Period("1871-01", freq="M") <= start <= pd.Period("1926-01", freq="M"):
         raise ValueError("La historia previa debe comenzar entre 1871-01 y 1926-01")
-    return history_start, policy["development_start"][:7], policy["development_end"][:7]
+    return history_start, "1927-01", "1989-12"
 
 
 
-def normalize_shiller(content: bytes, *, history_start: str, policy_bytes: bytes | None = None) -> tuple[pd.DataFrame, dict]:
-    start, development_start, end = preparation_window(history_start, policy_bytes)
+def normalize_shiller(content: bytes, *, history_start: str) -> tuple[pd.DataFrame, dict]:
+    start, development_start, end = preparation_window(history_start)
     try:
         book = xlrd.open_workbook(file_contents=content, on_demand=True)
     except xlrd.XLRDError as exc:

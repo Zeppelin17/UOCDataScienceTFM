@@ -1,18 +1,11 @@
 """Cuenta mensual: signos, efectivo, costes, fechas y publicación del flujo."""
 
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from tfm import cli
-from tfm.config import load_config
-from tfm.data import (calculate_signals, prepare_shiller_data, prepare_french_data,
-                      prepare_return_components, simulate_basic_strategies, read_result)
 from tfm.simulation import simulate_baselines, summarize_baselines
-from tfm.sources.shiller import INSTRUMENT, XLS_SIGNATURE
-from test_shiller import workbook
-from test_return_components import french_zip
+from tfm.sources.shiller import INSTRUMENT
 
 
 PARAMETERS = {"initial_capital": 100.0, "transaction_cost_rate": 0.01,
@@ -93,37 +86,3 @@ def test_drawdown_includes_initial_capital_and_optional_dividends():
     assert summary[0]["max_drawdown"] == pytest.approx(-0.1)  # También cuenta la pérdida del primer mes.
     assert result.dividend_pnl.eq(0).all()
     assert summary[0]["annualized_return"] == pytest.approx(0.9**6 - 1)
-
-
-def test_cli_publication_settings_and_all_dependency_invalidations(tmp_path, monkeypatch, capsys):
-    configs = tmp_path / "configs"; configs.mkdir()
-    config = configs / "estudio.toml"
-    config.write_bytes((Path(__file__).parents[1] / "configs/estudio.toml").read_bytes())
-    workbook(monkeypatch)
-    shiller = tmp_path / "shiller.xls"; shiller.write_bytes(XLS_SIGNATURE + b"synthetic")
-    french = tmp_path / "french.zip"
-    french.write_bytes(french_zip([f"{m.replace('-', '')},unused,unused,unused,0.2"
-                                   for m in pd.period_range("1927-01", "1989-12", freq="M").astype(str)]))
-    prepare_shiller_data(config, file=shiller); prepare_french_data(config, file=french)
-    calculate_signals(config); prepare_return_components(config)
-    assert cli.main(["simulate-baselines", "--config", str(config)]) == 0
-    assert "Son resultados de desarrollo" in capsys.readouterr().out
-    table, report = read_result(load_config(config), "baseline_simulations")
-    assert len(table) == 2268 and report["last_period"] == "1989-12"
-    assert report["liquidated_at_end"] and len(report["strategies"]) == 3
-    assert table.groupby("strategy").tail(1).asset_notional_end.eq(0).all()
-    assert report["strategies"][1]["sharpe"] is None
-    previous_config = config.read_bytes()
-    config.write_text(config.read_text().replace("transaction_cost_rate = 0.001", "transaction_cost_rate = 0.002"))
-    with pytest.raises(ValueError, match="configuración"):
-        read_result(load_config(config), "baseline_simulations")
-    config.write_bytes(previous_config)
-    path = tmp_path / "data/processed/baseline_simulations.parquet"
-    calculate_signals(config)
-    assert not path.exists() and not path.with_suffix(".json").exists()
-    simulate_basic_strategies(config); prepare_return_components(config)
-    assert not path.exists()
-    simulate_basic_strategies(config); prepare_french_data(config)
-    assert not path.exists()
-    prepare_return_components(config); simulate_basic_strategies(config); prepare_shiller_data(config)
-    assert not path.exists()

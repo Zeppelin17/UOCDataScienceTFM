@@ -14,7 +14,6 @@ from tfm.preparation.shiller import COLUMNS, normalize_shiller
 from tfm.sources.shiller import XLS_SIGNATURE
 
 
-POLICY = (Path(__file__).parents[1] / "configs/estudio.toml").read_bytes()
 
 
 class Sheet:
@@ -61,7 +60,7 @@ def workbook(monkeypatch, problem=None):
 
 def test_october_annualized_values_and_strict_column_temporal_selection(monkeypatch):
     workbook(monkeypatch)
-    table, report = normalize_shiller(b"fixture", history_start="1925-12", policy_bytes=POLICY)
+    table, report = normalize_shiller(b"fixture", history_start="1925-12")
     assert table.columns.tolist() == COLUMNS
     assert table.period.iloc[10] == "1926-10"
     assert table.dividend_annualized.eq(2.4).all()  # No dividir por 12 ni convertir en pago mensual.
@@ -71,40 +70,34 @@ def test_october_annualized_values_and_strict_column_temporal_selection(monkeypa
 
 
 def project(tmp_path):
-    configs = tmp_path / "configs"
-    configs.mkdir()
-    config = configs / "estudio.toml"
-    config.write_bytes(POLICY)
     original = tmp_path / "original.xls"
     original.write_bytes(XLS_SIGNATURE + b"synthetic workbook; reader provided by test")
-    return config, original
+    return tmp_path, original
 
 
 @pytest.mark.parametrize("problem", ["duplicate", "missing", "non_finite", "negative"])
 def test_bad_quality_blocks_publication(tmp_path, monkeypatch, problem):
     workbook(monkeypatch, problem)
-    config, original = project(tmp_path)
+    root, original = project(tmp_path)
     before = original.read_bytes()
     with pytest.raises(ValueError, match="No se han preparado los datos"):
-        prepare_shiller_data(config, file=original)
+        prepare_shiller_data(root, file=original)
     assert not (tmp_path / "data/processed/shiller_monthly.parquet").exists()
     assert original.read_bytes() == before
 
 
-@pytest.mark.parametrize("problem", ["policy", "header"])
-def test_invalid_policy_and_source_header_are_rejected(tmp_path, monkeypatch, problem):
+@pytest.mark.parametrize("problem", ["history", "header"])
+def test_invalid_history_and_source_header_are_rejected(tmp_path, monkeypatch, problem):
     workbook(monkeypatch, "header" if problem == "header" else None)
-    config, original = project(tmp_path)
-    if problem == "policy":
-        config.write_text(config.read_text().replace("1989-12-31", "1990-12-31"))
+    root, original = project(tmp_path)
     with pytest.raises(ValueError):
-        prepare_shiller_data(config, file=original)
+        prepare_shiller_data(root, file=original, history_start="1927-01" if problem == "history" else "1924-12")
     assert not (tmp_path / "data/processed/shiller_monthly.parquet").exists()
 
 
 def test_download_preserves_exact_bytes_and_source_with_verified_https(tmp_path, monkeypatch):
     workbook(monkeypatch)
-    config, original = project(tmp_path)
+    root, original = project(tmp_path)
     response = SimpleNamespace(geturl=lambda: "https://www.econ.yale.edu/~shiller/data/ie_data.xls",
                                read=lambda size: original.read_bytes())
     class Response:
@@ -117,7 +110,7 @@ def test_download_preserves_exact_bytes_and_source_with_verified_https(tmp_path,
         assert kwargs["context"].check_hostname is True
         return Response()
     monkeypatch.setattr("tfm.sources.shiller.urlopen", download)
-    prepare_shiller_data(config)
+    prepare_shiller_data(root)
     assert (tmp_path / "data/raw/shiller.xls").read_bytes() == original.read_bytes()
     source = json.loads((tmp_path / "data/raw/shiller_fuente.json").read_bytes())
     assert source["acquisition"]["method"] == "https_download"

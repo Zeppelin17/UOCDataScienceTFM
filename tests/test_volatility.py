@@ -1,23 +1,15 @@
 """Escalado causal, cuentas parciales y comparación conjunta sin red."""
 
-from pathlib import Path
 from statistics import stdev
 import math
 
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
-from tfm.config import load_config
-from tfm.data import (prepare_shiller_data, prepare_french_data, calculate_signals,
-                      prepare_return_components, read_result, compare_simple_strategies)
 from tfm.simulation import simulate_baselines
 from tfm.volatility import build_volatility_scale, validate_volatility_parameters
-from tfm.sources.shiller import INSTRUMENT, XLS_SIGNATURE
-from test_shiller import workbook
-from test_return_components import french_zip
+from tfm.sources.shiller import INSTRUMENT
 from test_simulation import inputs, PARAMETERS
-from test_menu import answer_with
 
 
 RISK = {"lookback_months": 12, "target_annual_volatility": 0.12, "max_exposure": 1.0}
@@ -73,45 +65,3 @@ def test_risk_window_is_prior_only_with_explicit_cap_zero_risk_and_missing_histo
         build_volatility_scale(monthly, signals, {**RISK, "lookback_months": 25})
     with pytest.raises(ValueError, match="apalancamiento"):
         validate_volatility_parameters({**RISK, "max_exposure": 1.5})
-
-
-def test_cli_menu_joint_comparison_configuration_and_invalidations(tmp_path, monkeypatch, capsys):
-    configs = tmp_path / "configs"; configs.mkdir()
-    config = configs / "estudio.toml"
-    config.write_bytes((Path(__file__).parents[1] / "configs/estudio.toml").read_bytes())
-    assert cli.main(["compare-simple-strategies", "--config", str(config)]) == 1
-    assert "Faltan" in capsys.readouterr().err
-    workbook(monkeypatch)
-    shiller = tmp_path / "shiller.xls"; shiller.write_bytes(XLS_SIGNATURE + b"synthetic")
-    french = tmp_path / "french.zip"
-    french.write_bytes(french_zip([f"{m.replace('-', '')},unused,unused,unused,0.2"
-                                   for m in pd.period_range("1927-01", "1989-12", freq="M").astype(str)]))
-    prepare_shiller_data(config, file=shiller); prepare_french_data(config, file=french)
-    calculate_signals(config); prepare_return_components(config)
-    before = {p: p.read_bytes() for p in (tmp_path / "data").rglob("*") if p.is_file()}
-    assert cli.main(["compare-simple-strategies", "--config", str(config)]) == 0
-    assert all(p.read_bytes() == content for p, content in before.items())
-    table, report = read_result(load_config(config), "simple_comparisons")
-    assert len(table) == 6048 and report["months_per_strategy"] == 756
-    assert report["first_period"] == "1927-01" and report["last_period"] == "1989-12"
-    assert len(report["strategies"]) == 8 and table.position.between(-1, 1).all()
-    assert table.estimated_annual_volatility.eq(0).all() and table.volatility_scale.eq(1).all()
-    output = capsys.readouterr().out
-    assert "ocho cuentas" in output and "Modelos y evaluación desde 1990 siguen pendientes" in output
-    monkeypatch.setattr(menu, "_clear_screen", lambda: None)
-    answer_with(monkeypatch, ["11", "", "3", "9", "", "0", "0"])
-    assert menu.interactive_menu(config) == 0
-    assert "Primeras cinco filas" in capsys.readouterr().out
-    previous = config.read_bytes()
-    config.write_text(config.read_text().replace("target_annual_volatility = 0.12", "target_annual_volatility = 0.10"))
-    with pytest.raises(ValueError, match="configuración"):
-        read_result(load_config(config), "simple_comparisons")
-    # Cambiar el comparador no obliga a preparar las fuentes otra vez.
-    read_result(load_config(config), "monthly_return_components")
-    config.write_bytes(previous)
-    path = tmp_path / "data/processed/simple_comparisons.parquet"
-    saved = path.read_bytes(), path.with_suffix(".json").read_bytes()
-    for regenerate in (calculate_signals, prepare_return_components, prepare_french_data, prepare_shiller_data):
-        path.write_bytes(saved[0]); path.with_suffix(".json").write_bytes(saved[1])
-        regenerate(config)
-        assert not path.exists() and not path.with_suffix(".json").exists()

@@ -1,20 +1,15 @@
 """Unidades RF, cálculo manual, alineación y recorrido nuevo sin red."""
 
 from io import BytesIO
-from pathlib import Path
 from zipfile import ZipFile
 
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
-from tfm.config import load_config
-from tfm.data import prepare_shiller_data, prepare_french_data, prepare_return_components, read_result
 from tfm.preparation.french import normalize_french_rf
 from tfm.returns import build_return_components
 from tfm.sources.french import SOURCE_URL, fetch_french
-from tfm.sources.shiller import INSTRUMENT, XLS_SIGNATURE
-from test_shiller import workbook
+from tfm.sources.shiller import INSTRUMENT
 
 
 def french_zip(rows):
@@ -83,49 +78,3 @@ def test_french_https_checks_and_local_import(tmp_path, monkeypatch):
     original.write_bytes(content)
     monkeypatch.setattr("tfm.sources.french.urlopen", lambda *a, **k: pytest.fail("No debe descargar"))
     assert fetch_french(url=SOURCE_URL, file=original)[0] == content
-
-
-def test_offline_cli_menu_and_dependency_invalidation(tmp_path, monkeypatch, capsys):
-    configs = tmp_path / "configs"
-    configs.mkdir()
-    config = configs / "estudio.toml"
-    config.write_bytes((Path(__file__).parents[1] / "configs/estudio.toml").read_bytes())
-    workbook(monkeypatch)
-    shiller = tmp_path / "original.xls"
-    shiller.write_bytes(XLS_SIGNATURE + b"synthetic workbook")
-    prepare_shiller_data(config, file=shiller)
-    original = tmp_path / "french.zip"
-    original.write_bytes(french_zip([f"{month.replace('-', '')},unused,unused,unused,0.20"
-                                    for month in pd.period_range("1927-01", "1989-12", freq="M").astype(str)]))
-    monkeypatch.setattr("tfm.sources.french.urlopen", lambda *a, **k: pytest.fail("No debe descargar"))
-    assert cli.main(["prepare-data", "--source", "french", "--config", str(config), "--file", str(original)]) == 0
-    assert cli.main(["prepare-returns", "--config", str(config)]) == 0
-    table, report = read_result(load_config(config), "monthly_return_components")
-    assert len(table) == 756 and report["last_period"] == "1989-12"
-    assert table.price_return.eq(0).all()
-    assert table.dividend_return_approx.eq(0.002).all()
-    assert table.rf_return.eq(0.002).all()
-    assert not (tmp_path / "outputs").exists()
-    before = {p: p.read_bytes() for p in (tmp_path / "data").rglob("*") if p.is_file()}
-    answers = iter(["6", "", "7", "", "3", "5", "", "0", "0"])
-    monkeypatch.setattr(menu, "_clear_screen", lambda: None)
-    monkeypatch.setattr("builtins.input", lambda _: next(answers))
-    assert menu.interactive_menu(config) == 0
-    assert "Todavía no se han aplicado señales, posiciones ni costes" in capsys.readouterr().out
-    assert (tmp_path / "data/raw/french_factors.zip").read_bytes() == original.read_bytes()
-    # Volver a preparar French retira los componentes, pero conserva Shiller.
-    prepare_french_data(config)
-    path = tmp_path / "data/processed/monthly_return_components.parquet"
-    assert not path.exists()
-    with pytest.raises(ValueError, match="Faltan componentes"):
-        read_result(load_config(config), "monthly_return_components")
-    assert (tmp_path / "data/processed/shiller_monthly.parquet").read_bytes() == before[tmp_path / "data/processed/shiller_monthly.parquet"]
-    prepare_return_components(config)
-    # Una entrada inválida no destruye el resultado anterior.
-    good = path.read_bytes()
-    monkeypatch.setattr("tfm.data.build_return_components", lambda *a, **k: (_ for _ in ()).throw(ValueError("entrada inválida")))
-    with pytest.raises(ValueError, match="entrada inválida"):
-        prepare_return_components(config)
-    assert path.read_bytes() == good
-    prepare_shiller_data(config)
-    assert not path.exists() and not path.with_suffix(".json").exists()

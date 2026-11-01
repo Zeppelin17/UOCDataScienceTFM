@@ -56,7 +56,7 @@ VIX y ETF sectoriales no pueden ser predictores aprendidos en 1927–1989. Se ma
 - Se conserva Shiller como base principal declarada y el contraste con cierres como análisis separado, sin empalmar series.
 - Antes de entrenar se revisará el alcance de las conclusiones sobre reversión, dadas las diferencias de la construcción de precios.
 - Se concretarán las características y los rezagos con su documentación; las diez candidatas no son una selección definitiva.
-- La siguiente refactorización retirará la CLI y los ficheros de configuración de los cuadernos antiguos. Este diagnóstico ya es independiente de ellos.
+- La CLI y los ficheros de configuración se han retirado. Tanto el diagnóstico como los cuadernos 01–06 se ejecutan directamente.
 - No se han entrenado modelos, ajustado ventanas por rendimiento ni realizado la evaluación desde 1990.
 
 ## Fuentes

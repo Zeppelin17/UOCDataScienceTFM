@@ -1,21 +1,12 @@
 """Sensibilidad prefijada: mismo simulador, efectos contables y flujo local."""
 
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
-from tfm.config import load_config
-from tfm.data import (analyze_sensitivity, calculate_signals, prepare_shiller_data,
-                      prepare_french_data, prepare_return_components, read_result)
 from tfm.sensitivity import run_sensitivities, sensitivity_scenarios
 from tfm.simulation import simulate_baselines, summarize_baselines
-from tfm.sources.shiller import XLS_SIGNATURE
-from test_shiller import workbook
-from test_return_components import french_zip
 from test_simulation import inputs
-from test_menu import answer_with
 
 
 PARAMETERS = {"initial_capital": 100.0, "transaction_cost_rate": 0.001,
@@ -63,49 +54,3 @@ def test_borrow_and_dividend_effects_and_no_silent_omission_of_insolvency():
     zero = {**PARAMETERS, "transaction_cost_rate": 0.0, "annual_borrow_rate": 0.0}
     with pytest.raises(ValueError, match="Negociación.*insolvente.*No se han omitido"):
         run_sensitivities(components, signals, zero)
-
-
-def test_cli_menu_publication_and_upstream_invalidations(tmp_path, monkeypatch, capsys):
-    configs = tmp_path / "configs"; configs.mkdir()
-    config = configs / "estudio.toml"
-    config.write_bytes((Path(__file__).parents[1] / "configs/estudio.toml").read_bytes())
-    assert cli.main(["analyze-sensitivity", "--config", str(config)]) == 1
-    assert "Faltan" in capsys.readouterr().err
-    workbook(monkeypatch)
-    shiller = tmp_path / "shiller.xls"; shiller.write_bytes(XLS_SIGNATURE + b"synthetic")
-    french = tmp_path / "french.zip"
-    french.write_bytes(french_zip([f"{m.replace('-', '')},unused,unused,unused,0.2"
-                                   for m in pd.period_range("1927-01", "1989-12", freq="M").astype(str)]))
-    prepare_shiller_data(config, file=shiller); prepare_french_data(config, file=french)
-    calculate_signals(config); prepare_return_components(config)
-    assert cli.main(["analyze-sensitivity", "--config", str(config)]) == 0
-    table, report = read_result(load_config(config), "baseline_sensitivity")
-    assert len(table) == 21 and table.months.eq(756).all()
-    assert report["first_period"] == "1927-01" and report["last_period"] == "1989-12"
-    assert len(report["comparisons"]) == 21
-    output = capsys.readouterr().out
-    assert "7 escenarios" in output and "puntos porcentuales" in output
-    assert "sin evaluación desde 1990" in output
-    monkeypatch.setattr(menu, "_clear_screen", lambda: None)
-    answer_with(monkeypatch, ["9", "", "3", "7", "", "0", "0"])
-    assert menu.interactive_menu(config) == 0
-    assert "Primeras cinco filas" in capsys.readouterr().out
-    before = config.read_bytes()
-    config.write_text(config.read_text().replace("annual_borrow_rate = 0.01", "annual_borrow_rate = 0.02"))
-    with pytest.raises(ValueError, match="configuración"):
-        read_result(load_config(config), "baseline_sensitivity")
-    config.write_bytes(before)
-    path = tmp_path / "data/processed/baseline_sensitivity.parquet"
-    saved = (path.read_bytes(), path.with_suffix(".json").read_bytes())
-    def fail(*args):
-        raise ValueError("Escenario insolvente")
-    with monkeypatch.context() as patch:
-        patch.setattr("tfm.data.run_sensitivities", fail)
-        with pytest.raises(ValueError, match="insolvente"):
-            analyze_sensitivity(config)
-    assert saved == (path.read_bytes(), path.with_suffix(".json").read_bytes())
-    for regenerate in (calculate_signals, prepare_return_components, prepare_french_data, prepare_shiller_data):
-        # Reutilizar la salida ya comprobada para verificar cada invalidación sin repetir las simulaciones.
-        path.write_bytes(saved[0]); path.with_suffix(".json").write_bytes(saved[1])
-        regenerate(config)
-        assert not path.exists() and not path.with_suffix(".json").exists()

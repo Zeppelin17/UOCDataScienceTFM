@@ -18,6 +18,7 @@ import pandas as pd
 
 from tfm.preparation.shiller import normalize_shiller
 from tfm.signals.shiller import price_rule_values
+from tfm.sources.shiller import SOURCE_URL as SHILLER_URL
 from tfm.sources.prices import fetch_prices
 
 
@@ -27,7 +28,7 @@ HISTORY_START = "1924-12"
 MONTHS = pd.period_range(START, END, freq="M").astype(str)
 INDUSTRIES = ["NoDur", "Durbl", "Manuf", "Enrgy", "Chems", "BusEq", "Telcm", "Utils", "Shops", "Hlth", "Money", "Other"]
 SOURCE_URLS = {
-    "shiller": "https://img1.wsimg.com/blobby/go/e5e77e0b-59d1-44d9-ab25-4763ac982e53/downloads/1449043e-a1ed-4e2e-8e9c-7b9a2a064493/ie_data.xls?ver=1791297298731",
+    "shiller": SHILLER_URL,
     "industries": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/12_Industry_Portfolios_CSV.zip",
     "BAA": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAA&cosd=1919-01-01&coed=1989-12-31",
     "AAA": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=AAA&cosd=1919-01-01&coed=1989-12-31",

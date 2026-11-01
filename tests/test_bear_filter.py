@@ -1,21 +1,13 @@
 """Filtro prefijado: historia, decisión anterior y contabilidad compartida."""
 
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from tfm import cli, menu
 from tfm.comparators import build_bear_signals, simulate_bear_comparison
-from tfm.config import load_config
-from tfm.data import (prepare_shiller_data, prepare_french_data, calculate_signals,
-                      prepare_return_components, read_result, simulate_basic_strategies)
 from tfm.simulation import simulate_baselines
-from tfm.sources.shiller import INSTRUMENT, XLS_SIGNATURE
-from test_shiller import workbook
-from test_return_components import french_zip
+from tfm.sources.shiller import INSTRUMENT
 from test_simulation import inputs, PARAMETERS
-from test_menu import answer_with
 
 
 def history():
@@ -70,45 +62,3 @@ def test_shared_engine_preserves_baselines_and_accounts_for_cash_and_costs():
         filtered = unchanged.loc[unchanged.strategy.eq(f"{rule}_bear"), baseline.columns].reset_index(drop=True)
         filtered["strategy"] = rule
         pd.testing.assert_frame_equal(raw, filtered)
-
-
-def test_cli_menu_full_development_and_dependency_invalidations(tmp_path, monkeypatch, capsys):
-    configs = tmp_path / "configs"; configs.mkdir()
-    config = configs / "estudio.toml"
-    config.write_bytes((Path(__file__).parents[1] / "configs/estudio.toml").read_bytes())
-    assert cli.main(["simulate-bear-filter", "--config", str(config)]) == 1
-    assert "Faltan" in capsys.readouterr().err
-    workbook(monkeypatch)
-    shiller = tmp_path / "shiller.xls"; shiller.write_bytes(XLS_SIGNATURE + b"synthetic")
-    french = tmp_path / "french.zip"
-    french.write_bytes(french_zip([f"{m.replace('-', '')},unused,unused,unused,0.2"
-                                   for m in pd.period_range("1927-01", "1989-12", freq="M").astype(str)]))
-    prepared = prepare_shiller_data(config, file=shiller)
-    assert prepared["rows"] == 781 and prepared["history_rows"] == 25
-    prepare_french_data(config, file=french); calculate_signals(config); prepare_return_components(config)
-    simulate_basic_strategies(config)
-    processed = tmp_path / "data/processed"
-    before = {p: p.read_bytes() for p in processed.iterdir()}
-    assert cli.main(["simulate-bear-filter", "--config", str(config)]) == 0
-    assert all(p.read_bytes() == content for p, content in before.items())
-    table, report = read_result(load_config(config), "bear_filter_simulations")
-    assert len(table) == 3780 and report["months_per_strategy"] == 756
-    assert report["first_period"] == "1927-01" and report["last_period"] == "1989-12"
-    assert report["bear_months"] == report["blocked_momentum_signals"] == report["blocked_reversal_signals"] == 0
-    assert len(report["strategies"]) == 5
-    assert "no réplica" in capsys.readouterr().out
-    monkeypatch.setattr(menu, "_clear_screen", lambda: None)
-    answer_with(monkeypatch, ["10", "", "3", "8", "", "0", "0"])
-    assert menu.interactive_menu(config) == 0
-    assert "Primeras cinco filas" in capsys.readouterr().out
-    saved_config = config.read_bytes()
-    config.write_text(config.read_text().replace("annual_borrow_rate = 0.01", "annual_borrow_rate = 0.02"))
-    with pytest.raises(ValueError, match="configuración"):
-        read_result(load_config(config), "bear_filter_simulations")
-    config.write_bytes(saved_config)
-    path = processed / "bear_filter_simulations.parquet"
-    saved = path.read_bytes(), path.with_suffix(".json").read_bytes()
-    for regenerate in (calculate_signals, prepare_return_components, prepare_french_data, prepare_shiller_data):
-        path.write_bytes(saved[0]); path.with_suffix(".json").write_bytes(saved[1])
-        regenerate(config)
-        assert not path.exists() and not path.with_suffix(".json").exists()

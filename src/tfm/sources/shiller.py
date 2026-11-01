@@ -9,6 +9,8 @@ from urllib.request import Request, urlopen
 import certifi
 
 
+SOURCE_URL = "https://img1.wsimg.com/blobby/go/e5e77e0b-59d1-44d9-ab25-4763ac982e53/downloads/1449043e-a1ed-4e2e-8e9c-7b9a2a064493/ie_data.xls?ver=1791297298731"
+
 INSTRUMENT = "SHILLER_SP_COMPOSITE"
 MAX_BYTES = 10 * 1024 * 1024
 XLS_SIGNATURE = bytes.fromhex("d0cf11e0a1b11ae1")
