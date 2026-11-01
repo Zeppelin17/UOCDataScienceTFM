@@ -10,7 +10,7 @@ Cada fila representa un mes objetivo t de enero de 1927 a diciembre de 1989. La 
 |---|---|---|
 | `price_return_1m` | P[m] / P[m−1] − 1 | Decimal |
 | `momentum_12_1` | P[m−1] / P[m−12] − 1 | Decimal; once variaciones |
-| `distance_ma_3m` | P[m] / media(P[m−2], …, P[m]) − 1 | Decimal |
+| `market_return_24m` | P[m] / P[m−24] − 1 | Decimal; veinticuatro variaciones |
 | `distance_ma_12m` | P[m] / media(P[m−11], …, P[m]) − 1 | Decimal |
 | `price_volatility_12m` | Desviación típica muestral de r[m−11], …, r[m] por √12 | Decimal anualizado |
 | `drawdown_12m` | P[m] / máximo(P[m−11], …, P[m]) − 1 | Decimal, no positivo |
@@ -24,6 +24,16 @@ Las medias y ventanas incluyen ambos extremos. El drawdown mide la distancia act
 Los retornos industriales del primer bloque mensual ponderado por valor se convierten de porcentaje a decimal una sola vez. W es el producto acumulado de (1 + retorno) desde julio de 1926. Su escala inicial arbitraria no altera la comparación con su media. La igualdad con la media no cuenta como superación. Antes de tener doce observaciones, la amplitud permanece ausente, no se convierte en cero. La amplitud y dispersión corresponden a carteras industriales de French, no a acciones individuales, ETF ni exactamente al universo del S&P 500.
 
 Baa y Aaa entran como rendimientos anuales en porcentaje. Su diferencia se conserva en puntos porcentuales, sin dividir entre doce ni tratarla como RF. No equivale a un diferencial corporativo frente a Treasury ni a un OAS. Los dividendos de Shiller, RF y los resultados de las estrategias no se utilizan como predictores.
+
+## Sustitución de la distancia a media de tres meses
+
+Antes de definir etiquetas o entrenar modelos se sustituye `distance_ma_3m` por `market_return_24m`, manteniendo diez candidatas. Es una decisión de diseño: se prioriza describir el estado del mercado a dos años y conectar con el comparador bajista ya previsto en la guía. La alternativa descartada añadía otra descripción de tendencia reciente junto al retorno de un mes, momentum y la distancia a la media de doce meses. No se ha comparado su capacidad predictiva ni se afirma que la sustitución mejore resultados o elimine la redundancia.
+
+La fórmula es exactamente la del retorno previo utilizado por nuestro comparador bajista: `P[m] / P[m−24] − 1`. El filtro sencillo convierte ese retorno en un veto cuando es negativo; el modelo recibirá el valor continuo, que permite distinguir una caída pequeña de otra intensa. No se añade también el indicador binario como undécima característica. El sentido y las ventanas de las reglas originales permanecen iguales.
+
+Daniel y Moskowitz (2016), *Momentum crashes*, sección 3.2, utilizan el signo del retorno acumulado previo de dos años para identificar mercados bajistas. Nuestra variable utiliza variaciones de precios medios de Shiller, sin dividendos: es una adaptación, no una réplica de su retorno de mercado ni evidencia de que funcione como filtro para nuestro índice. Referencia: [DOI 10.1016/j.jfineco.2015.12.002](https://doi.org/10.1016/j.jfineco.2015.12.002).
+
+La primera decisión, diciembre de 1926 para el objetivo enero de 1927, utiliza precios de diciembre de 1924 y diciembre de 1926. La historia ya conservada cubre esta ventana: no se descargan nuevas fuentes ni se pierden meses adicionales. La dispersión industrial se conserva como candidata exploratoria. Las posibles dependencias entre retorno de 24 meses, momentum y otras variables se evaluarán dentro del desarrollo con el protocolo de validación y Clustered MDA.
 
 ## Calentamiento y guardado
 

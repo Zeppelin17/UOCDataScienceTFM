@@ -10,7 +10,7 @@ from tfm.sources.shiller import INSTRUMENT
 
 
 FEATURE_COLUMNS = [
-    "price_return_1m", "momentum_12_1", "distance_ma_3m", "distance_ma_12m",
+    "price_return_1m", "momentum_12_1", "market_return_24m", "distance_ma_12m",
     "price_volatility_12m", "drawdown_12m", "credit_spread_pp", "credit_spread_change_pp",
     "industry_breadth_12m", "industry_dispersion",
 ]
@@ -19,7 +19,7 @@ FEATURE_COLUMNS = [
 FEATURE_DESCRIPTIONS = [
     ("price_return_1m", "Retorno del último mes", "P[m] / P[m-1] - 1", "decimal", "Shiller", 0),
     ("momentum_12_1", "Momentum 12–1", "P[m-1] / P[m-12] - 1", "decimal", "Shiller", 0),
-    ("distance_ma_3m", "Distancia a media de 3 meses", "P[m] / media(P[m-2:m]) - 1", "decimal", "Shiller", 0),
+    ("market_return_24m", "Retorno acumulado de 24 meses", "P[m] / P[m-24] - 1", "decimal", "Shiller", 0),
     ("distance_ma_12m", "Distancia a media de 12 meses", "P[m] / media(P[m-11:m]) - 1", "decimal", "Shiller", 0),
     ("price_volatility_12m", "Volatilidad anualizada", "std_muestral(r[m-11:m]) * sqrt(12)", "decimal anualizado", "Shiller", 0),
     ("drawdown_12m", "Caída desde máximo de 12 meses", "P[m] / max(P[m-11:m]) - 1", "decimal <= 0", "Shiller", 0),
@@ -76,7 +76,7 @@ def build_monthly_features(monthly: pd.DataFrame, industries: pd.DataFrame,
     decisions = targets - 1
     context_months = targets - 2
     # Los huecos iniciales de industrias son calentamiento; huecos interiores o finales son errores.
-    if (prices.index[0] > decisions[0] - 12 or prices.index[-1] < decisions[-1]
+    if (prices.index[0] > decisions[0] - 24 or prices.index[-1] < decisions[-1]
             or sectors.index[0] > context_months[0] or sectors.index[-1] < context_months[-1]
             or baa_values.index[0] > context_months[0] - 1 or baa_values.index[-1] < context_months[-1]):
         raise ValueError("Las fuentes no cubren la historia y los meses requeridos para el desarrollo")
@@ -84,7 +84,7 @@ def build_monthly_features(monthly: pd.DataFrame, industries: pd.DataFrame,
     price_features = pd.DataFrame({
         "price_return_1m": rules.reversal_score,
         "momentum_12_1": rules.momentum_score,
-        "distance_ma_3m": prices / prices.rolling(3, min_periods=3).mean() - 1,
+        "market_return_24m": prices / prices.shift(24) - 1,
         "distance_ma_12m": prices / prices.rolling(12, min_periods=12).mean() - 1,
         "price_volatility_12m": rules.reversal_score.rolling(12, min_periods=12).std(ddof=1) * math.sqrt(12),
         "drawdown_12m": prices / prices.rolling(12, min_periods=12).max() - 1,

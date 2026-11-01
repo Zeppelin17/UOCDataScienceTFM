@@ -261,7 +261,7 @@ def feature_availability(sources: dict[str, pd.DataFrame]) -> pd.DataFrame:
     candidates = [
         ("Retorno de un mes", price_months[1:] + 1, 0),
         ("Momentum 12–1", price_months[12:] + 1, 0),
-        ("Distancia a media de 3 meses", price_months[2:] + 1, 0),
+        ("Retorno acumulado de 24 meses", price_months[24:] + 1, 0),
         ("Distancia a media de 12 meses", price_months[11:] + 1, 0),
         ("Volatilidad de 12 variaciones", price_months[12:] + 1, 0),
         ("Caída desde máximo de 12 meses", price_months[11:] + 1, 0),

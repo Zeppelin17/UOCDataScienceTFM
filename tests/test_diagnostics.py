@@ -102,6 +102,8 @@ def test_cached_sources_preserved_and_initial_availability_is_explicit(tmp_path,
     assert coverage.loc["yahoo", "missing_development_months"] == 11
     assert coverage.loc["shiller", "development_months"] == 756
     availability = feature_availability(sources).set_index("feature")
+    assert availability.loc["Retorno acumulado de 24 meses", "development_months"] == 756
+    assert availability.loc["Retorno acumulado de 24 meses", "first_available_target"] == "1927-01"
     breadth = availability.loc["Amplitud industrial sobre media de 12 meses"]
     assert breadth.first_available_target == "1927-08" and breadth.development_months == 749
     assert availability.loc["Diferencial Baa–Aaa", "development_months"] == 756

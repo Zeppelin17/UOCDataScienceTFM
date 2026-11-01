@@ -51,6 +51,8 @@ La dispersión y amplitud son entre industrias, no entre acciones individuales n
 
 VIX y ETF sectoriales no pueden ser predictores aprendidos en 1927–1989. Se mantiene el periodo acordado. El nivel y la variación de Baa–Aaa son candidatos de cobertura larga. No equivalen a un diferencial corporativo frente a Treasury ni a un OAS.
 
+La lista inicial incluía la distancia a la media de tres meses. Antes de definir etiquetas o entrenar modelos se sustituye por el retorno de precio de 24 meses, por su relación con el comparador bajista, sin comparar rendimientos predictivos de ambas candidatas. La cobertura conjunta se mantiene en 749 meses. El notebook 00 muestra ahora la disponibilidad de la lista actual; la decisión y su fórmula se detallan en `docs/caracteristicas.md`.
+
 ## Decisiones y siguiente paso
 
 - Se conserva Shiller como base principal declarada y el contraste con cierres como análisis separado, sin empalmar series.

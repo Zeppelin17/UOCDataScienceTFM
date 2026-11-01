@@ -145,6 +145,10 @@ El diagnóstico del 17/10/2026 permanece en `outputs/reviews/step1_20261017/`, c
 
 No se obtuvo una segunda serie de cierres comparables. Un NAV o una prima/descuento no sustituyen al precio de mercado, y coincidencias de dividendos no acreditan cierres ni ajustes. Las tres discrepancias aisladas no justifican una investigación indefinida; si SPY se utiliza para resultados finales, deberán conservarse la limitación y una sensibilidad adecuada.
 
+## Cambio conceptual de una característica antes del entrenamiento
+
+Se sustituye la distancia a la media de tres meses por el retorno de precio de 24 meses en la tabla del notebook 07. Se mantienen diez variables, 756 meses conservados y 749 con las diez completas. La elección busca una conexión explícita con el comparador de mercado bajista y el horizonte de Daniel y Moskowitz, no una mejora observada de predicción o rentabilidad. Ambas alternativas se han considerado conceptualmente; no se han entrenado modelos para escoger entre ellas. La fórmula, las fechas y la limitación de Shiller quedan documentadas en `docs/caracteristicas.md`. La dispersión industrial continúa como candidata exploratoria. No se añade el indicador bajista binario ni se cambia ninguna regla de inversión.
+
 ## Desarrollo posterior
 
 Con el protocolo financiero, las alternativas sencillas y la tabla de características del notebook 07 implementados, se incorporarán etiquetas, validación temporal, selección de variables, modelos y evaluación. Las fórmulas, unidades, calentamiento y retrasos de las diez candidatas se documentan en `docs/caracteristicas.md`. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.

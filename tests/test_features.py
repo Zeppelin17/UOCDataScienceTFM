@@ -8,6 +8,8 @@ import pytest
 
 from tfm.diagnostics import INDUSTRIES
 from tfm.features import FEATURE_COLUMNS, build_monthly_features
+from tfm.comparators import build_bear_signals
+from tfm.signals.shiller import build_price_signals
 from tfm.sources.shiller import INSTRUMENT
 
 
@@ -25,6 +27,7 @@ def inputs():
 
 def test_manual_features_lag_units_and_initial_breadth_not_zero():
     prices, industries, baa, aaa = inputs()
+    prices.loc[prices.period.eq("1973-04"), "price_monthly_mean"] = 120.0
     prices.loc[prices.period.eq("1975-03"), "price_monthly_mean"] = 80.0
     prices.loc[prices.period.eq("1975-04"), "price_monthly_mean"] = 90.0
     baa.loc[baa.period.eq("1975-03"), "yield_percent"] = 8.0
@@ -35,7 +38,7 @@ def test_manual_features_lag_units_and_initial_breadth_not_zero():
     assert row.context_source_period == "1975-03"
     assert row.price_return_1m == pytest.approx(90 / 80 - 1)
     assert row.momentum_12_1 == pytest.approx(80 / 100 - 1)
-    assert row.distance_ma_3m == pytest.approx(90 / ((100 + 80 + 90) / 3) - 1)
+    assert row.market_return_24m == pytest.approx(90 / 120 - 1)
     assert row.distance_ma_12m == pytest.approx(90 / (1170 / 12) - 1)
     assert row.drawdown_12m == pytest.approx(-0.1)
     assert row.price_volatility_12m == pytest.approx(stdev([0.0] * 10 + [-0.2, 0.125]) * math.sqrt(12))
@@ -49,6 +52,22 @@ def test_manual_features_lag_units_and_initial_breadth_not_zero():
     # Igualdad con la media no significa superarla.
     flat = industries.copy(); flat[INDUSTRIES] = 0.0
     assert build_monthly_features(prices, flat, baa, aaa).loc[7:, "industry_breadth_12m"].eq(0).all()
+
+
+def test_24_month_history_and_exact_consistency_with_bear_comparator():
+    prices, industries, baa, aaa = inputs()
+    prices.loc[prices.period.eq("1924-12"), "price_monthly_mean"] = 80.0
+    prices.loc[prices.period.eq("1926-12"), "price_monthly_mean"] = 120.0
+    table = build_monthly_features(prices, industries, baa, aaa)
+    assert table.loc[0, "target_period"] == "1927-01"
+    assert table.loc[0, "market_return_24m"] == pytest.approx(0.5)
+    signals = build_price_signals(prices)
+    signals = signals.loc[signals.target_period.between("1927-01", "1989-12")].reset_index(drop=True)
+    bear = build_bear_signals(prices, signals)
+    pd.testing.assert_series_equal(table.market_return_24m, bear.market_return_24m, check_exact=True)
+    assert len(FEATURE_COLUMNS) == 10 and "distance_ma_3m" not in table
+    with pytest.raises(ValueError, match="historia"):
+        build_monthly_features(prices.iloc[1:].reset_index(drop=True), industries, baa, aaa)
 
 
 def test_price_and_context_cutoffs_ignore_later_values_and_dividends():
