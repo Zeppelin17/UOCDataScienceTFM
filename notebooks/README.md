@@ -2,6 +2,14 @@
 
 Los notebooks sirven para comprender y explicar el análisis con texto, código y tablas. La lógica reutilizable pertenece a `src/tfm`: la CLI y los cuadernos llaman a las mismas funciones y leen `configs/estudio.toml`.
 
+## Diagnóstico previo a la tercera entrega
+
+Abre `00_diagnostico_fuentes.ipynb`, selecciona `.venv`, reinicia el kernel y ejecuta las celdas en orden desde el proyecto o la carpeta `notebooks`. No lee `configs/estudio.toml` ni utiliza la CLI. Los cuadernos 01–06 siguen temporalmente con el flujo anterior hasta el próximo incremento de simplificación.
+
+La primera lectura puede descargar originales: Shiller si no existe, ZIP de las doce industrias, CSV mensuales Baa/Aaa y diarios de Yahoo `^GSPC` hasta 1989. Los archivos de trabajo existentes no se sustituyen ni se invalidan. Las nuevas copias quedan en `data/raw/diagnosis/`. Las tablas explicativas se escriben únicamente al ejecutar la celda final, bajo `outputs/diagnosis/`.
+
+La cobertura es la analizada en la ventana solicitada, no un certificado del calendario o de todas las fechas de publicación. El primer mes del promedio de Yahoo se excluye por posible cobertura parcial; señales y resultados brutos se comparan sobre una misma muestra madura, cuyo intervalo se imprime. El resultado bruto solo mide la contribución de precio de una señal, sin dividendos, RF o costes. Los rezagos de publicación son propuestas que requieren documentar sus límites. Guarda el notebook sin salidas antes de hacer commit.
+
 ## Primer recorrido
 
 Abre `01_datos_y_senales.ipynb` en un editor compatible con Jupyter (por ejemplo, VS Code con la extensión Jupyter) y selecciona `.venv/bin/python` como kernel en macOS/Linux, o `.venv/Scripts/python.exe` en Windows. La primera celda de código muestra el intérprete elegido.

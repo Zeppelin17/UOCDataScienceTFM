@@ -2,6 +2,18 @@
 
 Herramienta local del TFM de Ciencia de Datos para preparar datos y estudiar reglas de momentum y reversión. Prepara Shiller, SPY y RF de French por separado, calcula señales de Shiller y prepara los componentes de rentabilidad mensual. También simula comprar y mantener, momentum y reversión hasta 1989. Compara también la sensibilidad a costes y dividendos. Incluye un filtro sencillo de mercado bajista. También ajusta la exposición por volatilidad y reúne las alternativas sencillas. El entrenamiento de modelos y la evaluación desde 1990 siguen pendientes.
 
+## Tercera entrega: diagnóstico de fuentes
+
+Empieza por [00_diagnostico_fuentes.ipynb](notebooks/00_diagnostico_fuentes.ipynb). Este nuevo recorrido no utiliza CLI ni archivos de configuración. Revisa Shiller, los diarios de `^GSPC` de Yahoo, las doce carteras industriales de French y Baa/Aaa de FRED. Conserva las fuentes separadas, limita los importes analizados al desarrollo 1927–1989 y muestra la disponibilidad inicial de características con calentamiento y rezagos propuestos.
+
+El diagnóstico compara la media de Shiller, el promedio de cierres diarios de Yahoo y su último cierre mensual disponible. Informa diferencias de señales, variabilidad, correlación entre meses y resultados teóricos brutos por precio. No incorpora dividendos o costes, no entrena y no certifica precios de ejecución o calendarios completos. Las diferencias entre proveedores se separan del contraste de promediar dentro de Yahoo.
+
+Reutiliza `data/raw/shiller.xls` y guarda nuevos originales bajo `data/raw/diagnosis/`; los CSV son los originales de FRED, no copias de tablas preparadas. Las tablas del diagnóstico se guardan en `outputs/diagnosis/`, sin regenerar datos de trabajo ni simulaciones. La primera ejecución necesita red si faltan originales. No requiere dependencias nuevas.
+
+Los hallazgos verificados, sus cifras y límites se recogen en [docs/diagnostico_fuentes.md](docs/diagnostico_fuentes.md).
+
+La CLI y `configs/estudio.toml` que aparecen en los recorridos anteriores se mantienen temporalmente por compatibilidad. Se retirarán en el siguiente incremento; la entrega se organizará mediante notebooks con fuentes y supuestos explícitos.
+
 ## Empezar
 
 Con el entorno virtual existente activado, desde la raíz del repositorio:

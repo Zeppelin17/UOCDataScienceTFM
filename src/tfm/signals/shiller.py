@@ -31,7 +31,20 @@ def build_price_signals(monthly: pd.DataFrame) -> pd.DataFrame:
     months = pd.PeriodIndex(table.period, freq="M")
     if table.period.tolist() != pd.period_range(months[0], months[-1], freq="M").astype(str).tolist():
         raise ValueError("Los meses deben estar ordenados, ser únicos y no tener huecos")
-    prices = table.price_monthly_mean
+    values = price_rule_values(table.price_monthly_mean)
+    return pd.DataFrame({
+        "asset": table.asset, "decision_period": table.period,
+        "target_period": (months + 1).astype(str), "basis": BASIS,
+        **{column: values[column] for column in values},
+    })
+
+
+def price_rule_values(prices: pd.Series) -> pd.DataFrame:
+    """Fórmulas fijas sobre una serie ordenada; sin identificarla como Shiller.
+
+    El llamador comprueba el calendario y conserva la definición y procedencia
+    del precio. Los valores iniciales sin historia permanecen ausentes.
+    """
     if (not pd.api.types.is_numeric_dtype(prices) or pd.api.types.is_bool_dtype(prices)
             or not prices.map(math.isfinite).all() or prices.le(0).any()):
         raise ValueError("Los precios medios deben ser positivos y finitos")
@@ -40,16 +53,14 @@ def build_price_signals(monthly: pd.DataFrame) -> pd.DataFrame:
     for score in (momentum, reversal):
         if not score.dropna().map(math.isfinite).all():
             raise ValueError("La variación de precios no es finita")
-    momentum_signal = pd.Series(pd.NA, index=table.index, dtype="Int8")
-    reversal_signal = pd.Series(pd.NA, index=table.index, dtype="Int8")
+    momentum_signal = pd.Series(pd.NA, index=prices.index, dtype="Int8")
+    reversal_signal = pd.Series(pd.NA, index=prices.index, dtype="Int8")
     available = momentum.notna()
     momentum_signal.loc[available] = momentum.loc[available].gt(0).astype("int8")
     available = reversal.notna()
     reversal_signal.loc[available] = (reversal.loc[available].lt(0).astype("int8")
                                      - reversal.loc[available].gt(0).astype("int8"))
     return pd.DataFrame({
-        "asset": table.asset, "decision_period": table.period,
-        "target_period": (months + 1).astype(str), "basis": BASIS,
         "momentum_score": momentum, "reversal_score": reversal,
         "momentum_signal": momentum_signal, "reversal_signal": reversal_signal,
         "both_rules_available": momentum.notna() & reversal.notna(),

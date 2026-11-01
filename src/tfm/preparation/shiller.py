@@ -37,10 +37,10 @@ def _month(value) -> str:
 
 
 
-def preparation_window(history_start: str, policy_bytes: bytes) -> tuple[str, str, str]:
-    policy = tomllib.loads(policy_bytes.decode("utf-8"))["validation"]
+def preparation_window(history_start: str, policy_bytes: bytes | None = None) -> tuple[str, str, str]:
     expected = {"development_start": "1927-01-01", "development_end": "1989-12-31",
                 "final_test_start": "1990-01-01", "final_test_end": "pending"}
+    policy = tomllib.loads(policy_bytes.decode("utf-8"))["validation"] if policy_bytes is not None else expected
     if policy != expected:
         raise ValueError("Este flujo exige desarrollo 1927–1989 y evaluación desde 1990 aún deshabilitada")
     try:
@@ -53,7 +53,7 @@ def preparation_window(history_start: str, policy_bytes: bytes) -> tuple[str, st
 
 
 
-def normalize_shiller(content: bytes, *, history_start: str, policy_bytes: bytes) -> tuple[pd.DataFrame, dict]:
+def normalize_shiller(content: bytes, *, history_start: str, policy_bytes: bytes | None = None) -> tuple[pd.DataFrame, dict]:
     start, development_start, end = preparation_window(history_start, policy_bytes)
     try:
         book = xlrd.open_workbook(file_contents=content, on_demand=True)
