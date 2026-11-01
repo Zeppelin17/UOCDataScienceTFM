@@ -13,13 +13,15 @@ Selecciona el Python de `.venv` en tu editor Jupyter, reinicia el kernel y ejecu
 5. `05_filtro_bajista.ipynb` compara las reglas originales y filtradas junto a comprar y mantener. Utiliza el signo de la variación de precio de 24 meses, como adaptación declarada del indicador de Daniel y Moskowitz.
 6. `06_ajuste_volatilidad.ipynb` compara ocho cuentas, incluyendo comprar y mantener escalado como control. Estima riesgo con 12 variaciones anteriores, objetivo anual 12 % y exposición máxima 100 %. No combina escalado y veto bajista ni optimiza sus parámetros.
 
+7. `07_caracteristicas.ipynb` requiere solo Shiller preparado en el 01 y reutiliza o descarga industrias y crédito. Explica diez variables y sus fechas de fuente, conserva los 756 meses y marca las 749 filas completas. No utiliza Yahoo ni entrena modelos. Las fórmulas y supuestos están en `docs/caracteristicas.md`.
+
 Los cuadernos 03–06 requieren las tablas de 01 y 02 y se pueden ejecutar independientemente entre sí. Muestran y guardan sus supuestos centrales. Cambiarlos en uno no cambia los otros: para comparar resultados, utiliza los mismos supuestos.
 
 El diagnóstico `00_diagnostico_fuentes.ipynb` funciona por separado. Revisa Shiller, doce industrias de French, Baa/Aaa de FRED y diarios de Yahoo `^GSPC`. Compara medias y cierres sobre una muestra común; los resultados brutos allí no incluyen RF, dividendos o costes. Reutiliza originales y guarda sus tablas en `outputs/diagnosis/` al ejecutar la última celda. No sustituye las tablas de 01–06.
 
 ## Guardado y reproducción
 
-Los cuadernos 01 y 02 escriben tablas en `data/processed/`. Regenerar una entrada retira los resultados que dependían de ella; vuelve a ejecutar las simulaciones que necesites. Cada cuaderno 03–06 guarda su propia tabla y resumen, conservando las demás simulaciones. Los JSON son salidas descriptivas, no archivos de configuración.
+Los cuadernos 01 y 02 escriben tablas en `data/processed/`. Regenerar una entrada retira los resultados que dependían de ella; vuelve a ejecutar las simulaciones que necesites. El 07 guarda `monthly_features.parquet` y su JSON; repetir la preparación de Shiller retira también esta tabla. Si actualizas los originales de contexto, debes repetir el 07. Cada cuaderno 03–06 guarda su propia tabla y resumen, conservando las demás simulaciones. Los JSON son salidas descriptivas, no archivos de configuración.
 
 No se rellenan datos ausentes para forzar cobertura. El tramo desde 1990 queda excluido de estos cálculos. Las medias de Shiller no son precios de ejecución y su dividendo es una aproximación retrospectiva; estas limitaciones siguen vigentes en las simulaciones.
 

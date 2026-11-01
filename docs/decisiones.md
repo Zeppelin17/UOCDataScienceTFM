@@ -2,7 +2,7 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1924 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos y un filtro de mercado bajista, además del ajuste por volatilidad y su comparación conjunta. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1924 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos y un filtro de mercado bajista, además del ajuste por volatilidad y su comparación conjunta. El notebook 07 prepara diez características candidatas con fechas de fuente explícitas, sin seleccionarlas por sus resultados. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
 
 Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. El diagnóstico actual utiliza diarios de Yahoo `^GSPC` como contraste separado; los datos de SPY desde 1993 pertenecen a una etapa anterior. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
@@ -115,7 +115,7 @@ Ya se comparan los resultados de las reglas básicas bajo estos costes; la sensi
 
 ## Ejecución mediante notebooks
 
-La entrega se ejecuta mediante los notebooks 00–06. Se han retirado el menú, los comandos `python -m tfm` y `configs/estudio.toml`. Las fuentes oficiales y el periodo de desarrollo están fijados en los lectores. Los supuestos contables se muestran en las primeras celdas de cada simulación; no se leen archivos de configuración. Los JSON junto a los resultados describen lo calculado y no son configuraciones de entrada.
+La entrega se ejecuta mediante los notebooks 00–07. Se han retirado el menú, los comandos `python -m tfm` y `configs/estudio.toml`. Las fuentes oficiales y el periodo de desarrollo están fijados en los lectores. Los supuestos contables se muestran en las primeras celdas de cada simulación; no se leen archivos de configuración. Los JSON junto a los resultados describen lo calculado y no son configuraciones de entrada.
 
 Los cuadernos 01 y 02 preparan precios, señales, RF y componentes. Los cuadernos 03–06 llaman directamente a los motores financieros reutilizables de `src/tfm` y guardan sus tablas. Cambiar un supuesto en un cuaderno exige volver a ejecutarlo; no actualiza los demás cuadernos. Se conserva el mismo escenario central en los cuatro. Regenerar una entrada retira los resultados que dependen de ella. Las salidas históricas se conservan hasta que el estudiante decide regenerarlas.
 
@@ -147,7 +147,7 @@ No se obtuvo una segunda serie de cierres comparables. Un NAV o una prima/descue
 
 ## Desarrollo posterior
 
-Con el protocolo financiero y las alternativas sencillas implementados, se incorporarán variables de entorno, etiquetas, validación temporal, modelos y evaluación. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.
+Con el protocolo financiero, las alternativas sencillas y la tabla de características del notebook 07 implementados, se incorporarán etiquetas, validación temporal, selección de variables, modelos y evaluación. Las fórmulas, unidades, calentamiento y retrasos de las diez candidatas se documentan en `docs/caracteristicas.md`. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.
 
 Se mantendrán las comprobaciones temporales y, cuando proceda, purga y embargo. Clustered MDA precederá a SHAP. El registro científico de configuraciones y pruebas necesarias para DSR/PBO se concretará al desarrollar los experimentos; eliminar registros técnicos de cada preparación no autoriza a omitir alternativas probadas durante la selección de modelos.
 

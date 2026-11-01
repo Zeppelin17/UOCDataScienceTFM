@@ -43,7 +43,12 @@ def test_offline_preparation_has_identical_data_signals_and_stable_paths(study, 
     files = {p.relative_to(root) for p in (root / "data").rglob("*") if p.is_file()}
     calculate_signals(root)
     assert files == {p.relative_to(root) for p in (root / "data").rglob("*") if p.is_file()}
+    # La nueva tabla de variables depende también de los precios preparados.
+    features = root / "data/processed/monthly_features.parquet"
+    features.write_bytes(b"previous features")
+    features.with_suffix(".json").write_text("{}")
     prepare_shiller_data(root)  # Reutiliza sin contactar con la fuente.
+    assert not features.exists() and not features.with_suffix(".json").exists()
     assert not (root / "data/processed/shiller_signals.parquet").exists()
     assert not (root / "data/processed/shiller_signals.json").exists()
 

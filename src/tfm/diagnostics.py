@@ -147,6 +147,16 @@ def _load_original(path: Path, url: str, reader):
     return table
 
 
+def load_context_sources(root: str | Path) -> dict[str, pd.DataFrame]:
+    """Industrias y crédito para variables, sin descargar Shiller ni Yahoo."""
+    folder = Path(root) / "data/raw/diagnosis"
+    sources = {"industries": _load_original(folder / "12_industries.zip", SOURCE_URLS["industries"], parse_industry_returns)}
+    for series in ("BAA", "AAA"):
+        sources[series] = _load_original(folder / f"{series.lower()}.csv", SOURCE_URLS[series],
+                                         lambda content, name=series: parse_fred_yield(content, name))
+    return sources
+
+
 def load_diagnostic_sources(root: str | Path) -> dict[str, pd.DataFrame]:
     """Reutilizar originales; nuevos archivos separados, sin tocar las tablas de trabajo."""
     raw = Path(root) / "data/raw"
@@ -157,10 +167,7 @@ def load_diagnostic_sources(root: str | Path) -> dict[str, pd.DataFrame]:
             raise ValueError(f"Shiller no supera los controles: {report['error_counts']}")
         return table
     sources = {"shiller": _load_original(raw / "shiller.xls", SOURCE_URLS["shiller"], read_shiller),
-               "industries": _load_original(folder / "12_industries.zip", SOURCE_URLS["industries"], parse_industry_returns)}
-    for series in ("BAA", "AAA"):
-        sources[series] = _load_original(folder / f"{series.lower()}.csv", SOURCE_URLS[series],
-                                         lambda content, name=series: parse_fred_yield(content, name))
+               **load_context_sources(root)}
     path = folder / "gspc_daily_1920_1989.parquet"
     if path.exists():
         daily = pd.read_parquet(path)

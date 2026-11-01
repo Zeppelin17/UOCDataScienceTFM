@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from tfm.diagnostics import (INDUSTRIES, compare_price_definitions, coverage_table, feature_availability,
-                             load_diagnostic_sources, parse_fred_yield, parse_industry_returns, yahoo_monthly)
+                             load_context_sources, load_diagnostic_sources, parse_fred_yield, parse_industry_returns, yahoo_monthly)
 from tfm.sources.shiller import XLS_SIGNATURE
 from test_shiller import workbook
 
@@ -94,6 +94,8 @@ def test_cached_sources_preserved_and_initial_availability_is_explicit(tmp_path,
     before = {p: p.read_bytes() for p in raw.rglob("*") if p.is_file()}
     monkeypatch.setattr("tfm.diagnostics.urlopen", lambda *a, **k: pytest.fail("No debe descargar"))
     monkeypatch.setattr("tfm.diagnostics.fetch_prices", lambda *a, **k: pytest.fail("No debe descargar"))
+    context = load_context_sources(tmp_path)
+    assert set(context) == {"industries", "BAA", "AAA"}
     sources = load_diagnostic_sources(tmp_path)
     assert before == {p: p.read_bytes() for p in raw.rglob("*") if p.is_file()}
     coverage = coverage_table(sources).set_index("source")

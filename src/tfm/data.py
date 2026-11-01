@@ -129,7 +129,8 @@ def prepare_shiller_data(root: Path, *, file: str | Path | None = None, history_
     processed = root / "data/processed"
     return _publish(table, processed / "shiller_monthly.parquet",
                     report,
-                    dependents=(processed / "shiller_signals.parquet", processed / "shiller_signals.json",
+                    dependents=(processed / "monthly_features.parquet", processed / "monthly_features.json",
+                                processed / "shiller_signals.parquet", processed / "shiller_signals.json",
                                 processed / "monthly_return_components.parquet", processed / "monthly_return_components.json",
                                 *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed)))
 
@@ -398,8 +399,8 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
-    """Guardar una simulación y los supuestos usados, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons"}:
-        raise ValueError("Nombre de simulación desconocido")
+    """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features"}:
+        raise ValueError("Nombre de resultado desconocido")
     return _publish(table, root / "data/processed" / f"{name}.parquet",
                     {**report, "status": "passed", "rows": len(table)})
