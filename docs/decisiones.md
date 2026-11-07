@@ -157,6 +157,8 @@ Se mantendrán las comprobaciones temporales y, cuando proceda, purga y embargo.
 
 Antes de entrenar, la selección que use resultados se limitará al entrenamiento de cada partición; las cuatro asociaciones favorables del cribado completo no constituyen una selección independiente para CPCV. Los precios medios pueden introducir persistencia y la activación de la regla puede explicar parte de las asociaciones. En la evaluación con reentrenamiento anual se reunirán las señales para simular una cartera continua: reentrenar no implica reiniciar el capital ni liquidar cada año. Las operaciones aisladas del etiquetado tampoco se capitalizarán como si fueran esa cartera.
 
+El siguiente incremento se concreta en `docs/plan_validacion_temporal.md`: preparar el notebook 10 con seis bloques, dos de validación por partición y seis meses de embargo. Es un plan previo al entrenamiento; sus particiones y tablas aún no están implementadas.
+
 ## Referencias para el cribado y modelado
 
 La revisión del 7 de noviembre de 2026 de la guía incorpora un anexo práctico con hipótesis por variable, cribado individual, control de pruebas múltiples, referencias nulas y una escalera de modelos. Las características actuales son candidatas; su selección predictiva sigue pendiente.

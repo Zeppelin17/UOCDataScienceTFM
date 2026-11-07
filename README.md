@@ -33,6 +33,8 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 
 El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. No se han entrenado modelos ni seleccionado variables por sus resultados. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
 
+El siguiente incremento está definido en el [plan de validación temporal](docs/plan_validacion_temporal.md): notebook 10, seis bloques, quince combinaciones y controles de fechas antes de entrenar. Su implementación está pendiente.
+
 ## Supuestos y datos
 
 La fuente principal es Shiller: **promedios mensuales nominales**, no cierres negociables ni precios de SPY. Se conservan 25 meses previos de calentamiento desde diciembre de 1924 y 756 meses de desarrollo. D es anualizado e interpolado: dividirlo entre doce es una aproximación contable retrospectiva, no un pago observado ni un predictor conocido entonces.
