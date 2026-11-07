@@ -43,7 +43,7 @@ Las columnas `asset`, `target_period`, `decision_period`, `price_source_period`,
 
 El JSON acompaña al Parquet con diccionario, fórmulas, unidades, fechas, ausencias y limitaciones. No es configuración de entrada. Volver a preparar Shiller retira la tabla y su resumen: hay que ejecutar el 07 de nuevo. Si se actualizan los originales de contexto, también se debe repetir el 07. Esta ejecución no cambia señales ni simulaciones anteriores.
 
-No se ha realizado selección por resultados, normalización global, PCA, Clustered MDA o SHAP. Los ajustes que se aprendan de los datos se harán dentro de las particiones de entrenamiento. La tabla tampoco garantiza que una característica resulte útil o aporte información distinta de otras. Las etiquetas, la selección y la validación temporal son incrementos posteriores.
+No se ha realizado selección por resultados, normalización global, PCA, Clustered MDA o SHAP. Los ajustes que se aprendan de los datos se harán dentro de las particiones de entrenamiento. La tabla tampoco garantiza que una característica resulte útil o aporte información distinta de otras. Las etiquetas y su sensibilidad se construyen en el notebook 08, según `docs/etiquetado.md`. La selección y la validación temporal son incrementos posteriores.
 
 ## Fuentes
 

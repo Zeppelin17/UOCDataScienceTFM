@@ -15,6 +15,8 @@ Selecciona el Python de `.venv` en tu editor Jupyter, reinicia el kernel y ejecu
 
 7. `07_caracteristicas.ipynb` requiere solo Shiller preparado en el 01 y reutiliza o descarga industrias y crédito. Explica diez variables y sus fechas de fuente, conserva los 756 meses y marca las 749 filas completas. No utiliza Yahoo ni entrena modelos. Las fórmulas y supuestos están en `docs/caracteristicas.md`.
 
+8. `08_etiquetas.ipynb` necesita las tablas de 01, 02 y 07. Explica la operación aislada neta frente al efectivo y compara la etiqueta central con una sensibilidad sin negociación. Conserva los meses sin señal con etiqueta ausente. Guarda `labelled_signals.parquet` y su JSON; no descarga fuentes ni entrena modelos.
+
 Los cuadernos 03–06 requieren las tablas de 01 y 02 y se pueden ejecutar independientemente entre sí. Muestran y guardan sus supuestos centrales. Cambiarlos en uno no cambia los otros: para comparar resultados, utiliza los mismos supuestos.
 
 El diagnóstico `00_diagnostico_fuentes.ipynb` funciona por separado. Revisa Shiller, doce industrias de French, Baa/Aaa de FRED y diarios de Yahoo `^GSPC`. Compara medias y cierres sobre una muestra común; los resultados brutos allí no incluyen RF, dividendos o costes. Reutiliza originales y guarda sus tablas en `outputs/diagnosis/` al ejecutar la última celda. No sustituye las tablas de 01–06.
@@ -26,3 +28,5 @@ Los cuadernos 01 y 02 escriben tablas en `data/processed/`. Regenerar una entrad
 No se rellenan datos ausentes para forzar cobertura. El tramo desde 1990 queda excluido de estos cálculos. Las medias de Shiller no son precios de ejecución y su dividendo es una aproximación retrospectiva; estas limitaciones siguen vigentes en las simulaciones.
 
 Para reproducir, reinicia el kernel y ejecuta todas las celdas. Antes del commit, usa **Clear All Outputs** y guarda el notebook. No incluyas datasets ni resultados voluminosos en Git.
+
+Antes del 08, ejecuta **01 → 02 → 07**, en ese orden. Regenerar cualquiera de sus entradas retira las etiquetas anteriores. La estrategia final puede mantener posiciones; no deben capitalizarse los retornos aislados del etiquetado como si fueran esa estrategia. Antes del commit, limpia las salidas y guarda.

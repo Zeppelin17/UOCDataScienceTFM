@@ -1,6 +1,6 @@
 # Referencias de Jansen para los próximos incrementos
 
-Revisión: 7 de noviembre de 2026. Estado: fuentes consultadas y usos previstos; no se ha incorporado su código a los módulos del TFM.
+Revisión: 7 de noviembre de 2026. Estado: fuentes consultadas y usos previstos. El notebook 08 aplica la idea de horizonte fijo y señal más resultado futuro mediante implementación propia; no se ha copiado código del repositorio.
 
 Repositorio de la tercera edición: https://github.com/stefan-jansen/machine-learning-for-trading
 
@@ -29,11 +29,11 @@ Las reglas y periodos de la guía del tutor prevalecen sobre los ejemplos: desar
 
 El CSV del S&P 500 incluido comienza en enero de 1980, la descarga macro consultada está configurada desde 2000 y el universo de ETF desde 2006. Esos datos no sustituyen la cobertura larga requerida. Las fuentes ya utilizadas por el TFM se mantienen. Los scripts de descarga de French y ALFRED son referencias de acceso, no garantías de cobertura o versiones históricas para todas las series.
 
-## Etiquetado acordado y decisión pendiente
+## Etiquetado acordado y cribado pendiente
 
 Se trabajará con horizonte fijo de un mes. No se utilizarán barreras de beneficio o pérdida intramensuales: con esa frecuencia y horizonte no se observan puntos intermedios antes del vencimiento, y los promedios no reconstruyen la trayectoria del mes. El meta-modelo seguirá aceptando o rechazando la dirección de la regla original.
 
-Antes de generar etiquetas hay que cerrar el criterio favorable frente al efectivo y la convención de costes. Los costes de una operación aislada que abre y cierra no coinciden necesariamente con los de una estrategia que conserva posiciones. Después se concretarán las hipótesis por variable y regla en función de esa respuesta; la tabla conversada es una propuesta, no un protocolo confirmatorio ya cerrado.
+El criterio central y la sensibilidad están definidos en `docs/etiquetado.md` e implementados en el notebook 08. Se compara la operación aislada neta frente al efectivo; la sensibilidad elimina solo la negociación de la etiqueta. Los costes de una operación aislada no coinciden necesariamente con los de una estrategia que conserva posiciones. El cribado sigue pendiente: las hipótesis y los contrastes deben concretarse antes de evaluar relaciones predictivas.
 
 ## Uso en la memoria y bibliografía
 

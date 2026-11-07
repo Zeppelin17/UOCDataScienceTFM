@@ -20,7 +20,7 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 
 | Cuaderno | Qué hace | Entradas necesarias |
 |---|---|---|
-| [00 Diagnóstico](notebooks/00_diagnostico_fuentes.ipynb) | Contrasta medias y cierres y revisa fuentes de variables | Descarga originales si faltan; es independiente de 01–07 |
+| [00 Diagnóstico](notebooks/00_diagnostico_fuentes.ipynb) | Contrasta medias y cierres y revisa fuentes de variables | Descarga originales si faltan; es independiente de 01–08 |
 | [01 Datos y señales](notebooks/01_datos_y_senales.ipynb) | Prepara Shiller y calcula momentum y reversión | Descarga Shiller si falta, o permite indicar un XLS local |
 | [02 Componentes](notebooks/02_componentes_de_rentabilidad.ipynb) | Prepara RF de French, variaciones de precio y dividendo aproximado | Haber ejecutado 01; descarga French si falta |
 | [03 Estrategias básicas](notebooks/03_estrategias_basicas.ipynb) | Simula comprar y mantener y las dos reglas | Tablas de 01 y 02 |
@@ -28,8 +28,9 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [05 Filtro bajista](notebooks/05_filtro_bajista.ipynb) | Compara las reglas con un veto basado en los últimos 24 meses | Tablas de 01 y 02 |
 | [06 Volatilidad](notebooks/06_ajuste_volatilidad.ipynb) | Compara ocho cuentas, incluyendo exposición ajustada por riesgo | Tablas de 01 y 02 |
 | [07 Características](notebooks/07_caracteristicas.ipynb) | Construye diez variables de precio, riesgo, crédito e industrias | Shiller preparado con 01; reutiliza o descarga industrias y crédito |
+| [08 Etiquetas](notebooks/08_etiquetas.ipynb) | Compara cada operación mensual con el efectivo y calcula una sensibilidad de negociación | Tablas de 01, 02 y 07 |
 
-El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. No se han implementado aún etiquetas ni modelos; las variables no se han seleccionado por sus resultados.
+El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. No se han entrenado modelos ni seleccionado variables por sus resultados.
 
 ## Supuestos y datos
 
@@ -59,6 +60,7 @@ src/tfm/
   volatility.py           Escalado por riesgo y comparación conjunta
   diagnostics.py          Cobertura de fuentes y contraste de medias/cierres
   features.py             Diez características con fechas de fuente explícitas
+  labels.py               Etiquetas mensuales aisladas y sensibilidad de negociación
 data/raw/                Originales locales (fuera de Git)
 data/processed/          Tablas Parquet y resúmenes JSON (fuera de Git)
 outputs/diagnosis/       Tablas del diagnóstico (fuera de Git)
@@ -66,7 +68,7 @@ tests/                   Comprobaciones esenciales sin red
 docs/                    Decisiones y hallazgos para documentar el TFM
 ```
 
-Los JSON describen los resultados y sus supuestos: no se editan para dirigir la ejecución. Las tablas mantienen nombres fijos. Volver a preparar Shiller retira señales, componentes, características y simulaciones anteriores; preparar French retira componentes y simulaciones, conservando señales. Los cuadernos 03–06 guardan sus propios resultados sin sobrescribirse entre sí. Un fallo de publicación restaura las salidas anteriores.
+Los JSON describen los resultados y sus supuestos: no se editan para dirigir la ejecución. Las tablas mantienen nombres fijos. Volver a preparar Shiller retira señales, componentes, características, etiquetas y simulaciones anteriores; preparar French retira componentes, etiquetas y simulaciones, conservando señales. Los cuadernos 03–06 guardan sus propios resultados sin sobrescribirse entre sí. Regenerar señales, componentes o características retira también el conjunto etiquetado; vuelve a ejecutar el 08. Un fallo de publicación restaura las salidas anteriores.
 
 Los originales se reutilizan y no se sustituyen automáticamente. No se modifican los datos históricos conservados al actualizar el código. Si falta una tabla, ejecuta el cuaderno que la prepara. Si regeneras 01 o 02, vuelve a ejecutar las simulaciones que necesites. No se requiere servidor ni base de datos.
 

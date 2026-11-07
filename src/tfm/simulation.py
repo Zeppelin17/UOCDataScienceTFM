@@ -63,15 +63,20 @@ def _check_inputs(components: pd.DataFrame, signals: pd.DataFrame) -> None:
 
 
 def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, parameters: dict, *,
-                       exposure_scale: pd.Series | None = None) -> pd.DataFrame:
+                       exposure_scale: pd.Series | None = None,
+                       reset_each_month: bool = False) -> pd.DataFrame:
     """No descargar ni guardar; decidir exclusivamente con las señales anteriores.
 
     El nominal se ajusta a q * capital después de la comisión. Resolver el
     nominal negociado evita financiar la comisión con capital inexistente.
     Un corto conserva su nominal marcado a precio para medir el reajuste siguiente.
+    reset_each_month abre desde efectivo y liquida cada mes para etiquetar
+    operaciones aisladas; el comportamiento habitual conserva posiciones.
     """
     validate_parameters(parameters)
     _check_inputs(components, signals)
+    if type(reset_each_month) is not bool:
+        raise ValueError("reset_each_month debe ser booleano")
     if exposure_scale is not None:
         if (not isinstance(exposure_scale, pd.Series)
                 or exposure_scale.index.tolist() != components.period.tolist()
@@ -87,6 +92,9 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
         equity = float(parameters["initial_capital"])
         carried_notional = 0.0
         for i, row in enumerate(components.itertuples(index=False)):
+            if reset_each_month:
+                equity = float(parameters["initial_capital"])
+                carried_notional = 0.0
             q = 1 if strategy == "buy_and_hold" else int(signals.iloc[i][f"{strategy}_signal"])
             if exposure_scale is not None:
                 q *= float(exposure_scale.iloc[i])
@@ -112,12 +120,13 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
                 end_notional = q * invested + price_pnl + dividend_pnl
             else:
                 end_notional = q * invested * (1 + row.price_return) if q < 0 else 0.0
-            liquidation_notional = abs(end_notional) if i == len(components) - 1 else 0.0
+            close_position = reset_each_month or i == len(components) - 1
+            liquidation_notional = abs(end_notional) if close_position else 0.0
             liquidation_cost = fee * liquidation_notional
             equity = before_close - liquidation_cost
             if not math.isfinite(equity) or equity <= 0:
                 raise ValueError(f"{STRATEGIES[strategy]} insolvente en {row.period}; la simulación se detiene")
-            carried_notional = 0.0 if i == len(components) - 1 else end_notional
+            carried_notional = 0.0 if close_position else end_notional
             records.append({
                 "strategy": strategy, "period": row.period, "decision_period": row.previous_period,
                 "position": q, "capital_start": start, "capital_after_trading": invested,

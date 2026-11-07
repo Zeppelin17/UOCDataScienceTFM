@@ -2,7 +2,7 @@
 
 ## Alcance actual
 
-Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1924 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos y un filtro de mercado bajista, además del ajuste por volatilidad y su comparación conjunta. El notebook 07 prepara diez características candidatas con fechas de fuente explícitas, sin seleccionarlas por sus resultados. La evaluación final, las etiquetas y los modelos permanecen deshabilitados o sin implementar.
+Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1924 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos y un filtro de mercado bajista, además del ajuste por volatilidad y su comparación conjunta. El notebook 07 prepara diez características candidatas con fechas de fuente explícitas, sin seleccionarlas por sus resultados. El notebook 08 construye etiquetas y una sensibilidad de negociación. La evaluación final y los modelos permanecen deshabilitados o sin implementar.
 
 Se conservan dos fuentes con funciones diferentes. La serie mensual de Shiller del S&P Composite y sus antecedentes históricos es la base principal para calcular señales y variaciones de precio del estudio; no es SPY ni una serie idéntica al S&P 500 moderno durante todo el periodo. El diagnóstico actual utiliza diarios de Yahoo `^GSPC` como contraste separado; los datos de SPY desde 1993 pertenecen a una etapa anterior. No se unen ambas series ni se presentan como intercambiables; la simplificación de la herramienta no elimina `yfinance`.
 
@@ -115,7 +115,7 @@ Ya se comparan los resultados de las reglas básicas bajo estos costes; la sensi
 
 ## Ejecución mediante notebooks
 
-La entrega se ejecuta mediante los notebooks 00–07. Se han retirado el menú, los comandos `python -m tfm` y `configs/estudio.toml`. Las fuentes oficiales y el periodo de desarrollo están fijados en los lectores. Los supuestos contables se muestran en las primeras celdas de cada simulación; no se leen archivos de configuración. Los JSON junto a los resultados describen lo calculado y no son configuraciones de entrada.
+La entrega se ejecuta mediante los notebooks 00–08. Se han retirado el menú, los comandos `python -m tfm` y `configs/estudio.toml`. Las fuentes oficiales y el periodo de desarrollo están fijados en los lectores. Los supuestos contables se muestran en las primeras celdas de cada simulación; no se leen archivos de configuración. Los JSON junto a los resultados describen lo calculado y no son configuraciones de entrada.
 
 Los cuadernos 01 y 02 preparan precios, señales, RF y componentes. Los cuadernos 03–06 llaman directamente a los motores financieros reutilizables de `src/tfm` y guardan sus tablas. Cambiar un supuesto en un cuaderno exige volver a ejecutarlo; no actualiza los demás cuadernos. Se conserva el mismo escenario central en los cuatro. Regenerar una entrada retira los resultados que dependen de ella. Las salidas históricas se conservan hasta que el estudiante decide regenerarlas.
 
@@ -151,7 +151,7 @@ Se sustituye la distancia a la media de tres meses por el retorno de precio de 2
 
 ## Desarrollo posterior
 
-Con el protocolo financiero, las alternativas sencillas y la tabla de características del notebook 07 implementados, se incorporarán etiquetas, validación temporal, selección de variables, modelos y evaluación. Las fórmulas, unidades, calentamiento y retrasos de las diez candidatas se documentan en `docs/caracteristicas.md`. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.
+Con el protocolo financiero, las alternativas sencillas, las características del notebook 07 y las etiquetas del notebook 08 implementados, se incorporarán validación temporal, selección de variables, modelos y evaluación. Las fórmulas, unidades, calentamiento y retrasos de las diez candidatas se documentan en `docs/caracteristicas.md`. Los candidatos previstos son regresión logística regularizada, random forest y gradient boosting de complejidad acotada. En meta-labeling las reglas fijan la dirección; el modelo acepta la señal o permanece fuera.
 
 Se mantendrán las comprobaciones temporales y, cuando proceda, purga y embargo. Clustered MDA precederá a SHAP. El registro científico de configuraciones y pruebas necesarias para DSR/PBO se concretará al desarrollar los experimentos; eliminar registros técnicos de cada preparación no autoriza a omitir alternativas probadas durante la selección de modelos.
 
@@ -161,11 +161,13 @@ La revisión del 7 de noviembre de 2026 de la guía incorpora un anexo práctico
 
 Los ejemplos de la tercera edición de Jansen se han revisado como apoyo para los próximos incrementos. `docs/referencias_jansen.md` fija la revisión consultada, los archivos relevantes, qué se pretende adaptar y la referencia bibliográfica preparada para el repositorio. Se conservará también la referencia del libro y se citarán las metodologías originales cuando corresponda. No se ha incorporado aún código externo.
 
-Se acuerda etiquetar a horizonte fijo de un mes, justificando la ausencia de observaciones intermedias para barreras intramensuales. La definición de resultado favorable frente a efectivo y el tratamiento de costes están pendientes de concretar antes de generar etiquetas. El resto del cribado seguirá la guía, con adaptaciones explícitas a una serie mensual y a las dos anomalías.
+Se acuerda etiquetar a horizonte fijo de un mes, justificando la ausencia de observaciones intermedias para barreras intramensuales. El etiquetado central compara la operación aislada de un mes neta de negociación, dividendos y préstamo frente al efectivo. Se incorpora una sensibilidad sin negociación solo para etiquetar, conservando los costes en la evaluación económica. El resto del cribado seguirá la guía, con adaptaciones explícitas a una serie mensual y a las dos anomalías.
 
-## Propuesta de objetivo mensual para el filtro
+## Objetivo mensual para el filtro
 
-`docs/etiquetado.md` concreta una propuesta pendiente de implementación: comparar la operación aislada de un mes, con apertura, dividendos, préstamo y liquidación, frente al efectivo del mismo mes. No se han generado etiquetas históricas. Se conservan los supuestos centrales y se reutilizará el motor contable existente. La diferencia entre esa etiqueta y el resultado de una estrategia que mantiene posiciones queda explícita; los meses sin operación no se clasificarán como negativos.
+`docs/etiquetado.md` concreta el criterio acordado e implementado en `08_etiquetas.ipynb`: comparar la operación aislada de un mes, con apertura, dividendos, préstamo y liquidación, frente al efectivo del mismo mes. La sensibilidad predefinida elimina únicamente la negociación del etiquetado; se conservan los supuestos restantes. Se reutiliza el motor contable existente. La evaluación de estrategias mantiene posiciones y cobra los costes efectivamente requeridos, sin forzar cierre y reapertura mensuales.
+
+Los meses sin operación no se clasifican como negativos. El notebook conserva el calendario y distingue cobertura de características y ejemplos entrenables. Solo `FEATURE_COLUMNS` se utilizará como entrada; las etiquetas y cuentas realizadas son resultados. No se han entrenado modelos ni contrastado la predictibilidad de las variables. Las hipótesis y los criterios de cribado se cerrarán antes de esos contrastes.
 
 ## Fuentes ya utilizadas
 

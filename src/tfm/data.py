@@ -17,6 +17,7 @@ from tfm.simulation import STRATEGIES
 from tfm.sensitivity import sensitivity_scenarios
 from tfm.comparators import BEAR_STRATEGIES
 from tfm.volatility import SIMPLE_STRATEGIES
+from tfm.features import FEATURE_COLUMNS
 
 # Ventana fijada por el diseño del TFM; la evaluación posterior sigue deshabilitada.
 START, END = "1927-01", "1989-12"
@@ -46,6 +47,10 @@ def _bear_paths(processed: Path) -> tuple[Path, Path]:
 
 def _simple_paths(processed: Path) -> tuple[Path, Path]:
     return processed / "simple_comparisons.parquet", processed / "simple_comparisons.json"
+
+
+def _label_paths(processed: Path) -> tuple[Path, Path]:
+    return processed / "labelled_signals.parquet", processed / "labelled_signals.json"
 
 
 def _json(path: Path, value: dict) -> None:
@@ -132,7 +137,7 @@ def prepare_shiller_data(root: Path, *, file: str | Path | None = None, history_
                     dependents=(processed / "monthly_features.parquet", processed / "monthly_features.json",
                                 processed / "shiller_signals.parquet", processed / "shiller_signals.json",
                                 processed / "monthly_return_components.parquet", processed / "monthly_return_components.json",
-                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed)))
+                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed)))
 
 
 def load_monthly(root: Path) -> pd.DataFrame:
@@ -180,7 +185,8 @@ def calculate_signals(root: Path) -> dict:
                     dependents=(*_simulation_paths(root / "data/processed"),
                                 *_sensitivity_paths(root / "data/processed"),
                                 *_bear_paths(root / "data/processed"),
-                                *_simple_paths(root / "data/processed")))
+                                *_simple_paths(root / "data/processed"),
+                                *_label_paths(root / "data/processed")))
 
 
 def prepare_french_data(root: Path, *, file: str | Path | None = None) -> dict:
@@ -194,7 +200,7 @@ def prepare_french_data(root: Path, *, file: str | Path | None = None) -> dict:
     return _publish(table, processed / "french_rf_monthly.parquet",
                     report,
                     dependents=(processed / "monthly_return_components.parquet",
-                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed)))
+                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed)))
 
 
 def load_french_rf(root: Path) -> tuple[pd.DataFrame, dict]:
@@ -225,11 +231,36 @@ def prepare_return_components(root: Path) -> dict:
                     dependents=(*_simulation_paths(root / "data/processed"),
                                 *_sensitivity_paths(root / "data/processed"),
                                 *_bear_paths(root / "data/processed"),
-                                *_simple_paths(root / "data/processed")))
+                                *_simple_paths(root / "data/processed"),
+                                *_label_paths(root / "data/processed")))
 
 
 def read_result(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
     """Leer tablas preparadas y comprobar sus meses, estructura y valores."""
+    if name == "monthly_features":
+        table, summary = _read_table(root, name)
+        required = {"asset", "target_period", "decision_period", "price_source_period",
+                    "context_source_period", "features_ready", *FEATURE_COLUMNS}
+        months = pd.period_range(START, END, freq="M")
+        if (summary.get("status") != "passed" or summary.get("feature_columns") != FEATURE_COLUMNS
+                or not required <= set(table)
+                or table.target_period.tolist() != months.astype(str).tolist()
+                or table.decision_period.tolist() != (months - 1).astype(str).tolist()
+                or table.price_source_period.tolist() != (months - 1).astype(str).tolist()
+                or table.context_source_period.tolist() != (months - 2).astype(str).tolist()
+                or not table.asset.eq(INSTRUMENT).all()
+                or not pd.api.types.is_bool_dtype(table.features_ready)
+                or not table.features_ready.equals(table[FEATURE_COLUMNS].notna().all(axis=1))):
+            raise ValueError("Las características no corresponden al diseño actual; ejecuta de nuevo el notebook 07.")
+        for column in FEATURE_COLUMNS:
+            values = table[column]
+            first = values.first_valid_index()
+            if (not pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values)
+                    or first is None or values.loc[first:].isna().any()
+                    or (column != "industry_breadth_12m" and values.isna().any())
+                    or not values.dropna().map(math.isfinite).all()):
+                raise ValueError("Características inválidas; ejecuta de nuevo el notebook 07.")
+        return table, summary
     if name == "simple_comparisons":
         read_result(root, "monthly_return_components")
         read_result(root, "shiller_signals")
@@ -392,6 +423,8 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
         summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
         table = pd.read_parquet(path)
     except FileNotFoundError as exc:
+        if name == "monthly_features":
+            raise ValueError("Faltan las características; ejecuta primero el notebook 07.") from exc
         raise ValueError(f"Falta {name}; ejecuta su notebook de preparación.") from exc
     if not isinstance(summary, dict) or summary.get("rows") != len(table):
         raise ValueError("La tabla y su resumen no coinciden; vuelve a ejecutar su notebook.")
@@ -400,7 +433,8 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features"}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals"}:
         raise ValueError("Nombre de resultado desconocido")
     return _publish(table, root / "data/processed" / f"{name}.parquet",
-                    {**report, "status": "passed", "rows": len(table)})
+                    {**report, "status": "passed", "rows": len(table)},
+                    dependents=_label_paths(root / "data/processed") if name == "monthly_features" else ())
