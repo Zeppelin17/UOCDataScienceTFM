@@ -155,9 +155,17 @@ Con el protocolo financiero, las alternativas sencillas y la tabla de caracterí
 
 Se mantendrán las comprobaciones temporales y, cuando proceda, purga y embargo. Clustered MDA precederá a SHAP. El registro científico de configuraciones y pruebas necesarias para DSR/PBO se concretará al desarrollar los experimentos; eliminar registros técnicos de cada preparación no autoriza a omitir alternativas probadas durante la selección de modelos.
 
+## Referencias para el cribado y modelado
+
+La revisión del 7 de noviembre de 2026 de la guía incorpora un anexo práctico con hipótesis por variable, cribado individual, control de pruebas múltiples, referencias nulas y una escalera de modelos. Las características actuales son candidatas; su selección predictiva sigue pendiente.
+
+Los ejemplos de la tercera edición de Jansen se han revisado como apoyo para los próximos incrementos. `docs/referencias_jansen.md` fija la revisión consultada, los archivos relevantes, qué se pretende adaptar y la referencia bibliográfica preparada para el repositorio. Se conservará también la referencia del libro y se citarán las metodologías originales cuando corresponda. No se ha incorporado aún código externo.
+
+Se acuerda etiquetar a horizonte fijo de un mes, justificando la ausencia de observaciones intermedias para barreras intramensuales. La definición de resultado favorable frente a efectivo y el tratamiento de costes están pendientes de concretar antes de generar etiquetas. El resto del cribado seguirá la guía, con adaptaciones explícitas a una serie mensual y a las dos anomalías.
+
 ## Fuentes ya utilizadas
 
-- Guía local: `Guia TFM ML gestion Inversiones L1 v26-27 (01_11_26).pdf`, sublínea 1.B; periodos e historia larga en las páginas 2 y 4 de la versión revisada.
+- Guía inicial consultada: versión del 1 de noviembre de 2026, sublínea 1.B. Guía vigente revisada: `Guia TFM ML gestion Inversiones L1 v26-27 (07 11 26).pdf`; anexo práctico en las páginas 16–21.
 - Shiller: <https://shillerdata.com/>; enlace XLS concreto en `src/tfm/sources/shiller.py`.
 - Yahoo mediante yfinance: <https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html>.
 - Emisor de SPY: <https://www.ssga.com/us/en/intermediary/etfs/state-street-spdr-sp-500-etf-trust-spy>.
