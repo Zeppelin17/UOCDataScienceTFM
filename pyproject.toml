@@ -9,6 +9,7 @@ description = "Investigación reproducible de filtros de señales sobre el S&P 5
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=1.26,<3",
     "pandas>=2.3,<4",
     "pyarrow>=22,<24",
     "yfinance>=1.4,<2",

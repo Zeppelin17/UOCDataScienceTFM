@@ -1,6 +1,6 @@
 # Hipótesis y protocolo de cribado
 
-Fecha: 7 de noviembre de 2026. Estado: definido antes de calcular relaciones predictivas; pendiente de implementación. Este documento prepara el notebook 09. No añade configuraciones ni modifica las reglas, fuentes, etiquetas o costes.
+Fecha: 7 de noviembre de 2026. Estado: protocolo definido antes de calcular relaciones predictivas e implementado en el notebook 09. Se conserva el diseño fijado antes de los contrastes. No añade configuraciones ni modifica las reglas, fuentes, etiquetas o costes.
 
 ## 1. Qué queremos comprobar
 
@@ -57,7 +57,7 @@ Este cálculo causal describe cada observación con información pasada de las c
 
 | Comprobación | Decisión para este TFM |
 |---|---|
-| Regresión principal | Una regresión con intercepto por característica y regla: 20 en total. Errores HAC de Newey–West, ponderación Bartlett y **6 retardos mensuales** fijados por adelantado. No se buscará el retardo que dé significación. |
+| Regresión principal | Una regresión con intercepto por característica y regla: 20 en total. Errores HAC de Newey–West, ponderación Bartlett y **6 retardos mensuales** fijados por adelantado, sin factor de corrección de muestra pequeña `n/(n−2)`. No se buscará el retardo que dé significación. |
 | Inferencia | Contraste bilateral `b = 0`, con aproximación normal asintótica para los valores p. Reportar coeficiente, error estándar, estadístico y valor p; las garantías HAC son asintóticas y no eliminan no estacionariedad o sesgo de selección. |
 | Multiplicidad | **Holm al 5 % sobre la familia conjunta de 20 pruebas**, no diez por separado ni solo las favorables. Un contraste no estimable se identifica y conserva en la familia con p = 1 a efectos de ajuste, sin presentarlo como una estimación de efecto cero. |
 | Dirección | Donde hay `+`, una pendiente negativa no respalda la hipótesis aunque sea significativa. Para las exploratorias se informa del signo observado sin convertirlo retrospectivamente en una predicción previa. |
@@ -82,11 +82,11 @@ Una pendiente lineal no significativa tampoco descarta automáticamente una rela
 
 No se retocarán reglas, ventanas, signos, cortes o costes para obtener respaldo. Si el cribado no encuentra relaciones robustas, se documentará. La mejora económica solo podrá afirmarse después de evaluar el filtro frente a los comparadores con el protocolo correspondiente.
 
-## 7. Próximo incremento y salidas
+## 7. Implementación y salidas
 
-El notebook 09 requerirá **01 → 02 → 07 → 08**. Mostrará estas decisiones, construirá la respuesta y las transformaciones, y producirá la tabla de veinte contrastes, terciles, estabilidad y sombras. Los cálculos reutilizables irán en un módulo pequeño, sin CLI ni archivos de configuración. Antes de ejecutarlo, se revisarán las pruebas esenciales: alineación temporal, independencia del futuro en las transformaciones y corrección de HAC/Holm con ejemplos conocidos.
+El notebook `09_cribado_regimen.ipynb` requiere **01 → 02 → 07 → 08**. Muestra estas decisiones, construye la respuesta y las transformaciones y produce los veinte contrastes, terciles, estabilidad y sombras. Los cálculos reutilizables están en `src/tfm/screening.py`, sin CLI ni configuraciones. Las tres pruebas esenciales revisan alineación y causalidad, HAC/Holm con una referencia exacta y el recorrido persistido del notebook sin red.
 
-La salida guardará todas las pruebas y sus parámetros, incluidas las no favorables. No será todavía un registro de estrategias ganadoras ni una estimación de habilidad fuera de muestra. Al comenzar a evaluar modelos se añadirá el registro sencillo de variantes y retornos fuera de muestra que requiere la guía.
+La última celda guarda cinco tablas Parquet con sus JSON en `data/processed/`: `screening_monthly` (1512 filas de calendario y sus marcas de disponibilidad), `screening_tests` (20 contrastes), `screening_terciles` (60 grupos, incluidos los vacíos), `screening_stability` (80 combinaciones) y `screening_shadows` (todos los desplazamientos admisibles). Cada informe conserva las exclusiones, parámetros y limitaciones, sin convertirlos en configuración de entrada. Se guardan todas las pruebas, incluidas las no favorables. Si falta algún máximo de sombras no se sustituye por cero ni se reduce silenciosamente el conjunto nulo: la comparación se marca no disponible. Las tablas se publican por separado; si falla la celda de guardado, debe repetirse antes de usar sus salidas. No es un registro de estrategias ganadoras ni una estimación de habilidad fuera de muestra. Regenerar cualquiera de sus entradas retira las cinco tablas y sus informes; no cambia las simulaciones anteriores. Al comenzar a evaluar modelos se añadirá el registro sencillo de variantes y retornos fuera de muestra que requiere la guía.
 
 ## 8. Referencias metodológicas para la memoria
 
@@ -111,3 +111,9 @@ Propone un procedimiento secuencial para contrastar varias hipótesis controland
 ```
 
 Fuentes consultadas: [versión NBER de Newey–West y datos de su publicación en Econometrica](https://www.nber.org/papers/t0055), [referencia del artículo de Holm en JSTOR](https://www.jstor.org/stable/4615733), [Daniel y Moskowitz (2016)](https://kentdaniel.net/papers/published/jfe_16.pdf). Las extensiones al diseño de este TFM se identifican arriba como decisiones propias.
+
+## 9. Verificación de la implementación
+
+El notebook completo se verificó con los originales locales preparados, sobre una copia temporal y sin descargar fuentes ni modificar los datos del estudiante. El calentamiento deja 713 meses comunes, de agosto de 1930 a diciembre de 1989, y 642 desplazamientos circulares. Los veinte contrastes son estimables. Cuatro asociaciones de momentum superan Holm y la referencia de sombras: retorno del último mes, distancia a la media de doce meses, drawdown y amplitud industrial. La del último mes sigue siendo exploratoria, ya que no se fijó un signo previo. Ninguna relación de reversión supera esos criterios.
+
+Estos resultados no seleccionan variables ni demuestran mejora del filtro. La activación de momentum y el uso de precios medios siguen limitando la interpretación. Se mantienen las diez candidatas y las comprobaciones de terciles y subperiodos. Las 50 pruebas del proyecto pasan; la referencia HAC exacta, la preparación causal y el recorrido del notebook están incluidos. La respuesta mensual coincide con la del simulador continuo, que no se ha modificado.

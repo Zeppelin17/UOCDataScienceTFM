@@ -13,11 +13,12 @@ from tfm.signals.shiller import WARNINGS, build_price_signals
 from tfm.sources.shiller import INSTRUMENT, SOURCE_URL as SHILLER_URL, fetch_shiller
 from tfm.sources.french import SOURCE_URL as FRENCH_URL, fetch_french
 from tfm.returns import COLUMNS as RETURN_COLUMNS, FORMULAS, WARNINGS as RETURN_WARNINGS, build_return_components
-from tfm.simulation import STRATEGIES
+from tfm.simulation import STRATEGIES, validate_parameters
 from tfm.sensitivity import sensitivity_scenarios
 from tfm.comparators import BEAR_STRATEGIES
 from tfm.volatility import SIMPLE_STRATEGIES
 from tfm.features import FEATURE_COLUMNS
+from tfm.screening import RESULT_NAMES as SCREENING_RESULTS
 
 # Ventana fijada por el diseño del TFM; la evaluación posterior sigue deshabilitada.
 START, END = "1927-01", "1989-12"
@@ -47,6 +48,11 @@ def _bear_paths(processed: Path) -> tuple[Path, Path]:
 
 def _simple_paths(processed: Path) -> tuple[Path, Path]:
     return processed / "simple_comparisons.parquet", processed / "simple_comparisons.json"
+
+
+def _screening_paths(processed: Path) -> tuple[Path, ...]:
+    return tuple(processed / f"{name}.{extension}" for name in SCREENING_RESULTS
+                 for extension in ("parquet", "json"))
 
 
 def _label_paths(processed: Path) -> tuple[Path, Path]:
@@ -137,7 +143,7 @@ def prepare_shiller_data(root: Path, *, file: str | Path | None = None, history_
                     dependents=(processed / "monthly_features.parquet", processed / "monthly_features.json",
                                 processed / "shiller_signals.parquet", processed / "shiller_signals.json",
                                 processed / "monthly_return_components.parquet", processed / "monthly_return_components.json",
-                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed)))
+                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed), *_screening_paths(processed)))
 
 
 def load_monthly(root: Path) -> pd.DataFrame:
@@ -186,7 +192,8 @@ def calculate_signals(root: Path) -> dict:
                                 *_sensitivity_paths(root / "data/processed"),
                                 *_bear_paths(root / "data/processed"),
                                 *_simple_paths(root / "data/processed"),
-                                *_label_paths(root / "data/processed")))
+                                *_label_paths(root / "data/processed"),
+                                *_screening_paths(root / "data/processed")))
 
 
 def prepare_french_data(root: Path, *, file: str | Path | None = None) -> dict:
@@ -200,7 +207,7 @@ def prepare_french_data(root: Path, *, file: str | Path | None = None) -> dict:
     return _publish(table, processed / "french_rf_monthly.parquet",
                     report,
                     dependents=(processed / "monthly_return_components.parquet",
-                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed)))
+                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed), *_screening_paths(processed)))
 
 
 def load_french_rf(root: Path) -> tuple[pd.DataFrame, dict]:
@@ -232,11 +239,41 @@ def prepare_return_components(root: Path) -> dict:
                                 *_sensitivity_paths(root / "data/processed"),
                                 *_bear_paths(root / "data/processed"),
                                 *_simple_paths(root / "data/processed"),
-                                *_label_paths(root / "data/processed")))
+                                *_label_paths(root / "data/processed"),
+                                *_screening_paths(root / "data/processed")))
 
 
 def read_result(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
     """Leer tablas preparadas y comprobar sus meses, estructura y valores."""
+    if name == "labelled_signals":
+        table, summary = _read_table(root, name)
+        required = {"asset", "strategy", "target_period", "decision_period", "label", "label_no_transaction_cost",
+                    "has_signal", "features_ready", "training_ready", "excess_return", *FEATURE_COLUMNS}
+        months = pd.period_range(START, END, freq="M")
+        rules = ("momentum", "reversal")
+        if (summary.get("status") != "passed" or summary.get("feature_columns") != FEATURE_COLUMNS
+                or not required <= set(table) or len(table) != 2 * len(months)
+                or set(table.strategy) != set(rules) or not table.asset.eq(INSTRUMENT).all()):
+            raise ValueError("Faltan etiquetas válidas; ejecuta el notebook 08.")
+        validate_parameters(summary.get("parameters"))
+        for column in ("has_signal", "features_ready", "training_ready"):
+            if not pd.api.types.is_bool_dtype(table[column]) or table[column].isna().any():
+                raise ValueError("Marcas de etiquetas inválidas; ejecuta el notebook 08.")
+        if not table.training_ready.equals(table.features_ready & table.has_signal):
+            raise ValueError("Muestra de etiquetas inválida; ejecuta el notebook 08.")
+        for rule in rules:
+            rows = table.loc[table.strategy.eq(rule)]
+            if (rows.target_period.tolist() != months.astype(str).tolist()
+                    or rows.decision_period.tolist() != (months - 1).astype(str).tolist()):
+                raise ValueError("Calendario de etiquetas inválido; ejecuta el notebook 08.")
+        for column in ("label", "label_no_transaction_cost"):
+            if (not table[column].isna().equals(~table.has_signal)
+                    or not table.loc[table.has_signal, column].isin([0, 1]).all()):
+                raise ValueError("Etiquetas inválidas; ejecuta el notebook 08.")
+        if (not pd.api.types.is_numeric_dtype(table.excess_return)
+                or not table.excess_return.map(math.isfinite).all()):
+            raise ValueError("Resultados de etiquetado inválidos; ejecuta el notebook 08.")
+        return table, summary
     if name == "monthly_features":
         table, summary = _read_table(root, name)
         required = {"asset", "target_period", "decision_period", "price_source_period",
@@ -423,6 +460,8 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
         summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
         table = pd.read_parquet(path)
     except FileNotFoundError as exc:
+        if name == "labelled_signals":
+            raise ValueError("Faltan las etiquetas; ejecuta primero el notebook 08.") from exc
         if name == "monthly_features":
             raise ValueError("Faltan las características; ejecuta primero el notebook 07.") from exc
         raise ValueError(f"Falta {name}; ejecuta su notebook de preparación.") from exc
@@ -433,8 +472,13 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals"}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS}:
         raise ValueError("Nombre de resultado desconocido")
-    return _publish(table, root / "data/processed" / f"{name}.parquet",
-                    {**report, "status": "passed", "rows": len(table)},
-                    dependents=_label_paths(root / "data/processed") if name == "monthly_features" else ())
+    processed = root / "data/processed"
+    dependents = ()
+    if name == "monthly_features":
+        dependents = (*_label_paths(processed), *_screening_paths(processed))
+    elif name == "labelled_signals":
+        dependents = _screening_paths(processed)
+    return _publish(table, processed / f"{name}.parquet",
+                    {**report, "status": "passed", "rows": len(table)}, dependents=dependents)
