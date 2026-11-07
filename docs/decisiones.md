@@ -163,6 +163,10 @@ Los ejemplos de la tercera edición de Jansen se han revisado como apoyo para lo
 
 Se acuerda etiquetar a horizonte fijo de un mes, justificando la ausencia de observaciones intermedias para barreras intramensuales. La definición de resultado favorable frente a efectivo y el tratamiento de costes están pendientes de concretar antes de generar etiquetas. El resto del cribado seguirá la guía, con adaptaciones explícitas a una serie mensual y a las dos anomalías.
 
+## Propuesta de objetivo mensual para el filtro
+
+`docs/etiquetado.md` concreta una propuesta pendiente de implementación: comparar la operación aislada de un mes, con apertura, dividendos, préstamo y liquidación, frente al efectivo del mismo mes. No se han generado etiquetas históricas. Se conservan los supuestos centrales y se reutilizará el motor contable existente. La diferencia entre esa etiqueta y el resultado de una estrategia que mantiene posiciones queda explícita; los meses sin operación no se clasificarán como negativos.
+
 ## Fuentes ya utilizadas
 
 - Guía inicial consultada: versión del 1 de noviembre de 2026, sublínea 1.B. Guía vigente revisada: `Guia TFM ML gestion Inversiones L1 v26-27 (07 11 26).pdf`; anexo práctico en las páginas 16–21.
