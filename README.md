@@ -30,7 +30,7 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [07 Características](notebooks/07_caracteristicas.ipynb) | Construye diez variables de precio, riesgo, crédito e industrias | Shiller preparado con 01; reutiliza o descarga industrias y crédito |
 | [08 Etiquetas](notebooks/08_etiquetas.ipynb) | Compara cada operación mensual con el efectivo y calcula una sensibilidad de negociación | Tablas de 01, 02 y 07 |
 
-El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. No se han entrenado modelos ni seleccionado variables por sus resultados.
+El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. No se han entrenado modelos ni seleccionado variables por sus resultados. El siguiente incremento es el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md): las decisiones están fijadas, pero aún no se han ejecutado los contrastes.
 
 ## Supuestos y datos
 

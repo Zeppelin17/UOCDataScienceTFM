@@ -33,7 +33,7 @@ El CSV del S&P 500 incluido comienza en enero de 1980, la descarga macro consult
 
 Se trabajará con horizonte fijo de un mes. No se utilizarán barreras de beneficio o pérdida intramensuales: con esa frecuencia y horizonte no se observan puntos intermedios antes del vencimiento, y los promedios no reconstruyen la trayectoria del mes. El meta-modelo seguirá aceptando o rechazando la dirección de la regla original.
 
-El criterio central y la sensibilidad están definidos en `docs/etiquetado.md` e implementados en el notebook 08. Se compara la operación aislada neta frente al efectivo; la sensibilidad elimina solo la negociación de la etiqueta. Los costes de una operación aislada no coinciden necesariamente con los de una estrategia que conserva posiciones. El cribado sigue pendiente: las hipótesis y los contrastes deben concretarse antes de evaluar relaciones predictivas.
+El criterio central y la sensibilidad están definidos en `docs/etiquetado.md` e implementados en el notebook 08. Se compara la operación aislada neta frente al efectivo; la sensibilidad elimina solo la negociación de la etiqueta. Los costes de una operación aislada no coinciden necesariamente con los de una estrategia que conserva posiciones. El cribado sigue pendiente de implementación; las hipótesis, los contrastes y las adaptaciones quedan definidos en [hipotesis_y_cribado.md](hipotesis_y_cribado.md), antes de evaluar relaciones predictivas.
 
 ## Uso en la memoria y bibliografía
 
