@@ -201,11 +201,11 @@ def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     for shift in range(MIN_SHIFT, len(x) - MIN_SHIFT + 1):
         moved = np.roll(x, shift, axis=0)  # Mismo desplazamiento para las diez columnas y ambas reglas.
         stats = [hac_regression(moved[:, j], y)["t_hac"] for y in targets for j in range(len(FEATURE_COLUMNS))]
-        valid = [abs(value) for value in stats if value is not None]
+        valid = [abs(value) for value in stats if value is not None and math.isfinite(value)]
         shadows.append({"shift_months": shift, "circular_distance_months": min(shift, len(x) - shift),
-                        "max_abs_t_hac": max(valid) if valid else None, "estimable_tests": len(valid)})
+                        "max_abs_t_hac": max(valid) if len(valid) == len(tests) else None, "estimable_tests": len(valid)})
     shadows = pd.DataFrame(shadows)
-    # No reducir silenciosamente el conjunto nulo si algún desplazamiento no es estimable.
+    # Exigir la familia completa en cada sombra; no descartar desplazamientos incompletos.
     usable = shadows.max_abs_t_hac.notna().all()
     threshold = float(np.quantile(shadows.max_abs_t_hac, .95, method="higher")) if usable else None
     tests["shadow_threshold_95"] = threshold

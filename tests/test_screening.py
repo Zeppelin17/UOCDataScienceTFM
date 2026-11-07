@@ -1,4 +1,4 @@
-"""Tres comprobaciones: causalidad, estadística conocida y recorrido persistido sin red."""
+"""Causalidad, estadística conocida, sombras completas y recorrido persistido sin red."""
 
 import json
 from pathlib import Path
@@ -108,6 +108,35 @@ def test_known_hac_holm_and_joint_circular_shadows():
     assert tests.p_holm.eq(1).all() and not tests.passes_holm.any()
     assert tests.exceeds_shadows.isna().all() and not report["shadow_comparison_available"]
     assert shadows.max_abs_t_hac.isna().all()
+
+
+def test_partial_shadow_does_not_define_a_family_maximum():
+    rng = np.random.default_rng(172)
+    count = 100
+    x = rng.normal(size=(count, len(FEATURE_COLUMNS)))
+    months = pd.period_range("1927-01", periods=count, freq="M").astype(str)
+    pieces = []
+    # En la sombra 36, una regresión tiene ajuste perfecto y error HAC nulo.
+    # Las otras 19 son estimables: no deben convertirse en una familia completa.
+    for rule, y in (("momentum", np.roll(x[:, 0], 36)),
+                    ("reversal", rng.normal(size=count))):
+        pieces.append(pd.DataFrame({
+            "strategy": rule, "target_period": months, "screening_ready": True,
+            "anomaly_return": y,
+            **{f"z_{feature}": x[:, j] for j, feature in enumerate(FEATURE_COLUMNS)},
+        }))
+    tests, shadows, report = screen_relationships(pd.concat(pieces, ignore_index=True))
+    partial = shadows.loc[shadows.shift_months.eq(36)].iloc[0]
+    assert tests.estimable.all() and len(tests) == 20
+    assert partial.estimable_tests == 19
+    assert pd.isna(partial.max_abs_t_hac)
+    assert len(shadows) == 29  # No retirar el desplazamiento incompleto.
+    assert report["shadow_unavailable_count"] == 1
+    assert report["shadow_threshold_95"] is None
+    assert not report["shadow_comparison_available"]
+    assert tests.shadow_threshold_95.isna().all() and tests.exceeds_shadows.isna().all()
+    assert not tests.evidence_status.eq("holm_and_shadows").any()
+    assert tests.p_holm.tolist() == pytest.approx(holm_adjust(tests.p_value.to_numpy()))
 
 
 def test_notebook_continuous_response_persistence_and_invalidations(tmp_path, monkeypatch):
