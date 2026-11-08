@@ -1,6 +1,6 @@
 # Plan del notebook 10: validación temporal
 
-Fecha: 7 de noviembre de 2026. Estado: plan de implementación; no se han creado particiones persistidas ni entrenado modelos. Se ha comprobado su viabilidad mediante recuentos sobre los datos preparados, sin modificar archivos de datos.
+Diseño fijado el 7 de noviembre de 2026. Implementado el 8 de noviembre en el notebook 10 y `src/tfm/validation.py`. No se han entrenado modelos. Se conserva el plan original y se documenta abajo su implementación; las verificaciones usan copias temporales de los datos preparados.
 
 ## 1. Objetivo y alcance
 
@@ -105,3 +105,15 @@ Después se preparará el primer experimento de regresión logística, con regis
 Guía del tutor: `Guia TFM ML gestion Inversiones L1 v26-27 (07 11 26).pdf`, tabla de bloques y aclaración sobre descubrimiento CPCV frente a evaluación walk-forward. La memoria ya contiene `bib:lopezdeprado2018`, pertinente para purga/embargo y CPCV (capítulos 7 y 12); no se necesita duplicar esa entrada para este plan.
 
 El contexto de etiquetas y el cribado descriptivo están en [etiquetado.md](etiquetado.md) e [hipotesis_y_cribado.md](hipotesis_y_cribado.md). Las adaptaciones del código de Jansen se documentan en [referencias_jansen.md](referencias_jansen.md); sus ejemplos walk-forward no sustituyen el CPCV requerido por la guía.
+
+## 9. Implementación
+
+El notebook muestra el calendario completo, sus quince combinaciones, un gráfico de papeles por fecha y la frontera de una partición seleccionada por número. Las etiquetas se comprueban antes de contar ejemplos: calendario de ambas reglas, horizonte de un mes, señal activa con etiqueta binaria y correspondencia de las características incrustadas con el 07. Si faltan ambas clases se mantiene la partición y se marca la limitación, sin ajustar fechas. Los recuentos no son métricas predictivas.
+
+Las dos tablas y sus informes se guardan mediante las funciones existentes. Si una celda de guardado falla, debe repetirse completa antes de utilizar las salidas, pues se publican por separado. Regenerar entradas de 01, 02, 07 u 08 retira las particiones anteriores; guardar resultados del cribado las conserva. No se modifican los motores financieros ni se añaden dependencias. La preparación causal utiliza exactamente las mismas fórmulas y calentamiento que el diseño, sin tomar resultados de las tablas del 09.
+
+## 10. Verificación de la implementación
+
+El 8 de noviembre de 2026 se ejecutó el notebook completo desde un kernel limpio sobre una copia temporal de las tablas 07/08. No se descargaron fuentes ni se escribieron datos en el proyecto del estudiante. La carpeta temporal no contenía resultados del cribado, confirmando que no son una entrada. Se verificaron 11.340 filas de pertenencia temporal y treinta resúmenes, con los rangos de ejemplos indicados en el apartado 5 y ambas clases presentes en todas las particiones. Los Parquet guardados coinciden exactamente con las tablas calculadas.
+
+Pasan las 53 pruebas del proyecto, incluidas las dos comprobaciones de este incremento. No se han entrenado modelos, elegido variables por rendimiento o consultado importes desde 1990. El gráfico de particiones se revisó visualmente.

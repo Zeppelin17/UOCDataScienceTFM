@@ -19,6 +19,8 @@ Selecciona el Python de `.venv` en tu editor Jupyter, reinicia el kernel y ejecu
 
 9. `09_cribado_regimen.ipynb` requiere 01 → 02 → 07 → 08. Simula las reglas continuas, prepara diez variables con 36 meses anteriores, corrige conjuntamente veinte regresiones HAC con Holm y describe terciles, cuatro tramos y sombras circulares. Guarda cinco tablas `screening_*` y sus JSON. Es cribado descriptivo, sin selección definitiva, entrenamiento o evaluación desde 1990.
 
+10. `10_validacion_temporal.ipynb` requiere 01 → 02 → 07 → 08; no necesita el 09. Prepara seis bloques y quince combinaciones de dos bloques de validación, purga de un mes y embargo de seis. Muestra sus fronteras y los recuentos por regla, sin entrenar. Guarda `validation_splits.parquet` (11.340 filas) y `validation_summary.parquet` (30 resúmenes), con JSON descriptivos.
+
 Los cuadernos 03–06 requieren las tablas de 01 y 02 y se pueden ejecutar independientemente entre sí. Muestran y guardan sus supuestos centrales. Cambiarlos en uno no cambia los otros: para comparar resultados, utiliza los mismos supuestos.
 
 El diagnóstico `00_diagnostico_fuentes.ipynb` funciona por separado. Revisa Shiller, doce industrias de French, Baa/Aaa de FRED y diarios de Yahoo `^GSPC`. Compara medias y cierres sobre una muestra común; los resultados brutos allí no incluyen RF, dividendos o costes. Reutiliza originales y guarda sus tablas en `outputs/diagnosis/` al ejecutar la última celda. No sustituye las tablas de 01–06.
@@ -34,3 +36,5 @@ Para reproducir, reinicia el kernel y ejecuta todas las celdas. Antes del commit
 Antes del 08, ejecuta **01 → 02 → 07**, en ese orden. Regenerar cualquiera de sus entradas retira las etiquetas anteriores. La estrategia final puede mantener posiciones; no deben capitalizarse los retornos aislados del etiquetado como si fueran esa estrategia. Antes del commit, limpia las salidas y guarda.
 
 El 09 conserva un calendario común tras el calentamiento. Sus terciles no son carteras ejecutables y el retorno analizado no es el de las operaciones aisladas del 08. Regenerar precios, RF, señales, componentes, características o etiquetas retira sus cinco tablas; ejecuta después el 09 para recalcularlas. Los originales y los resultados de los otros cuadernos se conservan.
+
+El 10 mide purga y embargo sobre el calendario completo antes de excluir calentamiento o ausencia de señal. La ventana de embargo de seis meses incluye el mes ya excluido por purga posterior. Las particiones no dependen de los valores de las etiquetas ni del cribado. Regenerar entradas de 01, 02, 07 u 08 retira sus dos tablas; recalcular 09 las conserva.

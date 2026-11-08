@@ -19,6 +19,7 @@ from tfm.comparators import BEAR_STRATEGIES
 from tfm.volatility import SIMPLE_STRATEGIES
 from tfm.features import FEATURE_COLUMNS
 from tfm.screening import RESULT_NAMES as SCREENING_RESULTS
+from tfm.validation import RESULT_NAMES as VALIDATION_RESULTS
 
 # Ventana fijada por el diseño del TFM; la evaluación posterior sigue deshabilitada.
 START, END = "1927-01", "1989-12"
@@ -52,6 +53,11 @@ def _simple_paths(processed: Path) -> tuple[Path, Path]:
 
 def _screening_paths(processed: Path) -> tuple[Path, ...]:
     return tuple(processed / f"{name}.{extension}" for name in SCREENING_RESULTS
+                 for extension in ("parquet", "json"))
+
+
+def _validation_paths(processed: Path) -> tuple[Path, ...]:
+    return tuple(processed / f"{name}.{extension}" for name in VALIDATION_RESULTS
                  for extension in ("parquet", "json"))
 
 
@@ -143,7 +149,7 @@ def prepare_shiller_data(root: Path, *, file: str | Path | None = None, history_
                     dependents=(processed / "monthly_features.parquet", processed / "monthly_features.json",
                                 processed / "shiller_signals.parquet", processed / "shiller_signals.json",
                                 processed / "monthly_return_components.parquet", processed / "monthly_return_components.json",
-                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed), *_screening_paths(processed)))
+                                *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed), *_screening_paths(processed), *_validation_paths(processed)))
 
 
 def load_monthly(root: Path) -> pd.DataFrame:
@@ -193,7 +199,8 @@ def calculate_signals(root: Path) -> dict:
                                 *_bear_paths(root / "data/processed"),
                                 *_simple_paths(root / "data/processed"),
                                 *_label_paths(root / "data/processed"),
-                                *_screening_paths(root / "data/processed")))
+                                *_screening_paths(root / "data/processed"),
+                                *_validation_paths(root / "data/processed")))
 
 
 def prepare_french_data(root: Path, *, file: str | Path | None = None) -> dict:
@@ -207,7 +214,7 @@ def prepare_french_data(root: Path, *, file: str | Path | None = None) -> dict:
     return _publish(table, processed / "french_rf_monthly.parquet",
                     report,
                     dependents=(processed / "monthly_return_components.parquet",
-                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed), *_screening_paths(processed)))
+                                processed / "monthly_return_components.json", *_simulation_paths(processed), *_sensitivity_paths(processed), *_bear_paths(processed), *_simple_paths(processed), *_label_paths(processed), *_screening_paths(processed), *_validation_paths(processed)))
 
 
 def load_french_rf(root: Path) -> tuple[pd.DataFrame, dict]:
@@ -240,7 +247,8 @@ def prepare_return_components(root: Path) -> dict:
                                 *_bear_paths(root / "data/processed"),
                                 *_simple_paths(root / "data/processed"),
                                 *_label_paths(root / "data/processed"),
-                                *_screening_paths(root / "data/processed")))
+                                *_screening_paths(root / "data/processed"),
+                                *_validation_paths(root / "data/processed")))
 
 
 def read_result(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
@@ -472,13 +480,13 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS, *VALIDATION_RESULTS}:
         raise ValueError("Nombre de resultado desconocido")
     processed = root / "data/processed"
     dependents = ()
     if name == "monthly_features":
-        dependents = (*_label_paths(processed), *_screening_paths(processed))
+        dependents = (*_label_paths(processed), *_screening_paths(processed), *_validation_paths(processed))
     elif name == "labelled_signals":
-        dependents = _screening_paths(processed)
+        dependents = (*_screening_paths(processed), *_validation_paths(processed))
     return _publish(table, processed / f"{name}.parquet",
                     {**report, "status": "passed", "rows": len(table)}, dependents=dependents)
