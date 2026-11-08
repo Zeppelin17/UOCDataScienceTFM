@@ -4,6 +4,8 @@ Estudio de aprendizaje automático como filtro de las señales de momentum y rev
 
 El trabajo se ejecuta mediante **notebooks**, sin CLI ni archivos de configuración. Los cuadernos muestran las fuentes, los periodos y los supuestos; las funciones reutilizables están en `src/tfm`.
 
+Para comprender el estudio desde cero, abre la [guía interactiva del proyecto](docs/guia_del_proyecto.html) en un navegador. Recorre los fundamentos y los notebooks 00–10, con ejemplos, detalles de fórmulas y código y un glosario. [Instrucciones de lectura](docs/guia_del_proyecto.md).
+
 ## Cómo empezar
 
 Con Python 3.11 o posterior, desde la raíz del repositorio:
