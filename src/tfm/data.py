@@ -19,7 +19,8 @@ from tfm.comparators import BEAR_STRATEGIES
 from tfm.volatility import SIMPLE_STRATEGIES
 from tfm.features import FEATURE_COLUMNS
 from tfm.screening import RESULT_NAMES as SCREENING_RESULTS
-from tfm.validation import RESULT_NAMES as VALIDATION_RESULTS
+from tfm.validation import RESULT_NAMES as VALIDATION_RESULTS, build_temporal_splits
+from tfm.logistic import RESULT_NAMES as LOGISTIC_RESULTS
 
 # Ventana fijada por el diseño del TFM; la evaluación posterior sigue deshabilitada.
 START, END = "1927-01", "1989-12"
@@ -57,7 +58,12 @@ def _screening_paths(processed: Path) -> tuple[Path, ...]:
 
 
 def _validation_paths(processed: Path) -> tuple[Path, ...]:
-    return tuple(processed / f"{name}.{extension}" for name in VALIDATION_RESULTS
+    return tuple(processed / f"{name}.{extension}" for name in (*VALIDATION_RESULTS, *LOGISTIC_RESULTS)
+                 for extension in ("parquet", "json"))
+
+
+def _logistic_paths(processed: Path) -> tuple[Path, ...]:
+    return tuple(processed / f"{name}.{extension}" for name in LOGISTIC_RESULTS
                  for extension in ("parquet", "json"))
 
 
@@ -253,6 +259,16 @@ def prepare_return_components(root: Path) -> dict:
 
 def read_result(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
     """Leer tablas preparadas y comprobar sus meses, estructura y valores."""
+    if name in (*VALIDATION_RESULTS, *LOGISTIC_RESULTS):
+        table, summary = _read_table(root, name)
+        if summary.get("status") != "passed":
+            raise ValueError("Resultado sin preparación válida; repite su notebook.")
+        if name == "validation_splits":
+            try:
+                pd.testing.assert_frame_equal(table, build_temporal_splits()[0], check_exact=True)
+            except AssertionError as exc:
+                raise ValueError("Las particiones no corresponden al diseño; ejecuta el notebook 10.") from exc
+        return table, summary
     if name == "labelled_signals":
         table, summary = _read_table(root, name)
         required = {"asset", "strategy", "target_period", "decision_period", "label", "label_no_transaction_cost",
@@ -480,7 +496,7 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS, *VALIDATION_RESULTS}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS, *VALIDATION_RESULTS, *LOGISTIC_RESULTS}:
         raise ValueError("Nombre de resultado desconocido")
     processed = root / "data/processed"
     dependents = ()
@@ -488,5 +504,7 @@ def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dic
         dependents = (*_label_paths(processed), *_screening_paths(processed), *_validation_paths(processed))
     elif name == "labelled_signals":
         dependents = (*_screening_paths(processed), *_validation_paths(processed))
+    elif name in VALIDATION_RESULTS:
+        dependents = _logistic_paths(processed)
     return _publish(table, processed / f"{name}.parquet",
                     {**report, "status": "passed", "rows": len(table)}, dependents=dependents)

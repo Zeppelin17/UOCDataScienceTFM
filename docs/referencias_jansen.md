@@ -1,6 +1,6 @@
 # Referencias de Jansen para los próximos incrementos
 
-Revisión: 7 de noviembre de 2026. Estado: fuentes consultadas y usos previstos. El notebook 08 aplica la idea de horizonte fijo y señal más resultado futuro mediante implementación propia; no se ha copiado código del repositorio.
+Revisión: 7 de noviembre de 2026. Estado: fuentes consultadas y usos previstos. El notebook 08 aplica la idea de horizonte fijo y señal más resultado futuro mediante implementación propia; no se ha copiado código del repositorio. El notebook 11 utiliza también el ejemplo de logística como apoyo para organizar probabilidades y métricas, con CPCV propio en lugar de su walk-forward.
 
 Repositorio de la tercera edición: https://github.com/stefan-jansen/machine-learning-for-trading
 

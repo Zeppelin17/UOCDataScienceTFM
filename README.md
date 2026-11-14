@@ -13,10 +13,10 @@ Con Python 3.11 o posterior, desde la raíz del repositorio:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev,notebooks]"
+python -m pip install -e ".[dev,notebooks,models]"
 ```
 
-En PowerShell, activa el entorno con `.venv\Scripts\Activate.ps1`. Si ya tienes el entorno con ipykernel y matplotlib, este cambio no necesita instalar nada. `requirements-lock.txt` conserva las versiones verificadas del flujo base y pytest; las dependencias opcionales de notebooks se instalan por separado.
+En PowerShell, activa el entorno con `.venv\Scripts\Activate.ps1`. El extra `models` añade scikit-learn para el notebook 11; si ya tenías el entorno de notebooks, incorpora ese extra con `python -m pip install -e ".[models]"`. Los notebooks 01–10 no lo necesitan. `requirements-lock.txt` conserva las versiones verificadas del flujo base, pytest y modelado; las dependencias opcionales de notebooks se instalan por separado.
 
 Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de `.venv`, reinicia el kernel y ejecuta las celdas en orden. Pueden ejecutarse desde la raíz del proyecto o desde `notebooks/`.
 
@@ -33,10 +33,13 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [08 Etiquetas](notebooks/08_etiquetas.ipynb) | Compara cada operación mensual con el efectivo y calcula una sensibilidad de negociación | Tablas de 01, 02 y 07 |
 | [09 Cribado](notebooks/09_cribado_regimen.ipynb) | Relaciona el retorno de cada regla con las diez variables; revisa BH al 10 %, terciles, subperiodos y sombras | Haber ejecutado 01 → 02 → 07 → 08 |
 | [10 Validación temporal](notebooks/10_validacion_temporal.ipynb) | Prepara quince particiones CPCV con purga y embargo y cuenta ejemplos por regla | Haber ejecutado 01 → 02 → 07 → 08; independiente del 09 |
+| [11 Regresión logística](notebooks/11_regresion_logistica.ipynb) | Compara probabilidades L2 con la frecuencia de éxitos del entrenamiento | Haber ejecutado 01 → 02 → 07 → 08 → 10; extra `models` |
 
-El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. No se han entrenado modelos ni seleccionado variables por sus resultados. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
+El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
 
 El 10 implementa el [diseño de validación temporal](docs/plan_validacion_temporal.md): seis bloques, quince combinaciones, purga de un mes y embargo de seis meses. Separa el calendario de los ejemplos utilizables por regla, conserva las diez candidatas y no entrena modelos. Guarda las particiones y sus recuentos, sin depender de los resultados del cribado.
+
+El 11 implementa el [primer experimento de logística L2](docs/primer_modelo.md), con las diez candidatas, `C=1` y sin ponderación de clases ni búsqueda de parámetros. Guarda las cinco predicciones de validación por ejemplo y su media mensual, log-loss/AUC y coeficientes. La referencia es la frecuencia positiva del entrenamiento. El historial de intentos está en `outputs/experiments/logistic_trials.jsonl`. La puerta de capacidad predictiva queda pendiente de sombras del modelo; Clustered MDA, SHAP y la evaluación económica del filtro vendrán después. La guía interactiva cubre los fundamentos y notebooks 00–10; el 11 incluye su propia explicación.
 
 ## Supuestos y datos
 
@@ -69,9 +72,11 @@ src/tfm/
   labels.py               Etiquetas mensuales aisladas y sensibilidad de negociación
   screening.py            Preparación causal, regresiones HAC, BH, terciles y sombras
   validation.py           Calendario CPCV, purga, embargo y recuentos por regla
+  logistic.py             Primer clasificador L2, probabilidades y registro de variantes
 data/raw/                Originales locales (fuera de Git)
 data/processed/          Tablas Parquet y resúmenes JSON (fuera de Git)
 outputs/diagnosis/       Tablas del diagnóstico (fuera de Git)
+outputs/experiments/     Historial científico de intentos de modelado (fuera de Git)
 tests/                   Comprobaciones esenciales sin red
 docs/                    Decisiones y hallazgos para documentar el TFM
 ```
@@ -79,6 +84,8 @@ docs/                    Decisiones y hallazgos para documentar el TFM
 Los JSON describen los resultados y sus supuestos: no se editan para dirigir la ejecución. Las tablas mantienen nombres fijos. Volver a preparar Shiller retira señales, componentes, características, etiquetas y simulaciones anteriores; preparar French retira componentes, etiquetas y simulaciones, conservando señales. Los cuadernos 03–06 guardan sus propios resultados sin sobrescribirse entre sí. Regenerar señales, componentes o características retira también el conjunto etiquetado; vuelve a ejecutar el 08. Regenerar sus entradas, incluidas las etiquetas, retira las cinco tablas `screening_*` y sus informes; vuelve a ejecutar el 09. Esas mismas preparaciones retiran también las dos tablas `validation_*` y sus informes; vuelve a ejecutar el 10. Repetir el 09 no las invalida. Un fallo de publicación restaura las salidas anteriores de esa tabla.
 
 Los originales se reutilizan y no se sustituyen automáticamente. No se modifican los datos históricos conservados al actualizar el código. Si falta una tabla, ejecuta el cuaderno que la prepara. Si regeneras 01 o 02, vuelve a ejecutar las simulaciones que necesites. No se requiere servidor ni base de datos.
+
+Regenerar entradas de 01, 02, 07 u 08, o guardar las particiones del 10, retira también las cuatro tablas `logistic_*` y sus informes. Repetir el 09 las conserva. El historial científico se mantiene aunque se recalculen las tablas; repetir una variante no la convierte en otra configuración. Las medias de probabilidades no son trayectorias de rentabilidad para DSR/PBO.
 
 ## Verificación
 
