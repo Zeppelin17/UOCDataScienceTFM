@@ -22,4 +22,4 @@ La guía distingue lo implementado, los supuestos de simulación y las metodolog
 
 Se ha revisado el recorrido completo contra el código y las decisiones del proyecto, con especial atención a las fechas, las unidades, los costes, las etiquetas y las particiones de validación. Las calculadoras de cuentas se han contrastado con el motor de Python usando ejemplos ficticios.
 
-El punto 13 utiliza BH con p ajustado < 0,10 como criterio principal y Holm al 5 % como comprobación adicional. El signo esperado y las sombras se interpretan por separado; las diez características siguen siendo candidatas.
+El punto 13 utiliza BH con p ajustado < 0,10 como único criterio de significación del cribado. El signo esperado y las sombras se interpretan por separado; las diez características siguen siendo candidatas.

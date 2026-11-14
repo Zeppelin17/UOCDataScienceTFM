@@ -14,7 +14,7 @@ from tfm.data import (calculate_signals, prepare_french_data, prepare_return_com
 from tfm.features import FEATURE_COLUMNS, build_monthly_features
 from tfm.labels import build_monthly_labels
 from tfm.screening import (RESULT_NAMES, build_screening_monthly, describe_regimes,
-                           bh_adjust, hac_regression, holm_adjust, screen_relationships, transform_features)
+                           bh_adjust, hac_regression, screen_relationships, transform_features)
 from tfm.simulation import simulate_baselines
 from tfm.sources.shiller import INSTRUMENT, XLS_SIGNATURE
 from test_features import inputs as feature_inputs
@@ -67,7 +67,7 @@ def test_causal_winsorization_warmup_ties_and_date_alignment():
         transform_features(bad)
 
 
-def test_known_hac_holm_and_joint_circular_shadows():
+def test_known_hac_and_joint_circular_shadows():
     # Referencia calculada con aritmética racional y el sandwich matricial completo 2x2.
     # Var(b) exacta: 121354813 / 70251148968, sin factor n/(n-2).
     fit = hac_regression(range(12), [1, 2, 1, 4, 3, 6, 4, 8, 7, 9, 8, 12])
@@ -80,8 +80,6 @@ def test_known_hac_holm_and_joint_circular_shadows():
     assert not hac_regression(np.arange(12), np.arange(12))["estimable"]
     with pytest.raises(ValueError, match="finitas"):
         hac_regression([np.nan], [0.0])
-    p = [.04, .002, .03, .01, .2, *([1.0] * 15)]
-    assert holm_adjust(p) == pytest.approx([.68, .04, .54, .19, 1, *([1] * 15)])
     months = pd.period_range("1927-01", periods=100, freq="M").astype(str)
     i = np.arange(100)
     pieces = []
@@ -106,7 +104,6 @@ def test_known_hac_holm_and_joint_circular_shadows():
     # Un retorno constante no fabrica significación ni una referencia nula igual a cero.
     monthly["anomaly_return"] = 0.0
     tests, shadows, report = screen_relationships(monthly)
-    assert tests.p_holm.eq(1).all() and not tests.passes_holm.any()
     assert tests.p_bh.eq(1).all() and not tests.passes_bh.any()
     assert tests.exceeds_shadows.isna().all() and not report["shadow_comparison_available"]
     assert shadows.max_abs_t_hac.isna().all()
@@ -121,7 +118,7 @@ def test_bh_known_values_strict_boundary_and_independent_checks(monkeypatch):
         with pytest.raises(ValueError, match="BH"):
             bh_adjust(invalid)
 
-    # Una familia conocida: .004 supera BH pero no Holm; .01 da p BH = .10 exacto.
+    # Una familia conocida: .004 supera BH; .01 da p BH = .10 exacto.
     values = cycle(enumerate([.04, .004, .03, .01, .2, *([1.] * 15)]))
     def known_fit(x, y):
         index, p = next(values)
@@ -135,9 +132,9 @@ def test_bh_known_values_strict_boundary_and_independent_checks(monkeypatch):
         **{f"z_{feature}": np.arange(100, dtype=float) for feature in FEATURE_COLUMNS}})
         for rule in ("momentum", "reversal")], ignore_index=True)
     tests, _, _ = screen_relationships(monthly)
-    assert tests.passes_bh.sum() == 1 and not tests.passes_holm.any()
+    assert tests.passes_bh.sum() == 1
     accepted = tests.loc[tests.passes_bh].iloc[0]
-    assert accepted.evidence_status == "bh_only" and not accepted.exceeds_shadows
+    assert accepted.evidence_status == "bh_evidence" and not accepted.exceeds_shadows
     assert accepted.direction_status == "does_not_support_expected_sign"
     boundary = tests.loc[tests.p_value.eq(.01)].iloc[0]
     assert boundary.p_bh == .10 and not boundary.passes_bh
@@ -169,7 +166,6 @@ def test_partial_shadow_does_not_define_a_family_maximum():
     assert report["shadow_threshold_95"] is None
     assert not report["shadow_comparison_available"]
     assert tests.shadow_threshold_95.isna().all() and tests.exceeds_shadows.isna().all()
-    assert tests.p_holm.tolist() == pytest.approx(holm_adjust(tests.p_value.to_numpy()))
     assert tests.p_bh.tolist() == pytest.approx(bh_adjust(tests.p_value.to_numpy()))
 
 
@@ -232,10 +228,10 @@ def test_notebook_continuous_response_persistence_and_invalidations(tmp_path, mo
         assert info["family_size"] == 20 and info["scope"] == "descriptive_development_screening_only"
         assert info["multiple_testing"]["primary"] == {
             "method": "BH", "adjusted_p_threshold": .10, "comparison": "<"}
-        assert info["multiple_testing"]["secondary"] == {
-            "method": "Holm", "adjusted_p_threshold": .05, "comparison": "<="}
+        assert "secondary" not in info["multiple_testing"]
     persisted = pd.read_parquet(tmp_path / "data/processed/screening_tests.parquet")
-    assert {"p_bh", "passes_bh", "p_holm", "passes_holm", "direction_status", "exceeds_shadows"} <= set(persisted)
+    assert {"p_bh", "passes_bh", "direction_status", "exceeds_shadows"} <= set(persisted)
+    assert not {"p_holm", "passes_holm"} & set(persisted)
     before = {p: p.read_bytes() for p in paths}
     for regenerate in (calculate_signals, prepare_return_components, prepare_french_data, prepare_shiller_data):
         for p, content in before.items():p.write_bytes(content)

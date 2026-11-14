@@ -1,7 +1,7 @@
 """Cribado temporal descriptivo de 1.B; sin selección automática ni entrenamiento.
 
 Protocolo: docs/hipotesis_y_cribado.md. Fórmulas propias de OLS/Newey–West
-(Bartlett, sin corrección de muestra pequeña), BH y Holm. Jansen, capítulos 7–8,
+(Bartlett, sin corrección de muestra pequeña) y BH. Jansen, capítulos 7–8,
 aporta organización; no se copia su IC transversal ni sus permutaciones.
 """
 
@@ -19,7 +19,6 @@ from tfm.sources.shiller import INSTRUMENT
 MIN_HISTORY = 36
 HAC_LAGS = 6
 BH_ALPHA = 0.10
-HOLM_ALPHA = 0.05
 MIN_SHIFT = 36
 RULES = ("momentum", "reversal")
 POSITIVE_MOMENTUM = {"momentum_12_1", "market_return_24m", "distance_ma_12m",
@@ -114,10 +113,9 @@ def build_screening_monthly(features: pd.DataFrame, components: pd.DataFrame,
                    "hac_small_sample_correction": False, "family_size": 20,
                    "multiple_testing": {
                        "primary": {"method": "BH", "adjusted_p_threshold": BH_ALPHA, "comparison": "<"},
-                       "secondary": {"method": "Holm", "adjusted_p_threshold": HOLM_ALPHA, "comparison": "<="},
                        "family": "all ten features and both rules jointly",
                        "non_estimable_p_for_adjustment": 1.0,
-                       "revision": "2026-11-14; tutor recommendation after initial Holm analysis",
+                       "revision": "2026-11-14; BH at 10% as sole multiplicity criterion after tutor feedback",
                    },
                    "min_circular_shift_months": MIN_SHIFT,
                    "transform": "past-only expanding 1/99 winsorization and sample z-score; linear quantiles",
@@ -161,18 +159,6 @@ def hac_regression(x, y) -> dict:
             "p_value": math.erfc(abs(statistic) / math.sqrt(2)), "estimable": True, "reason": "ok"}
 
 
-def holm_adjust(p_values) -> np.ndarray:
-    """Ajuste step-down en orden original, conservando toda la familia."""
-    p = np.asarray(p_values, dtype=float)
-    if p.ndim != 1 or not len(p) or not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
-        raise ValueError("Holm requiere valores p entre 0 y 1 para toda la familia.")
-    order = np.argsort(p, kind="stable")
-    adjusted = np.minimum(1.0, np.maximum.accumulate(p[order] * np.arange(len(p), 0, -1)))
-    result = np.empty(len(p))
-    result[order] = adjusted
-    return result
-
-
 def bh_adjust(p_values) -> np.ndarray:
     """Benjamini–Hochberg step-up; devolver p ajustados en el orden original."""
     p = np.asarray(p_values, dtype=float)
@@ -207,7 +193,7 @@ def _common_arrays(monthly: pd.DataFrame):
 
 
 def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Veinte contrastes: BH principal, Holm adicional y sombras separadas."""
+    """Veinte contrastes: BH al 10% y sombras descriptivas separadas."""
     _, _, x, targets = _common_arrays(monthly)
     records = []
     for rule, y in zip(RULES, targets):
@@ -218,9 +204,7 @@ def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     tests = pd.DataFrame(records)
     family_p = tests.p_value.fillna(1).to_numpy()
     tests["p_bh"] = bh_adjust(family_p)
-    tests["p_holm"] = holm_adjust(family_p)
     tests["passes_bh"] = tests.estimable & tests.p_bh.lt(BH_ALPHA)
-    tests["passes_holm"] = tests.estimable & tests.p_holm.le(HOLM_ALPHA)
     shadows = []
     for shift in range(MIN_SHIFT, len(x) - MIN_SHIFT + 1):
         moved = np.roll(x, shift, axis=0)  # Mismo desplazamiento para las diez columnas y ambas reglas.
@@ -242,10 +226,8 @@ def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
             value = "not_estimable"
         elif not row.passes_bh:
             value = "no_bh_evidence"
-        elif row.passes_holm:
-            value = "bh_and_holm"
         else:
-            value = "bh_only"
+            value = "bh_evidence"
         status.append(value)
         directions.append("not_estimable" if not row.estimable else
                           "exploratory" if row.expected_sign == "unspecified" else
