@@ -81,3 +81,7 @@ El 14 de noviembre de 2026 se ejecutaron todas las celdas en un proceso limpio, 
 Estas métricas corresponden al resumen de cinco probabilidades por ejemplo. Ambas logísticas mejoran ligeramente la log-loss y superan la referencia de AUC de 0,54, pero no se declara superada la puerta completa: las sombras del modelo y su utilidad económica siguen pendientes. No se han modificado variables o parámetros a partir de estos resultados.
 
 Pasan las 58 pruebas del proyecto, incluidas las cuatro comprobaciones del incremento. La regresión de particiones vacías conserva las treinta combinaciones de partición y regla incluso cuando veinte carecen de ejemplos de validación. Se revisó también el gráfico: los meses sin ejemplo utilizable se muestran como huecos, sin interpolar probabilidades, y los marcadores permiten ver las observaciones aisladas. Los notebooks se entregan con salidas y contadores de ejecución vacíos.
+
+## Continuación del experimento
+
+El notebook 12 aplica el [protocolo de sombras de la logística](sombras_logistica.md). Lee estas salidas sin volver a ajustar el modelo original y guarda su comparación aparte. Sus criterios se fijan después de conocer las métricas anteriores y antes de calcular las sombras. El estado pendiente de sombras en los informes originales del 11 describe su alcance; la comparación posterior pertenece a los informes del 12.

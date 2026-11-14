@@ -157,15 +157,10 @@ def evaluate_logistic(samples: pd.DataFrame, splits: pd.DataFrame) -> tuple[dict
     return tables, report
 
 
-def run_logistic_experiment(root: Path) -> tuple[dict, dict]:
-    """Leer entradas verificadas y registrar cada intento antes del primer ajuste.
-
-    El historial científico se conserva aparte de las tablas reemplazables. Una
-    repetición es otro intento de la misma variante, no quince modelos candidatos.
-    """
+def load_logistic_inputs(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict, dict]:
+    """Reconstruir ejemplos y contrastar las particiones guardadas con sus entradas."""
     from tfm.data import read_result
 
-    _sklearn()
     features, _ = read_result(root, "monthly_features")
     labels, label_report = read_result(root, "labelled_signals")
     samples, preparation = prepare_validation_samples(features, labels)
@@ -175,6 +170,17 @@ def run_logistic_experiment(root: Path) -> tuple[dict, dict]:
         pd.testing.assert_frame_equal(saved_summary, summarize_validation(splits, samples), check_exact=True)
     except AssertionError as exc:
         raise ValueError("Las particiones no corresponden a las entradas actuales; ejecuta el notebook 10.") from exc
+    return samples, splits, label_report, preparation
+
+
+def run_logistic_experiment(root: Path) -> tuple[dict, dict]:
+    """Leer entradas verificadas y registrar cada intento antes del primer ajuste.
+
+    El historial científico se conserva aparte de las tablas reemplazables. Una
+    repetición es otro intento de la misma variante, no quince modelos candidatos.
+    """
+    _sklearn()
+    samples, splits, label_report, preparation = load_logistic_inputs(root)
     path = root / "outputs/experiments/logistic_trials.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     attempt = datetime.now(timezone.utc).isoformat()
