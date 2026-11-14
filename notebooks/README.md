@@ -17,7 +17,7 @@ Selecciona el Python de `.venv` en tu editor Jupyter, reinicia el kernel y ejecu
 
 8. `08_etiquetas.ipynb` necesita las tablas de 01, 02 y 07. Explica la operación aislada neta frente al efectivo y compara la etiqueta central con una sensibilidad sin negociación. Conserva los meses sin señal con etiqueta ausente. Guarda `labelled_signals.parquet` y su JSON; no descarga fuentes ni entrena modelos.
 
-9. `09_cribado_regimen.ipynb` requiere 01 → 02 → 07 → 08. Simula las reglas continuas, prepara diez variables con 36 meses anteriores, corrige conjuntamente veinte regresiones HAC con Holm y describe terciles, cuatro tramos y sombras circulares. Guarda cinco tablas `screening_*` y sus JSON. Es cribado descriptivo, sin selección definitiva, entrenamiento o evaluación desde 1990.
+9. `09_cribado_regimen.ipynb` requiere 01 → 02 → 07 → 08. Simula las reglas continuas, prepara diez variables con 36 meses anteriores, corrige conjuntamente veinte regresiones HAC con BH (p ajustado < 0,10) como principal y Holm al 5 % como adicional y describe terciles, cuatro tramos y sombras circulares. Guarda cinco tablas `screening_*` y sus JSON. Es cribado descriptivo, sin selección definitiva, entrenamiento o evaluación desde 1990.
 
 10. `10_validacion_temporal.ipynb` requiere 01 → 02 → 07 → 08; no necesita el 09. Prepara seis bloques y quince combinaciones de dos bloques de validación, purga de un mes y embargo de seis. Muestra sus fronteras y los recuentos por regla, sin entrenar. Guarda `validation_splits.parquet` (11.340 filas) y `validation_summary.parquet` (30 resúmenes), con JSON descriptivos.
 

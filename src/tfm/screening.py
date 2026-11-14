@@ -1,7 +1,7 @@
 """Cribado temporal descriptivo de 1.B; sin selección automática ni entrenamiento.
 
 Protocolo: docs/hipotesis_y_cribado.md. Fórmulas propias de OLS/Newey–West
-(Bartlett, sin corrección de muestra pequeña) y Holm. Jansen, capítulos 7–8,
+(Bartlett, sin corrección de muestra pequeña), BH y Holm. Jansen, capítulos 7–8,
 aporta organización; no se copia su IC transversal ni sus permutaciones.
 """
 
@@ -18,7 +18,8 @@ from tfm.sources.shiller import INSTRUMENT
 
 MIN_HISTORY = 36
 HAC_LAGS = 6
-ALPHA = 0.05
+BH_ALPHA = 0.10
+HOLM_ALPHA = 0.05
 MIN_SHIFT = 36
 RULES = ("momentum", "reversal")
 POSITIVE_MOMENTUM = {"momentum_12_1", "market_return_24m", "distance_ma_12m",
@@ -110,7 +111,14 @@ def build_screening_monthly(features: pd.DataFrame, components: pd.DataFrame,
     report.update({"common_months": len(common), "first_target": common.iloc[0], "last_target": common.iloc[-1],
                    "response": "continuous_unfiltered_net_return_minus_rf", "parameters": parameters,
                    "feature_columns": FEATURE_COLUMNS, "hac_lags": HAC_LAGS,
-                   "hac_small_sample_correction": False, "alpha": ALPHA, "family_size": 20,
+                   "hac_small_sample_correction": False, "family_size": 20,
+                   "multiple_testing": {
+                       "primary": {"method": "BH", "adjusted_p_threshold": BH_ALPHA, "comparison": "<"},
+                       "secondary": {"method": "Holm", "adjusted_p_threshold": HOLM_ALPHA, "comparison": "<="},
+                       "family": "all ten features and both rules jointly",
+                       "non_estimable_p_for_adjustment": 1.0,
+                       "revision": "2026-11-14; tutor recommendation after initial Holm analysis",
+                   },
                    "min_circular_shift_months": MIN_SHIFT,
                    "transform": "past-only expanding 1/99 winsorization and sample z-score; linear quantiles",
                    "subperiods": [list(pair) for pair in SUBPERIODS]})
@@ -165,6 +173,19 @@ def holm_adjust(p_values) -> np.ndarray:
     return result
 
 
+def bh_adjust(p_values) -> np.ndarray:
+    """Benjamini–Hochberg step-up; devolver p ajustados en el orden original."""
+    p = np.asarray(p_values, dtype=float)
+    if p.ndim != 1 or not len(p) or not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
+        raise ValueError("BH requiere valores p entre 0 y 1 para toda la familia.")
+    order = np.argsort(p, kind="stable")
+    scaled = p[order] * len(p) / np.arange(1, len(p) + 1)
+    adjusted = np.minimum(1.0, np.minimum.accumulate(scaled[::-1])[::-1])
+    result = np.empty(len(p))
+    result[order] = adjusted
+    return result
+
+
 def _common_arrays(monthly: pd.DataFrame):
     """Impedir que las sombras cuenten filas separadas como meses consecutivos."""
     rows = monthly.loc[monthly.screening_ready].copy()
@@ -186,7 +207,7 @@ def _common_arrays(monthly: pd.DataFrame):
 
 
 def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Veinte contrastes, Holm conjunto y máximo familiar por sombra circular."""
+    """Veinte contrastes: BH principal, Holm adicional y sombras separadas."""
     _, _, x, targets = _common_arrays(monthly)
     records = []
     for rule, y in zip(RULES, targets):
@@ -195,8 +216,11 @@ def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
                             "expected_sign": "+" if rule == "momentum" and feature in POSITIVE_MOMENTUM else "unspecified",
                             **hac_regression(x[:, j], y)})
     tests = pd.DataFrame(records)
-    tests["p_holm"] = holm_adjust(tests.p_value.fillna(1).to_numpy())
-    tests["passes_holm"] = tests.estimable & tests.p_holm.le(ALPHA)
+    family_p = tests.p_value.fillna(1).to_numpy()
+    tests["p_bh"] = bh_adjust(family_p)
+    tests["p_holm"] = holm_adjust(family_p)
+    tests["passes_bh"] = tests.estimable & tests.p_bh.lt(BH_ALPHA)
+    tests["passes_holm"] = tests.estimable & tests.p_holm.le(HOLM_ALPHA)
     shadows = []
     for shift in range(MIN_SHIFT, len(x) - MIN_SHIFT + 1):
         moved = np.roll(x, shift, axis=0)  # Mismo desplazamiento para las diez columnas y ambas reglas.
@@ -212,20 +236,22 @@ def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     tests["exceeds_shadows"] = pd.array(
         [abs(row.t_hac) > threshold if row.estimable and threshold is not None else pd.NA
          for row in tests.itertuples()], dtype="boolean")
-    status = []
+    status, directions = [], []
     for row in tests.itertuples():
         if not row.estimable:
             value = "not_estimable"
-        elif row.expected_sign == "+" and row.slope < 0:
-            value = "opposite_expected_sign"
-        elif not row.passes_holm:
-            value = "no_adjusted_evidence"
-        elif pd.notna(row.exceeds_shadows) and row.exceeds_shadows:
-            value = "holm_and_shadows"
+        elif not row.passes_bh:
+            value = "no_bh_evidence"
+        elif row.passes_holm:
+            value = "bh_and_holm"
         else:
-            value = "holm_only"
+            value = "bh_only"
         status.append(value)
+        directions.append("not_estimable" if not row.estimable else
+                          "exploratory" if row.expected_sign == "unspecified" else
+                          "supports_expected_sign" if row.slope > 0 else "does_not_support_expected_sign")
     tests["evidence_status"] = status
+    tests["direction_status"] = directions
     return tests, shadows, {"shadow_count": len(shadows), "shadow_threshold_95": threshold,
                             "shadow_comparison_available": bool(usable),
                             "shadow_unavailable_count": int(shadows.max_abs_t_hac.isna().sum())}

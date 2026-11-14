@@ -31,7 +31,7 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [06 Volatilidad](notebooks/06_ajuste_volatilidad.ipynb) | Compara ocho cuentas, incluyendo exposición ajustada por riesgo | Tablas de 01 y 02 |
 | [07 Características](notebooks/07_caracteristicas.ipynb) | Construye diez variables de precio, riesgo, crédito e industrias | Shiller preparado con 01; reutiliza o descarga industrias y crédito |
 | [08 Etiquetas](notebooks/08_etiquetas.ipynb) | Compara cada operación mensual con el efectivo y calcula una sensibilidad de negociación | Tablas de 01, 02 y 07 |
-| [09 Cribado](notebooks/09_cribado_regimen.ipynb) | Relaciona el retorno de cada regla con las diez variables; revisa Holm, terciles, subperiodos y sombras | Haber ejecutado 01 → 02 → 07 → 08 |
+| [09 Cribado](notebooks/09_cribado_regimen.ipynb) | Relaciona el retorno de cada regla con las diez variables; revisa BH al 10 %, Holm al 5 %, terciles, subperiodos y sombras | Haber ejecutado 01 → 02 → 07 → 08 |
 | [10 Validación temporal](notebooks/10_validacion_temporal.ipynb) | Prepara quince particiones CPCV con purga y embargo y cuenta ejemplos por regla | Haber ejecutado 01 → 02 → 07 → 08; independiente del 09 |
 
 El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. No se han entrenado modelos ni seleccionado variables por sus resultados. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
@@ -67,7 +67,7 @@ src/tfm/
   diagnostics.py          Cobertura de fuentes y contraste de medias/cierres
   features.py             Diez características con fechas de fuente explícitas
   labels.py               Etiquetas mensuales aisladas y sensibilidad de negociación
-  screening.py            Preparación causal, regresiones HAC, Holm, terciles y sombras
+  screening.py            Preparación causal, regresiones HAC, BH/Holm, terciles y sombras
   validation.py           Calendario CPCV, purga, embargo y recuentos por regla
 data/raw/                Originales locales (fuera de Git)
 data/processed/          Tablas Parquet y resúmenes JSON (fuera de Git)
