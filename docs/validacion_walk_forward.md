@@ -56,6 +56,8 @@ Solo se construirán mapas SHAP de regímenes aceptados, usando observaciones de
 
 ## Archivos e integración
 
+La [estructura de entrega](estructura_notebooks.md) integrará este recorrido en el cuaderno final de modelado. Mientras tanto, M2/M3 ampliarán el notebook 14 por secciones, sin crear un cuaderno por cada modelo. Este cambio de organización no modifica el protocolo científico.
+
 `src/tfm/walk_forward.py` mantiene el calendario, los recuentos, los ajustes y las métricas. Reutiliza `fit_partition` y `prepare_validation_samples`, sin modificar su comportamiento. El notebook `14_referencia_walk_forward.ipynb` explica cada bloque y publica cinco tablas con JSON descriptivos:
 
 | Tabla | Contenido |

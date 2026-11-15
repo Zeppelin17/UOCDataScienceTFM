@@ -2,6 +2,8 @@
 
 La entrega se ejecuta en notebooks. No hay menú de terminal ni ficheros de configuración. Los periodos, fuentes y supuestos están fijados en los lectores o visibles en las celdas; los cálculos reutilizables pertenecen a `src/tfm`.
 
+La [estructura objetivo de entrega](../docs/estructura_notebooks.md) reúne el estudio en siete cuadernos: datos, estrategias de referencia, características/etiquetas, análisis exploratorio, modelado, validación del filtro y evaluación final. La consolidación se hará cuando se estabilice el modelado. Por ahora se ejecutan los archivos 00–14 descritos abajo; los siguientes incrementos ampliarán sus secciones, empezando por la comparación M1–M2 en el 14.
+
 Selecciona el Python de `.venv` en tu editor Jupyter, reinicia el kernel y ejecuta en orden. El directorio de trabajo debe ser la raíz del proyecto o `notebooks/`. Si faltan ipykernel o matplotlib, el extra `python -m pip install -e ".[notebooks]"` los incorpora; no hace falta registrar un kernel global si el editor reconoce el entorno.
 
 ## Recorrido
