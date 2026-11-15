@@ -205,3 +205,7 @@ Los años con contribución positiva de AUC son 9/40 y 8/40 para volatilidad, 12
 Se mantuvieron las variantes y criterios fijados antes de calcular estas retiradas. No se ha eliminado drawdown ni se ha adoptado automáticamente el subconjunto que obtiene mejores métricas. Cualquier elección posterior usará selección interna y evaluación separada, considerando también comparaciones con las referencias, sombras y utilidad económica.
 
 Se reconstruyeron las probabilidades con sus coeficientes, con diferencia exactamente cero. Las AUC se comprobaron con comparaciones entre pares y las log-loss con su fórmula directa, verificando asimismo el signo de las contribuciones. Las tablas publicadas coinciden exactamente con las calculadas. Pasan las 68 pruebas del proyecto, con las dos advertencias gráficas anteriores; se añadió una comprobación de retirada efectiva y signo y se amplió el recorrido existente. El notebook se conserva sin salidas ni contadores.
+
+## Robustez CPCV equivalente
+
+La sección 16–18 del notebook 14 añade las comparaciones CPCV de los seis candidatos fijados. Su [protocolo específico](cpcv_regimen.md) conserva las quince particiones del 10, la muestra común y los mismos parámetros. El resumen principal cubre todo el desarrollo utilizable; el adicional usa las mismas medias de probabilidad en 1950–1989 para alinear meses con walk-forward, sin nuevos ajustes. La comparación no es evidencia independiente ni acepta automáticamente los regímenes. Las salidas y el historial CPCV son independientes de las tablas walk-forward.

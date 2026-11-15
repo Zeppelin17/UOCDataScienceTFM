@@ -208,3 +208,7 @@ Durante el desarrollo se conservan los archivos 00–14 y se amplían por seccio
 ## Retiradas individuales de régimen
 
 El notebook 14 incorpora tres candidatos de diagnóstico: M2 sin volatilidad, sin retorno de 24 meses y sin drawdown. Se reajusta cada candidato con cuatro predictores y las mismas condiciones. La contribución de conservar una variable es AUC de M2 menos AUC sin ella y log-loss sin ella menos log-loss de M2. Se conservan todas las comparaciones y años; no se elige automáticamente una lista ganadora. Las tres variantes se registran por separado. Dependen de M0/M1/M2 y no de M3. Cualquier selección posterior requerirá entrenamiento interno y evaluación separada.
+
+## Robustez CPCV de los candidatos de régimen
+
+La sección 16–18 del notebook 14 evalúa los seis candidatos fijos con las quince particiones existentes, purga de un mes y embargo de seis. Se conserva la preparación causal por fecha y se publican cinco tablas `cpcv_regime_*`, sin usar resultados walk-forward como entrada. El resumen de cinco probabilidades por ejemplo se calcula sobre todo el desarrollo y, de forma adicional prefijada, sobre 1950–1989. Los meses alineados siguen teniendo información de entrenamiento distinta. Se registran las nuevas validaciones de las mismas configuraciones sin atribuir independencia o aceptación del régimen; sombras específicas y utilidad económica permanecen pendientes. El protocolo está en `docs/cpcv_regimen.md`.

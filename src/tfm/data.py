@@ -28,6 +28,7 @@ from tfm.walk_forward import (RESULT_NAMES as WALK_FORWARD_RESULTS,
                               INTERACTION_RESULTS as WALK_FORWARD_INTERACTION_RESULTS, build_walk_forward_splits)
 
 from tfm.walk_forward_ablation import RESULT_NAMES as WALK_FORWARD_ABLATION_RESULTS
+from tfm.cpcv_regime import RESULT_NAMES as CPCV_REGIME_RESULTS
 
 # Ventana fijada por el diseño del TFM; la evaluación posterior sigue deshabilitada.
 START, END = "1927-01", "1989-12"
@@ -65,12 +66,12 @@ def _screening_paths(processed: Path) -> tuple[Path, ...]:
 
 
 def _validation_paths(processed: Path) -> tuple[Path, ...]:
-    return tuple(processed / f"{name}.{extension}" for name in (*VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS)
+    return tuple(processed / f"{name}.{extension}" for name in (*VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS)
                  for extension in ("parquet", "json"))
 
 
 def _logistic_paths(processed: Path) -> tuple[Path, ...]:
-    return tuple(processed / f"{name}.{extension}" for name in (*LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS)
+    return tuple(processed / f"{name}.{extension}" for name in (*LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *CPCV_REGIME_RESULTS)
                  for extension in ("parquet", "json"))
 
 
@@ -291,7 +292,7 @@ def prepare_return_components(root: Path) -> dict:
 
 def read_result(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
     """Leer tablas preparadas y comprobar sus meses, estructura y valores."""
-    if name in (*VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS):
+    if name in (*VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS):
         table, summary = _read_table(root, name)
         if summary.get("status") != "passed":
             raise ValueError("Resultado sin preparación válida; repite su notebook.")
@@ -521,6 +522,8 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
         summary = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
         table = pd.read_parquet(path)
     except FileNotFoundError as exc:
+        if name in CPCV_REGIME_RESULTS:
+            raise ValueError("Faltan comparaciones CPCV; ejecuta su sección del notebook 14.") from exc
         if name in (*WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS):
             raise ValueError("Faltan resultados cronológicos; ejecuta el notebook 14.") from exc
         if name in MDA_RESULTS:
@@ -541,7 +544,7 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS, *VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS, *VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS}:
         raise ValueError("Nombre de resultado desconocido")
     processed = root / "data/processed"
     dependents = ()
