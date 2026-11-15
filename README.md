@@ -35,14 +35,17 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [10 Validación temporal](notebooks/10_validacion_temporal.ipynb) | Prepara quince particiones CPCV con purga y embargo y cuenta ejemplos por regla | Haber ejecutado 01 → 02 → 07 → 08; independiente del 09 |
 | [11 Regresión logística](notebooks/11_regresion_logistica.ipynb) | Compara probabilidades L2 con la frecuencia de éxitos del entrenamiento | Haber ejecutado 01 → 02 → 07 → 08 → 10; extra `models` |
 | [12 Sombras de la logística](notebooks/12_sombras_logistica.ipynb) | Compara el modelo original con 642 rotaciones conjuntas de las características | Tablas completas del 11 y sus entradas; extra `models` |
+| [13 Selección de grupos](notebooks/13_seleccion_clustered_mda.ipynb) | Selecciona con Clustered MDA dentro del entrenamiento y evalúa la logística en bloques exteriores | Tablas del 11 y sus entradas; extra `models` |
 
 El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
 
 El 10 implementa el [diseño de validación temporal](docs/plan_validacion_temporal.md): seis bloques, quince combinaciones, purga de un mes y embargo de seis meses. Separa el calendario de los ejemplos utilizables por regla, conserva las diez candidatas y no entrena modelos. Guarda las particiones y sus recuentos, sin depender de los resultados del cribado.
 
-El 11 implementa el [primer experimento de logística L2](docs/primer_modelo.md), con las diez candidatas, `C=1` y sin ponderación de clases ni búsqueda de parámetros. Guarda las cinco predicciones de validación por ejemplo y su media mensual, log-loss/AUC y coeficientes. La referencia es la frecuencia positiva del entrenamiento. El historial de intentos está en `outputs/experiments/logistic_trials.jsonl`. Su puerta de capacidad predictiva se concreta en el 12; Clustered MDA, SHAP y la evaluación económica del filtro vendrán después. La guía interactiva cubre los fundamentos y notebooks 00–10; el 11 y el 12 incluyen sus propias explicaciones.
+El 11 implementa el [primer experimento de logística L2](docs/primer_modelo.md), con las diez candidatas, `C=1` y sin ponderación de clases ni búsqueda de parámetros. Guarda las cinco predicciones de validación por ejemplo y su media mensual, log-loss/AUC y coeficientes. La referencia es la frecuencia positiva del entrenamiento. El historial de intentos está en `outputs/experiments/logistic_trials.jsonl`. Su puerta de capacidad predictiva se concreta en el 12. La selección de grupos se desarrolla en el 13; SHAP y la evaluación económica del filtro vendrán después. La guía interactiva cubre los fundamentos y notebooks 00–10; los posteriores incluyen sus propias explicaciones.
 
 El 12 implementa el [protocolo de sombras del modelo](docs/sombras_logistica.md). Desplaza juntas las diez características sobre los 713 meses comunes, conservando etiquetas, señales y particiones, y repite los ajustes para 642 desplazamientos con distancia circular mínima de 36 meses. Compara la mejora de log-loss original con el percentil 95 de las sombras; la AUC de las sombras es descriptiva. El criterio operativo se fija tras conocer el 11 y antes de calcular las sombras. No equivale a un contraste exacto o a demostrar rentabilidad. Guarda dos tablas y un historial separado en `outputs/experiments/logistic_shadow_trials.jsonl`, conservando las salidas originales del 11.
+
+El 13 aplica la [selección interna mediante Clustered MDA](docs/seleccion_clustered_mda.md). Reserva el último bloque de cada entrenamiento exterior para seleccionar, agrupa con Spearman absoluto y enlace completo (umbral 0,70) sobre los otros tres, mide el aumento de log-loss al permutar cada grupo treinta veces y conserva los grupos con media positiva. Después reajusta con todo el entrenamiento exterior y evalúa sus bloques reservados. Si no queda ningún grupo, usa solo el intercepto. Guarda cinco tablas `mda_*` y el historial de la variante, sin modificar 11/12. La selección es específica de esta logística; sus sombras, otros modelos y la utilidad económica siguen pendientes. SciPy se declara como dependencia directa de modelado y ya estaba instalada con scikit-learn.
 
 ## Supuestos y datos
 
@@ -77,6 +80,7 @@ src/tfm/
   validation.py           Calendario CPCV, purga, embargo y recuentos por regla
   logistic.py             Primer clasificador L2, probabilidades y registro de variantes
   model_shadows.py        Rotaciones conjuntas y comparación del modelo con sus sombras
+  clustered_mda.py        División interna, grupos e importancia para la logística seleccionada
 data/raw/                Originales locales (fuera de Git)
 data/processed/          Tablas Parquet y resúmenes JSON (fuera de Git)
 outputs/diagnosis/       Tablas del diagnóstico (fuera de Git)
@@ -92,6 +96,8 @@ Los originales se reutilizan y no se sustituyen automáticamente. No se modifica
 Regenerar entradas de 01, 02, 07 u 08, o guardar las particiones del 10, retira también las cuatro tablas `logistic_*` y sus informes. Repetir el 09 las conserva. El historial científico se mantiene aunque se recalculen las tablas; repetir una variante no la convierte en otra configuración. Las medias de probabilidades no son trayectorias de rentabilidad para DSR/PBO.
 
 Recalcular cualquiera de las cuatro tablas del 11 retira también `logistic_shadows` y `logistic_shadow_comparison`, con sus JSON. Sus entradas anteriores las retiran igualmente; el cribado 09 las conserva. Los historiales de intentos permanecen intactos. El 12 requiere la familia completa de sombras para calcular sus umbrales y muestra el progreso cada 25 rotaciones.
+
+Recalcular entradas de 01, 02, 07, 08, 10 u 11 retira también las cinco tablas `mda_*` y sus JSON. Repetir 09 o 12 las conserva: no son entradas de esta selección. Su historial está en `outputs/experiments/clustered_mda_trials.jsonl` y no se elimina al preparar datos. La frecuencia de selección entre particiones es descriptiva y no fija una lista global retrospectiva de variables.
 
 ## Verificación
 

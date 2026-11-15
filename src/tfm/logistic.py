@@ -33,43 +33,78 @@ def _sklearn():
     return LogisticRegression, ConvergenceWarning, log_loss, roc_auc_score
 
 
-def fit_partition(train: pd.DataFrame, validation: pd.DataFrame, *, strategy: str,
-                  split_id: int) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Ajustar únicamente con train; los resultados de validación solo se conservan."""
+def model_columns(columns: list[str] | None = None) -> list[str]:
+    selected = list(MODEL_COLUMNS if columns is None else columns)
+    if len(set(selected)) != len(selected) or not set(selected) <= set(MODEL_COLUMNS):
+        raise ValueError("Los predictores deben ser columnas únicas de las diez características preparadas.")
+    return selected
+
+
+def fit_logistic(train: pd.DataFrame, *, strategy: str, split_id: int,
+                 columns: list[str] | None = None) -> tuple[object | None, dict]:
+    """Ajustar el clasificador; ninguna observación de validación entra en el ajuste."""
     LogisticRegression, ConvergenceWarning, _, _ = _sklearn()
-    for rows in (train, validation):
-        if (not rows.label.isin([0, 1]).all()
-                or not np.isfinite(rows[MODEL_COLUMNS].to_numpy(dtype=float)).all()):
-            raise ValueError("Se necesitan ejemplos completos y etiquetas binarias.")
-    if set(train.target_period) & set(validation.target_period):
-        raise ValueError("Entrenamiento y validación deben tener meses distintos.")
-    predictions = validation[["target_period", "label"]].reset_index(drop=True).copy()
-    predictions.insert(0, "strategy", strategy)
-    predictions.insert(0, "split_id", split_id)
-    predictions["probability_naive"] = float(train.label.mean()) if len(train) else np.nan
-    predictions["probability_logistic"] = np.nan
-    terms = ["intercept", *MODEL_COLUMNS]
-    coefficients = pd.DataFrame({"split_id": split_id, "strategy": strategy,
-                                 "term": terms, "coefficient": np.nan})
+    selected = model_columns(columns)
+    if (not train.label.isin([0, 1]).all()
+            or not np.isfinite(train[selected].to_numpy(dtype=float)).all()):
+        raise ValueError("Se necesitan ejemplos completos y etiquetas binarias.")
     diagnostic = {"split_id": split_id, "strategy": strategy, "train_examples": len(train),
-                  "validation_examples": len(validation), "train_positive": int(train.label.eq(1).sum()),
+                  "validation_examples": 0, "train_positive": int(train.label.eq(1).sum()),
                   "iterations": None, "status": "train_single_class"}
+    model = None
     if train.label.nunique() == 2:
+        if not selected:
+            diagnostic["status"] = "intercept_only"
+            return model, diagnostic
         model = LogisticRegression(**MODEL_PARAMETERS)
         with warnings.catch_warnings():
             warnings.simplefilter("error", ConvergenceWarning)
             try:
-                model.fit(train[MODEL_COLUMNS].to_numpy(dtype=float), train.label.to_numpy(dtype=int))
+                model.fit(train[selected].to_numpy(dtype=float), train.label.to_numpy(dtype=int))
             except ConvergenceWarning as exc:
                 raise RuntimeError(f"La logística no converge en {strategy}, partición {split_id}; no se han cambiado parámetros.") from exc
-        if len(validation):
-            positive = int(np.flatnonzero(model.classes_ == 1)[0])
-            predictions["probability_logistic"] = model.predict_proba(
-                validation[MODEL_COLUMNS].to_numpy(dtype=float))[:, positive]
-        coefficients["coefficient"] = np.r_[model.intercept_, model.coef_[0]]
         diagnostic.update(status="completed", iterations=int(model.n_iter_[0]))
     elif train.empty:
         diagnostic["status"] = "empty_training"
+    return model, diagnostic
+
+
+def predict_logistic(model, rows: pd.DataFrame, *, columns: list[str] | None = None,
+                     intercept_probability: float = np.nan) -> np.ndarray:
+    selected = model_columns(columns)
+    if not np.isfinite(rows[selected].to_numpy(dtype=float)).all():
+        raise ValueError("Faltan características finitas para calcular las probabilidades.")
+    if model is None or not len(rows):
+        return np.full(len(rows), intercept_probability, dtype=float)
+    positive = int(np.flatnonzero(model.classes_ == 1)[0])
+    return model.predict_proba(rows[selected].to_numpy(dtype=float))[:, positive]
+
+
+def fit_partition(train: pd.DataFrame, validation: pd.DataFrame, *, strategy: str,
+                  split_id: int, columns: list[str] | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Ajustar con train; una lista vacía representa un modelo con solo intercepto."""
+    selected = model_columns(columns)
+    if (not validation.label.isin([0, 1]).all()
+            or not np.isfinite(validation[selected].to_numpy(dtype=float)).all()):
+        raise ValueError("Se necesitan ejemplos completos y etiquetas binarias.")
+    if set(train.target_period) & set(validation.target_period):
+        raise ValueError("Entrenamiento y validación deben tener meses distintos.")
+    model, diagnostic = fit_logistic(train, strategy=strategy, split_id=split_id, columns=selected)
+    diagnostic["validation_examples"] = len(validation)
+    prior = float(train.label.mean()) if len(train) else np.nan
+    predictions = validation[["target_period", "label"]].reset_index(drop=True).copy()
+    predictions.insert(0, "strategy", strategy)
+    predictions.insert(0, "split_id", split_id)
+    predictions["probability_naive"] = prior
+    predictions["probability_logistic"] = predict_logistic(
+        model, validation, columns=selected,
+        intercept_probability=prior if diagnostic["status"] == "intercept_only" else np.nan)
+    coefficients = pd.DataFrame({"split_id": split_id, "strategy": strategy,
+                                 "term": ["intercept", *selected], "coefficient": np.nan})
+    if model is not None:
+        coefficients["coefficient"] = np.r_[model.intercept_, model.coef_[0]]
+    elif diagnostic["status"] == "intercept_only":
+        coefficients["coefficient"] = np.log(prior / (1 - prior))
     predictions["fit_status"] = diagnostic["status"]
     coefficients["fit_status"] = diagnostic["status"]
     return predictions, coefficients, diagnostic
@@ -171,6 +206,38 @@ def load_logistic_inputs(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict, 
     except AssertionError as exc:
         raise ValueError("Las particiones no corresponden a las entradas actuales; ejecuta el notebook 10.") from exc
     return samples, splits, label_report, preparation
+
+
+def load_logistic_results(root: Path, samples: pd.DataFrame, splits: pd.DataFrame,
+                          label_report: dict) -> tuple[pd.DataFrame, dict]:
+    """Contrastar las salidas del 11 sin volver a ajustar el modelo original."""
+    from tfm.data import read_result
+
+    stored = {name: read_result(root, name) for name in
+              ("logistic_predictions", "logistic_monthly", "logistic_metrics")}
+    report = stored["logistic_metrics"][1]
+    current_versions = {name: version(name) for name in ("scikit-learn", "numpy", "pandas")}
+    if (report.get("variant") != VARIANT or report.get("model_parameters") != MODEL_PARAMETERS
+            or report.get("model_columns") != MODEL_COLUMNS or report.get("target") != "label"
+            or report.get("parameters") != label_report["parameters"]
+            or report.get("versions") != current_versions or report.get("experiment_status") != "completed"
+            or not report.get("attempt")
+            or any(info.get("attempt") != report["attempt"] for _, info in stored.values())):
+        raise ValueError("Ejecuta el notebook 11 con las entradas y el entorno actuales antes de continuar.")
+    predictions = stored["logistic_predictions"][0]
+    keys = ["split_id", "strategy", "target_period", "label"]
+    expected = splits.loc[splits.role.eq("validation"), ["split_id", "target_period"]].merge(
+        samples.loc[samples.sample_usable, ["strategy", "target_period", "label"]], on="target_period")
+    coverage = summarize_validation(splits, samples)
+    try:
+        pd.testing.assert_frame_equal(predictions[keys].sort_values(keys[:3]).reset_index(drop=True),
+                                      expected[keys].sort_values(keys[:3]).reset_index(drop=True), check_exact=True)
+        monthly, metrics = summarize_predictions(predictions, partitions=coverage[["split_id", "strategy"]])
+        pd.testing.assert_frame_equal(monthly, stored["logistic_monthly"][0], check_exact=True)
+        pd.testing.assert_frame_equal(metrics, stored["logistic_metrics"][0], check_exact=True)
+    except (AssertionError, KeyError) as exc:
+        raise ValueError("Las salidas del 11 no coinciden con los ejemplos actuales; vuelve a ejecutarlo.") from exc
+    return metrics, report
 
 
 def run_logistic_experiment(root: Path) -> tuple[dict, dict]:

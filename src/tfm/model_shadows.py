@@ -1,7 +1,6 @@
 """Referencias circulares del clasificador L2, con el protocolo del notebook 12."""
 
 from datetime import datetime, timezone
-from importlib.metadata import version
 import json
 from pathlib import Path
 
@@ -9,9 +8,9 @@ import numpy as np
 import pandas as pd
 
 from tfm.logistic import (MODEL_PARAMETERS, VARIANT, evaluate_logistic,
-                         load_logistic_inputs, summarize_predictions)
+                         load_logistic_inputs, load_logistic_results as _load_original)
 from tfm.screening import MIN_SHIFT, RULES
-from tfm.validation import MODEL_COLUMNS, summarize_validation
+from tfm.validation import MODEL_COLUMNS
 
 
 RESULT_NAMES = ("logistic_shadows", "logistic_shadow_comparison")
@@ -113,38 +112,6 @@ def compare_shadows(shadows: pd.DataFrame, original_metrics: pd.DataFrame,
                         "expected_shadows": len(expected_shifts), "expected_shadow_rows": len(expected),
                         "missing_shadow_rows": len(expected - actual),
                         "invalid_shadow_rows": int((~shadows.status.eq("completed") | ~finite).sum())}
-
-
-def _load_original(root: Path, samples: pd.DataFrame, splits: pd.DataFrame,
-                   label_report: dict) -> tuple[pd.DataFrame, dict]:
-    """Contrastar las salidas del 11 sin volver a ajustar el modelo original."""
-    from tfm.data import read_result
-
-    stored = {name: read_result(root, name) for name in
-              ("logistic_predictions", "logistic_monthly", "logistic_metrics")}
-    report = stored["logistic_metrics"][1]
-    current_versions = {name: version(name) for name in ("scikit-learn", "numpy", "pandas")}
-    if (report.get("variant") != VARIANT or report.get("model_parameters") != MODEL_PARAMETERS
-            or report.get("model_columns") != MODEL_COLUMNS or report.get("target") != "label"
-            or report.get("parameters") != label_report["parameters"]
-            or report.get("versions") != current_versions or report.get("experiment_status") != "completed"
-            or not report.get("attempt")
-            or any(info.get("attempt") != report["attempt"] for _, info in stored.values())):
-        raise ValueError("Ejecuta el notebook 11 con las entradas y el entorno actuales antes de las sombras.")
-    predictions = stored["logistic_predictions"][0]
-    keys = ["split_id", "strategy", "target_period", "label"]
-    expected = splits.loc[splits.role.eq("validation"), ["split_id", "target_period"]].merge(
-        samples.loc[samples.sample_usable, ["strategy", "target_period", "label"]], on="target_period")
-    coverage = summarize_validation(splits, samples)
-    try:
-        pd.testing.assert_frame_equal(predictions[keys].sort_values(keys[:3]).reset_index(drop=True),
-                                      expected[keys].sort_values(keys[:3]).reset_index(drop=True), check_exact=True)
-        monthly, metrics = summarize_predictions(predictions, partitions=coverage[["split_id", "strategy"]])
-        pd.testing.assert_frame_equal(monthly, stored["logistic_monthly"][0], check_exact=True)
-        pd.testing.assert_frame_equal(metrics, stored["logistic_metrics"][0], check_exact=True)
-    except (AssertionError, KeyError) as exc:
-        raise ValueError("Las salidas del 11 no coinciden con los ejemplos actuales; vuelve a ejecutarlo.") from exc
-    return metrics, report
 
 
 def run_model_shadows(root: Path, *, progress=None) -> tuple[dict, dict]:
