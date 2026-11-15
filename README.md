@@ -36,6 +36,7 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [11 Regresión logística](notebooks/11_regresion_logistica.ipynb) | Compara probabilidades L2 con la frecuencia de éxitos del entrenamiento | Haber ejecutado 01 → 02 → 07 → 08 → 10; extra `models` |
 | [12 Sombras de la logística](notebooks/12_sombras_logistica.ipynb) | Compara el modelo original con 642 rotaciones conjuntas de las características | Tablas completas del 11 y sus entradas; extra `models` |
 | [13 Selección de grupos](notebooks/13_seleccion_clustered_mda.ipynb) | Selecciona con Clustered MDA dentro del entrenamiento y evalúa la logística en bloques exteriores | Tablas del 11 y sus entradas; extra `models` |
+| [14 Referencia walk-forward](notebooks/14_referencia_walk_forward.ipynb) | Predice cada año de 1950–1989 con historia anterior, usando solo dos características de las señales | Tablas de 01 → 02 → 07 → 08; extra `models`; independiente de 09–13 |
 
 El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
 
@@ -46,6 +47,8 @@ El 11 implementa el [primer experimento de logística L2](docs/primer_modelo.md)
 El 12 implementa el [protocolo de sombras del modelo](docs/sombras_logistica.md). Desplaza juntas las diez características sobre los 713 meses comunes, conservando etiquetas, señales y particiones, y repite los ajustes para 642 desplazamientos con distancia circular mínima de 36 meses. Compara la mejora de log-loss original con el percentil 95 de las sombras; la AUC de las sombras es descriptiva. El criterio operativo se fija tras conocer el 11 y antes de calcular las sombras. No equivale a un contraste exacto o a demostrar rentabilidad. Guarda dos tablas y un historial separado en `outputs/experiments/logistic_shadow_trials.jsonl`, conservando las salidas originales del 11.
 
 El 13 aplica la [selección interna mediante Clustered MDA](docs/seleccion_clustered_mda.md). Reserva el último bloque de cada entrenamiento exterior para seleccionar, agrupa con Spearman absoluto y enlace completo (umbral 0,70) sobre los otros tres, mide el aumento de log-loss al permutar cada grupo treinta veces y conserva los grupos con media positiva. Después reajusta con todo el entrenamiento exterior y evalúa sus bloques reservados. Si no queda ningún grupo, usa solo el intercepto. Guarda cinco tablas `mda_*` y el historial de la variante, sin modificar 11/12. La selección es específica de esta logística; sus sombras, otros modelos y la utilidad económica siguen pendientes. SciPy se declara como dependencia directa de modelado y ya estaba instalada con scikit-learn.
+
+El 14 establece la [referencia cronológica sin régimen](docs/validacion_walk_forward.md) prevista tras la guía del 15 de noviembre. Reentrena cada año con ventana expansiva y purga de un mes anterior, y prueba 1950–1989. M0 es la frecuencia positiva del entrenamiento; M1 utiliza retorno mensual y momentum 12–1. Conserva la muestra común de diez características, pero solo esas dos predicen. Cada ejemplo recibe una probabilidad por modelo y se calculan AUC/log-loss reunidas, conservando los años vacíos o con una clase. Guarda cinco tablas `walk_forward_*` y un historial separado. La comparación con régimen, sus sombras y la utilidad económica vendrán después; el tramo desde 1990 sigue reservado.
 
 ## Supuestos y datos
 
@@ -81,6 +84,7 @@ src/tfm/
   logistic.py             Primer clasificador L2, probabilidades y registro de variantes
   model_shadows.py        Rotaciones conjuntas y comparación del modelo con sus sombras
   clustered_mda.py        División interna, grupos e importancia para la logística seleccionada
+  walk_forward.py         Calendario anual de desarrollo y referencia cronológica M0/M1
 data/raw/                Originales locales (fuera de Git)
 data/processed/          Tablas Parquet y resúmenes JSON (fuera de Git)
 outputs/diagnosis/       Tablas del diagnóstico (fuera de Git)
@@ -98,6 +102,8 @@ Regenerar entradas de 01, 02, 07 u 08, o guardar las particiones del 10, retira 
 Recalcular cualquiera de las cuatro tablas del 11 retira también `logistic_shadows` y `logistic_shadow_comparison`, con sus JSON. Sus entradas anteriores las retiran igualmente; el cribado 09 las conserva. Los historiales de intentos permanecen intactos. El 12 requiere la familia completa de sombras para calcular sus umbrales y muestra el progreso cada 25 rotaciones.
 
 Recalcular entradas de 01, 02, 07, 08, 10 u 11 retira también las cinco tablas `mda_*` y sus JSON. Repetir 09 o 12 las conserva: no son entradas de esta selección. Su historial está en `outputs/experiments/clustered_mda_trials.jsonl` y no se elimina al preparar datos. La frecuencia de selección entre particiones es descriptiva y no fija una lista global retrospectiva de variables.
+
+Recalcular entradas de 01, 02, 07 u 08 retira las cinco tablas `walk_forward_*` y sus JSON. Repetir 09–13 las conserva: el 14 no depende de sus resultados. El historial `outputs/experiments/walk_forward_trials.jsonl` permanece. Sus predicciones cronológicas no son las medias CPCV ni los retornos aislados del etiquetado.
 
 ## Verificación
 
