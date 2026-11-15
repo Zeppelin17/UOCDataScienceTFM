@@ -42,7 +42,7 @@ Cada ejemplo probado recibe una única predicción de cada método. Las métrica
 
 Se conservan las métricas de los cuarenta años para ambas reglas y ambos modelos, aunque un año esté vacío. Con una única clase, la log-loss sigue siendo calculable y AUC queda ausente con `auc_status=single_class`. Sin ejemplos, ambas métricas quedan ausentes. Si falta alguna predicción, no se elimina ese mes para calcular un resultado favorable: la métrica correspondiente queda no disponible. Si el entrenamiento no contiene ambas clases, M1 queda no estimable; M0 conserva su frecuencia cuando exista entrenamiento. Una falta de convergencia detiene y registra el intento, sin cambiar parámetros.
 
-El cuaderno no aplica un umbral de aceptación, construye posiciones ni calcula Sharpe. Las etiquetas siguen siendo las operaciones aisladas netas frente a RF del 08; no se capitalizan como una cuenta continua. Tampoco se declara superada una puerta de capacidad predictiva por una AUC aislada. El estado de M0/M1 conserva `pending_regime_comparisons_shadows_and_economic_evaluation` como alcance de su referencia inicial; el informe específico de M2 concreta las comprobaciones pendientes.
+Este primer bloque no aplica un umbral de aceptación, construye posiciones ni calcula Sharpe. Las etiquetas siguen siendo las operaciones aisladas netas frente a RF del 08; no se capitalizan como una cuenta continua. Tampoco se declara superada una puerta de capacidad predictiva por una AUC aislada. El estado de M0/M1 conserva `pending_regime_comparisons_shadows_and_economic_evaluation` como alcance de su referencia inicial; los apartados posteriores documentan los incrementos siguientes.
 
 ## Contrastes posteriores ya previstos
 
@@ -209,3 +209,7 @@ Se reconstruyeron las probabilidades con sus coeficientes, con diferencia exacta
 ## Robustez CPCV equivalente
 
 La sección 16–18 del notebook 14 añade las comparaciones CPCV de los seis candidatos fijados. Su [protocolo específico](cpcv_regimen.md) conserva las quince particiones del 10, la muestra común y los mismos parámetros. El resumen principal cubre todo el desarrollo utilizable; el adicional usa las mismas medias de probabilidad en 1950–1989 para alinear meses con walk-forward, sin nuevos ajustes. La comparación no es evidencia independiente ni acepta automáticamente los regímenes. Las salidas y el historial CPCV son independientes de las tablas walk-forward.
+
+## Evaluación económica con las predicciones cronológicas
+
+La sección 19–22 del notebook 14 usa las probabilidades M0–M3 ya publicadas para aceptar señales únicamente si superan 0,5. Su [protocolo económico](evaluacion_economica.md) mantiene cuentas continuas de 1950–1989, con iguales costes e inicio para los filtros y sus referencias. No recalcula modelos, no utiliza medias CPCV ni retornos aislados como una curva, y no anula los criterios de estabilidad incumplidos. Publica cuatro tablas económicas y su historial, sin modificar los experimentos anteriores.

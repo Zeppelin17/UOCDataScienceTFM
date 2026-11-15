@@ -195,8 +195,8 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     namespace = {}
     notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
     for cell in notebook["cells"]:
-        if "cpcv" in cell.get("metadata", {}).get("tags", []):
-            continue  # La rama cronológica no necesita las tablas del notebook 10.
+        if {"cpcv", "economics"} & set(cell.get("metadata", {}).get("tags", [])):
+            continue  # Las ampliaciones tienen sus propios recorridos de prueba.
         if cell["cell_type"] == "code":
             assert cell["execution_count"] is None and not cell["outputs"]
             exec(compile("".join(cell["source"]), "14_referencia_walk_forward.ipynb", "exec"), namespace)
