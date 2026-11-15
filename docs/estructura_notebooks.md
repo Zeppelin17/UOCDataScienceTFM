@@ -46,7 +46,7 @@ El 07 queda separado para ejecutar la evaluación desde 1990 una vez fijados var
 
 La unidad de incremento y commit puede ser una sección de un notebook; no necesita convertirse en otro archivo.
 
-El notebook `14_referencia_walk_forward.ipynb` se amplía para comparar M1 y M2 con las mismas fechas y parámetros. M3 y las retiradas individuales se incorporarán en secciones del mismo recorrido, conservando la identificación y los resultados de cada variante. Este contenido se integrará más adelante en el cuaderno final 05. No se abrirá un notebook 15 solo para añadir M2.
+El notebook `14_referencia_walk_forward.ipynb` se amplía para comparar M1 y M2 con las mismas fechas y parámetros. M3 se incorpora en otra sección del mismo recorrido y las retiradas individuales seguirán esa organización, conservando la identificación y los resultados de cada variante. Este contenido se integrará más adelante en el cuaderno final 05. No se abrirá un notebook 15 solo para añadir M2.
 
 Las nuevas sombras y comprobaciones se incorporarán al bloque de validación. Durante la transición, se elegirá el cuaderno existente que corresponda y se ajustará su título si hace falta; una operación nueva debe quedar correctamente identificada, aunque comparta cuaderno con otra anterior. Los experimentos extensos tendrán una sección de cálculo explícita y una lectura de sus resultados ya guardados, cuando se implemente esa organización. Consultar una tabla o un gráfico no deberá obligar a recalcular todas las sombras.
 

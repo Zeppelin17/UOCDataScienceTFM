@@ -1,6 +1,6 @@
 # Comparación cronológica con y sin régimen
 
-Diseño fijado el 15 de noviembre de 2026, tras revisar la guía de esa fecha y conocer los experimentos CPCV de los notebooks 11–13. No es un prerregistro anterior a toda exploración. El notebook 14 implementa las referencias M0/M1 y, en una segunda parte, su comparación con M2. Esta ampliación se fija después de conocer M0/M1 y antes de calcular M2 con los datos reales. No acepta regímenes ni utiliza datos desde 1990.
+Diseño fijado el 15 de noviembre de 2026, tras revisar la guía de esa fecha y conocer los experimentos CPCV de los notebooks 11–13. No es un prerregistro anterior a toda exploración. El notebook 14 implementa las referencias M0/M1, su comparación con M2 y la interacción prevista de M3. Esta ampliación se fija después de conocer M0/M1 y antes de calcular M2 con los datos reales. No acepta regímenes ni utiliza datos desde 1990.
 
 ## Motivo y escalera prevista
 
@@ -11,11 +11,11 @@ El nuevo apartado 5 de la guía (pp. 19–21) pide demostrar que el régimen mej
 | M0 | Frecuencia positiva del entrenamiento anual de cada regla | Notebook 14 |
 | M1 | Retorno del último mes y momentum 12–1, ambos transformados causalmente | Notebook 14 |
 | M2 | M1 + volatilidad de 12 meses + retorno de 24 meses + drawdown de 12 meses | Notebook 14 |
-| M3 | M2 + `indicador(retorno_24m < 0) × volatilidad_12m`, estandarizada con historia pasada | Previsto |
+| M3 | M2 + `indicador(retorno_24m < 0) × volatilidad_12m`, estandarizada con historia pasada | Notebook 14 |
 
 «Sin régimen» es una definición operativa: las dos variables de M1 representan información asociada a las señales, pero también pueden describir indirectamente condiciones del mercado. Se utilizan ambas para las dos reglas, sin escoger una lista distinta según resultados. La dirección original de cada regla permanece fija y las fechas, etiquetas y retornos realizados nunca entran como predictores.
 
-Las tres variables directas del núcleo ya existen en la tabla 07. Las diez candidatas se conservan para los experimentos más amplios. M3 no se calcula en este incremento. La hipótesis de su interacción es que la relación entre volatilidad y resultado puede cambiar tras un mercado bajista, sin asumir que la evidencia de momentum transversal se transfiera a nuestro índice. Para momentum se investigará un posible deterioro en ese entorno; para reversión el análisis seguirá siendo exploratorio, sin dirección inequívoca fijada por la literatura revisada. No se ha calculado su rendimiento para decidir esta definición.
+Las tres variables directas del núcleo ya existen en la tabla 07. Las diez candidatas se conservan para los experimentos más amplios. M3 se añade después de conocer M2, manteniendo la fórmula que ya estaba prevista; su convención de historia constante se fija al revisar cobertura y antes de ajustar M3. La hipótesis de su interacción es que la relación entre volatilidad y resultado puede cambiar tras un mercado bajista, sin asumir que la evidencia de momentum transversal se transfiera a nuestro índice. Para momentum se investigará un posible deterioro en ese entorno; para reversión el análisis seguirá siendo exploratorio, sin dirección inequívoca fijada por la literatura revisada. No se ha calculado su rendimiento para decidir esta definición.
 
 Se prevén tres retiradas individuales de M2: sin volatilidad, sin retorno de 24 meses y sin drawdown. La comparación principal será M2 frente a M1, para el conjunto; cada retirada estudiará el aporte adicional de una variable condicionado a las otras. La falta de mejora individual puede reflejar redundancia y no demuestra que la variable carezca de información. Son listas fijas; en esta comparación no se elegirá una lista usando los resultados de sus bloques de prueba. La posterior selección Clustered MDA constituirá otra variante, aprendida dentro del entrenamiento y evaluada por separado.
 
@@ -56,7 +56,7 @@ Solo se construirán mapas SHAP de regímenes aceptados, usando observaciones de
 
 ## Archivos e integración
 
-La [estructura de entrega](estructura_notebooks.md) integrará este recorrido en el cuaderno final de modelado. M2 amplía el notebook 14 por secciones; M3 se incorporará después sin crear un cuaderno por cada modelo. Este cambio de organización no modifica el protocolo científico.
+La [estructura de entrega](estructura_notebooks.md) integrará este recorrido en el cuaderno final de modelado. M2 y M3 amplían el notebook 14 por secciones, sin crear un cuaderno por cada modelo. Este cambio de organización no modifica el protocolo científico.
 
 `src/tfm/walk_forward.py` mantiene el calendario, los recuentos, los ajustes y las métricas. Reutiliza `fit_partition` y `prepare_validation_samples`, sin modificar su comportamiento. El notebook `14_referencia_walk_forward.ipynb` explica cada bloque y publica cinco tablas con JSON descriptivos:
 
@@ -94,6 +94,26 @@ Se guardan cuatro tablas adicionales con JSON:
 Su informe identifica `reference_attempt` y `reference_variant`, además de su propia variante e intento. Comparte `outputs/experiments/walk_forward_trials.jsonl`; M2 cuenta como una nueva configuración por regla, no como ochenta. Se registran inicio, resultado o fallo, también cuando M2 empeora. La referencia debe estar actualizada antes del primer ajuste. Volver a publicar cualquiera de sus cinco tablas retira las cuatro salidas de M2. Las preparaciones de 01/02/07/08 retiran ambas familias; repetir 09–13 no las invalida. El historial permanece.
 
 El estado de M2 es `pending_matched_cpcv_regime_shadows_and_economic_evaluation`. La robustez CPCV equivalente, sus sombras específicas, M3, retiradas individuales, selección interna, interpretación y utilidad económica siguen pendientes. Una mejora de AUC, por sí sola, no acepta el régimen.
+
+## Ampliación M3: interacción mercado bajista y volatilidad
+
+M3 conserva las cinco columnas de M2 y añade `z_bear_volatility_12m`. El producto original se calcula como `1(market_return_24m < 0) × price_volatility_12m`. El indicador utiliza el signo del retorno de 24 meses original, no el de su z-score; la igualdad a cero no activa el estado bajista. No se utiliza el resultado del mes objetivo ni se prueban otras ventanas.
+
+Se construye una sola serie sobre los 756 meses completos antes de filtrar por señales. Se reutiliza la transformación causal de las otras variables: percentiles 1/99, media y desviación muestral del pasado recortado, con al menos 36 observaciones anteriores. La extracción de esa operación a `transform_feature_series` mantiene exactamente las transformaciones de las diez candidatas originales.
+
+La interacción introduce un caso de escala: al principio su historia es cero. Con un producto no negativo, si el percentil 99 histórico es cero, ambos límites son cero; toda la historia recortada y el valor actual recortado son cero. Se define para esa columna constante una contribución normalizada de cero, sin dividir por cero o asignar una desviación positiva ficticia. La regla también se aplica si la winsorización elimina toda variación de una historia con valores positivos muy escasos. El mínimo de 36 meses no se omite, los valores de origen deben ser finitos y el tratamiento habitual de las diez variables anteriores no cambia. No se imputan datos ausentes.
+
+Esta convención se fija antes de ajustar M3, al comprobar su disponibilidad. Con los datos actuales afecta a enero–octubre de 1930, incluido el primer producto positivo, que el recorte causal todavía lleva a cero. Desde noviembre se observa variación recortada. Se mantienen todos los ejemplos originales de M1/M2, también los tres ejemplos de reversión de agosto–octubre de 1930 que habrían quedado sin z-score por división entre cero. Si faltase realmente la interacción en algún ejemplo de la muestra común, el cálculo se detendría sin eliminarlo.
+
+Los meses cuyo producto original es cero pueden tener z-score negativo una vez que la historia tiene media positiva; esa diferencia de escala no activa el indicador bajista. Los valores original y transformado se muestran juntos en el cuaderno. La hipótesis es permitir una relación distinta con la volatilidad en un mercado bajista; no se supone que la interacción vaya a mejorar este índice.
+
+Se ajustan únicamente ochenta modelos de M3 con los mismos años, etiquetas, exclusiones y parámetros. La lectura de M2 contrasta su intento con M0/M1, sus columnas, métricas y comparación, sin reajustar ni modificar las referencias. La lista permitida de predictores de la logística admite esta única derivada explícita; por defecto sigue utilizando las diez candidatas de los notebooks anteriores. No se añade la interacción a la tabla 07 ni se requieren nuevas fuentes.
+
+Se guardan cuatro tablas: `walk_forward_interaction_predictions` (probabilidades M0–M3 emparejadas), `walk_forward_interaction_metrics` (82 filas de M3), `walk_forward_interaction_coefficients` (560 filas: intercepto y seis columnas por año/regla) y `walk_forward_interaction_comparison` (164 filas: cada año y total para M3 frente a M1 y frente a M2). `reference_model` identifica la comparación; las columnas de referencia se llaman `auc_reference` y `log_loss_reference`.
+
+La comparación M3–M2 estudia añadir la interacción; M3–M1 estudia el bloque de régimen completo. Ambas usan el mismo candidato entrenado y no cuentan como dos configuraciones. El historial registra una nueva variante por regla, su fórmula, convención de escala e intentos de referencia. Republicar M0/M1 retira M2 y M3; republicar M2 retira M3. El resto de entradas anteriores sigue invalidando las tres familias y 09–13 las conserva.
+
+Se mantienen cuarenta años previstos por regla y comparación, con veintiuno favorables como mayoría estricta. El estado es `pending_matched_cpcv_interaction_shadows_and_economic_evaluation`. Las retiradas individuales, sombras específicas, robustez CPCV, selección interna, SHAP y evaluación económica siguen pendientes. No se cambia la fórmula ni el criterio de estabilidad después de ver M3 y una mejora predictiva no basta para aceptar el régimen.
 
 ## Límites y comprobaciones esenciales
 
@@ -134,3 +154,20 @@ El bloque de régimen empeora ligeramente el resultado reunido de momentum y mej
 Se reconstruyeron las probabilidades de M2 con sus coeficientes guardados, con diferencia exactamente cero. Se contrastaron las log-loss con su fórmula directa y las AUC anuales y reunidas mediante comparaciones entre pares de etiquetas, conservando los años no estimables. Las tablas persistidas coinciden exactamente con las calculadas. El notebook se entrega sin salidas ni contadores.
 
 Pasan las 66 pruebas del proyecto. Se ampliaron las tres comprobaciones de walk-forward para cubrir M2 y su integración, sin añadir otra colección de tests. Las dos advertencias del recorrido gráfico del 09 permanecen sin cambios.
+
+## Ejecución de la ampliación M3
+
+Se ejecutó el notebook completo en un proceso limpio y sin descargas. Los ochenta ajustes de M3 completaron el recorrido. Las nueve tablas anteriores de M0/M1/M2 y todas las transformaciones causales originales se reprodujeron exactamente. Se guardaron 810 predicciones emparejadas, 82 métricas de M3, 560 coeficientes y 164 comparaciones, con sus JSON. Los otros 65 archivos anteriores comprobados permanecieron intactos.
+
+| Regla | AUC M1 | AUC M2 | AUC M3 | Log-loss M3 | Años M3 mejora a M1 | Años M3 mejora a M2 |
+|---|---:|---:|---:|---:|---|---|
+| Momentum | 0,595625 | 0,594764 | 0,601982 | 0,669766 | 11 / 40 | 7 / 40 |
+| Reversión | 0,630296 | 0,635839 | 0,633992 | 0,644313 | 15 / 40 | 9 / 40 |
+
+En momentum M3 mejora el AUC reunido frente a ambas referencias y la log-loss frente a M2, pero su log-loss sigue siendo ligeramente mayor que la de M1 (0,669000). En reversión mejora AUC y log-loss frente a M1; frente a M2 reduce ligeramente la log-loss, pero empeora AUC. La mejora reunida de AUC no equivale a una mejora en la mayoría de años.
+
+Ninguna de las cuatro comparaciones alcanza los veintiún años favorables fijados. La interacción no queda aceptada con estos resultados; permanecen pendientes los contrastes y la utilidad económica previstos. No se han cambiado la fórmula, la escala, la muestra ni los criterios después de observar M3. La convención de historia recortada cero se decidió con datos de cobertura antes del ajuste real, sin utilizar sus métricas.
+
+Se reconstruyeron las probabilidades con los coeficientes guardados, con diferencia exactamente cero. Las AUC anuales y reunidas se contrastaron mediante pares de etiquetas y las log-loss con su fórmula directa. Las tablas publicadas coinciden exactamente con las calculadas y el notebook queda sin salidas ni contadores de ejecución.
+
+Pasan las 67 pruebas del proyecto. Se añadió una comprobación de la fórmula y causalidad de la interacción y se amplió el recorrido existente para cubrir sus referencias, resultados e invalidaciones. Las dos advertencias de gráficos no interactivos del 09 son las anteriores.

@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from tfm.validation import MODEL_COLUMNS, prepare_validation_samples, summarize_validation
+from tfm.features import BEAR_VOLATILITY_FEATURE
 
 
 RESULT_NAMES = ("logistic_predictions", "logistic_monthly", "logistic_metrics", "logistic_coefficients")
@@ -35,8 +36,9 @@ def _sklearn():
 
 def model_columns(columns: list[str] | None = None) -> list[str]:
     selected = list(MODEL_COLUMNS if columns is None else columns)
-    if len(set(selected)) != len(selected) or not set(selected) <= set(MODEL_COLUMNS):
-        raise ValueError("Los predictores deben ser columnas únicas de las diez características preparadas.")
+    allowed = {*MODEL_COLUMNS, f"z_{BEAR_VOLATILITY_FEATURE}"}
+    if len(set(selected)) != len(selected) or not set(selected) <= allowed:
+        raise ValueError("Los predictores deben ser columnas únicas de las características preparadas o la interacción definida.")
     return selected
 
 

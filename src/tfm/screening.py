@@ -29,6 +29,43 @@ RESULT_NAMES = ("screening_monthly", "screening_tests", "screening_terciles",
                 "screening_stability", "screening_shadows")
 
 
+def transform_feature_series(series: pd.Series) -> tuple[np.ndarray, pd.arrays.IntegerArray, list[str | None]]:
+    """Winsorización/z-score y terciles con historia estrictamente anterior a cada fila."""
+    name = str(series.name)
+    if (not pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series)
+            or not series.dropna().map(math.isfinite).all()):
+        raise ValueError(f"Característica no numérica o no finita: {name}")
+    valid = series.notna().to_numpy()
+    if not valid.any() or not valid[np.flatnonzero(valid)[0]:].all():
+        raise ValueError(f"Sin datos o con huecos interiores en {name}; revisa el notebook 07.")
+    values = series.to_numpy(dtype=float, na_value=np.nan)
+    z = np.full(len(values), np.nan)
+    terciles = pd.array([pd.NA] * len(values), dtype="Int8")
+    exclusions = []
+    for i, value in enumerate(values):
+        history = values[:i]
+        history = history[np.isfinite(history)]
+        reason = None
+        if not math.isfinite(value):
+            reason = "missing_current"
+        elif len(history) < MIN_HISTORY:
+            reason = "history_warmup"
+        else:
+            lower, upper = np.quantile(history, [.01, .99], method="linear")
+            clipped = np.clip(history, lower, upper)
+            deviation = clipped.std(ddof=1)
+            if deviation <= np.finfo(float).eps * max(1.0, abs(float(clipped.mean()))):
+                reason = "constant_history"
+            else:
+                z[i] = (np.clip(value, lower, upper) - clipped.mean()) / deviation
+            # Los cortes se calculan en x original, con exactamente el mismo pasado.
+            low, high = np.quantile(history, [1/3, 2/3], method="linear")
+            terciles[i] = (1 if value < low else 3 if value > high else 2) if low == high else (
+                1 if value <= low else 3 if value > high else 2)
+        exclusions.append(reason)
+    return z, terciles, exclusions
+
+
 def transform_features(features: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """Estadísticos de x anteriores a cada fila; nunca usar su valor actual ni y."""
     months = pd.period_range(START, END, freq="M")
@@ -44,36 +81,8 @@ def transform_features(features: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
                        "context_source_period"]].reset_index(drop=True).copy()
     reasons = [[] for _ in months]
     for name in FEATURE_COLUMNS:
-        series = features[name]
-        if (not pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series)
-                or not series.dropna().map(math.isfinite).all()):
-            raise ValueError(f"Característica no numérica o no finita: {name}")
-        valid = series.notna().to_numpy()
-        if not valid.any() or not valid[np.flatnonzero(valid)[0]:].all():
-            raise ValueError(f"Sin datos o con huecos interiores en {name}; revisa el notebook 07.")
-        values = series.to_numpy(dtype=float, na_value=np.nan)
-        z = np.full(len(values), np.nan)
-        terciles = pd.array([pd.NA] * len(values), dtype="Int8")
-        for i, value in enumerate(values):
-            history = values[:i]
-            history = history[np.isfinite(history)]
-            reason = None
-            if not math.isfinite(value):
-                reason = "missing_current"
-            elif len(history) < MIN_HISTORY:
-                reason = "history_warmup"
-            else:
-                lower, upper = np.quantile(history, [.01, .99], method="linear")
-                clipped = np.clip(history, lower, upper)
-                deviation = clipped.std(ddof=1)
-                if deviation <= np.finfo(float).eps * max(1.0, abs(float(clipped.mean()))):
-                    reason = "constant_history"
-                else:
-                    z[i] = (np.clip(value, lower, upper) - clipped.mean()) / deviation
-                # Los cortes se calculan en x original, con exactamente el mismo pasado.
-                low, high = np.quantile(history, [1/3, 2/3], method="linear")
-                terciles[i] = (1 if value < low else 3 if value > high else 2) if low == high else (
-                    1 if value <= low else 3 if value > high else 2)
+        z, terciles, exclusions = transform_feature_series(features[name])
+        for i, reason in enumerate(exclusions):
             if reason:
                 reasons[i].append(f"{name}:{reason}")
         result[f"z_{name}"] = z

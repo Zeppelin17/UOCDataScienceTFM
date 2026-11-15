@@ -1,6 +1,6 @@
 """Comparación cronológica de desarrollo, con listas fijas de características.
 
-Protocolo: docs/validacion_walk_forward.md. Modelos M0/M1/M2 del notebook 14.
+Protocolo: docs/validacion_walk_forward.md. Modelos M0/M1/M2/M3 del notebook 14.
 No usa predicciones CPCV ni datos desde 1990.
 """
 
@@ -14,7 +14,8 @@ import pandas as pd
 
 from tfm.diagnostics import START, END
 from tfm.logistic import MODEL_PARAMETERS, _sklearn, fit_partition
-from tfm.screening import RULES
+from tfm.features import BEAR_VOLATILITY_FEATURE
+from tfm.screening import RULES, MIN_HISTORY, transform_feature_series
 from tfm.validation import MODEL_COLUMNS, PURGE_MONTHS, prepare_validation_samples
 
 
@@ -22,12 +23,18 @@ FIRST_TEST_YEAR, LAST_TEST_YEAR = 1950, 1989
 SIGNAL_COLUMNS = ["z_price_return_1m", "z_momentum_12_1"]
 REGIME_COLUMNS = ["z_price_volatility_12m", "z_market_return_24m", "z_drawdown_12m"]
 M2_COLUMNS = [*SIGNAL_COLUMNS, *REGIME_COLUMNS]
+INTERACTION_COLUMN = f"z_{BEAR_VOLATILITY_FEATURE}"
+M3_COLUMNS = [*M2_COLUMNS, INTERACTION_COLUMN]
 VARIANT = "walk_forward_logistic_l2_C1_signal2_central"
 REGIME_VARIANT = "walk_forward_logistic_l2_C1_signal2_regime3_central"
+INTERACTION_VARIANT = "walk_forward_logistic_l2_C1_signal2_regime3_interaction_central"
 RESULT_NAMES = ("walk_forward_splits", "walk_forward_summary", "walk_forward_predictions",
                 "walk_forward_metrics", "walk_forward_coefficients")
 REGIME_RESULTS = ("walk_forward_regime_predictions", "walk_forward_regime_metrics",
                   "walk_forward_regime_coefficients", "walk_forward_regime_comparison")
+
+INTERACTION_RESULTS = ("walk_forward_interaction_predictions", "walk_forward_interaction_metrics",
+                       "walk_forward_interaction_coefficients", "walk_forward_interaction_comparison")
 
 
 def build_walk_forward_splits() -> pd.DataFrame:
@@ -53,6 +60,34 @@ def load_walk_forward_inputs(root: Path) -> tuple[pd.DataFrame, dict, dict]:
     labels, label_report = read_result(root, "labelled_signals")
     samples, preparation = prepare_validation_samples(features, labels)
     return samples, label_report, preparation
+
+
+def build_interaction_feature(features: pd.DataFrame) -> pd.DataFrame:
+    """Producto en unidades originales y transformación causal sobre todo el calendario."""
+    months = pd.period_range(START, END, freq="M").astype(str).tolist()
+    required = {"target_period", "market_return_24m", "price_volatility_12m"}
+    if not required <= set(features) or features.target_period.tolist() != months:
+        raise ValueError("La interacción requiere el calendario de características de 1927–1989.")
+    values = features[["market_return_24m", "price_volatility_12m"]]
+    if (any(not pd.api.types.is_numeric_dtype(values[c]) or pd.api.types.is_bool_dtype(values[c]) for c in values)
+            or not np.isfinite(values.to_numpy(dtype=float)).all() or values.price_volatility_12m.lt(0).any()):
+        raise ValueError("Se necesitan retornos finitos y volatilidades no negativas para la interacción.")
+    result = features[["target_period", "market_return_24m", "price_volatility_12m"]].reset_index(drop=True).copy()
+    result["bear_market"] = result.market_return_24m.lt(0)
+    result[BEAR_VOLATILITY_FEATURE] = result.price_volatility_12m.where(result.bear_market, 0.)
+    z, _, reasons = transform_feature_series(result[BEAR_VOLATILITY_FEATURE])
+    # Si el pasado winsorizado es cero, ambos percentiles son cero y el valor actual
+    # winsorizado también es cero. Convención de columna constante: contribución
+    # normalizada cero, sin dividir por cero ni inventar una desviación positiva.
+    zero_history = result[BEAR_VOLATILITY_FEATURE].expanding(min_periods=MIN_HISTORY).quantile(.99).shift(1).eq(0).to_numpy()
+    constant_zero = zero_history & np.array([reason == "constant_history" for reason in reasons])
+    z[constant_zero] = 0.
+    result[INTERACTION_COLUMN] = z
+    result["interaction_ready"] = np.isfinite(z)
+    result["scaling_status"] = ["constant_zero_encoded" if constant_zero[i] else
+                                "standardized" if np.isfinite(z[i]) else reason for i, reason in enumerate(reasons)]
+    result["exclusion_reason"] = ["" if np.isfinite(z[i]) else reason for i, reason in enumerate(reasons)]
+    return result
 
 
 def summarize_walk_forward(samples: pd.DataFrame, splits: pd.DataFrame) -> pd.DataFrame:
@@ -259,65 +294,57 @@ def load_walk_forward_reference(root: Path, samples: pd.DataFrame,
     return tables, report
 
 
-def compare_walk_forward_regime(reference: pd.DataFrame, regime: pd.DataFrame) -> pd.DataFrame:
+def compare_walk_forward_regime(reference: pd.DataFrame, regime: pd.DataFrame, *,
+                                reference_model: str = "M1", candidate_model: str = "M2") -> pd.DataFrame:
     """Diferencias emparejadas, sin omitir años con una clase o predicciones ausentes."""
     keys = ["aggregation", "split_id", "test_year", "strategy"]
     columns = [*keys, "examples", "positive", "negative", "status", "auc", "log_loss"]
-    m1 = reference.loc[reference.model.eq("M1"), columns]
-    m2 = regime.loc[regime.model.eq("M2"), columns]
-    compared = m1.merge(m2, on=keys, how="outer", validate="one_to_one", suffixes=("_m1", "_m2"), indicator=True)
+    first, second = reference_model.lower(), candidate_model.lower()
+    if first == second:
+        raise ValueError("Se requieren dos modelos distintos para comparar.")
+    left = reference.loc[reference.model.eq(reference_model), columns]
+    right = regime.loc[regime.model.eq(candidate_model), columns]
+    compared = left.merge(right, on=keys, how="outer", validate="one_to_one",
+                          suffixes=(f"_{first}", f"_{second}"), indicator=True)
     if (len(compared) != (LAST_TEST_YEAR-FIRST_TEST_YEAR+2)*len(RULES)
             or not compared._merge.eq("both").all()
-            or any(not compared[f"{name}_m1"].equals(compared[f"{name}_m2"])
+            or any(not compared[f"{name}_{first}"].equals(compared[f"{name}_{second}"])
                    for name in ("examples", "positive", "negative"))):
-        raise ValueError("M1 y M2 deben evaluar los mismos ejemplos, clases y periodos.")
-    available = (compared.status_m1.eq("completed") & compared.status_m2.eq("completed"))
-    loss_available = available & np.isfinite(compared[["log_loss_m1", "log_loss_m2"]].to_numpy(dtype=float)).all(axis=1)
-    auc_available = available & np.isfinite(compared[["auc_m1", "auc_m2"]].to_numpy(dtype=float)).all(axis=1)
-    compared["log_loss_improvement"] = (compared.log_loss_m1 - compared.log_loss_m2).where(loss_available)
-    compared["auc_improvement"] = (compared.auc_m2 - compared.auc_m1).where(auc_available)
+        raise ValueError(f"{reference_model} y {candidate_model} deben evaluar los mismos ejemplos, clases y periodos.")
+    available = compared[f"status_{first}"].eq("completed") & compared[f"status_{second}"].eq("completed")
+    loss_available = available & np.isfinite(compared[[f"log_loss_{first}", f"log_loss_{second}"]].to_numpy(dtype=float)).all(axis=1)
+    auc_available = available & np.isfinite(compared[[f"auc_{first}", f"auc_{second}"]].to_numpy(dtype=float)).all(axis=1)
+    compared["log_loss_improvement"] = (compared[f"log_loss_{first}"] - compared[f"log_loss_{second}"]).where(loss_available)
+    compared["auc_improvement"] = (compared[f"auc_{second}"] - compared[f"auc_{first}"]).where(auc_available)
     compared["auc_improved"] = compared.auc_improvement.gt(0).astype("boolean").where(auc_available)
     compared["comparison_status"] = np.select(
-        [compared.examples_m1.eq(0), ~available, ~auc_available],
+        [compared[f"examples_{first}"].eq(0), ~available, ~auc_available],
         ["empty_validation", "unavailable_predictions", "single_class"], default="available")
-    compared = compared.drop(columns=["_merge", "examples_m2", "positive_m2", "negative_m2"]).rename(
-        columns={"examples_m1": "examples", "positive_m1": "positive", "negative_m1": "negative"})
-    # Mantener el orden cronológico del resumen, con los dos totales al final.
+    compared = compared.drop(columns=["_merge", f"examples_{second}", f"positive_{second}", f"negative_{second}"]).rename(
+        columns={f"examples_{first}": "examples", f"positive_{first}": "positive", f"negative_{first}": "negative"})
     return compared.sort_values(["aggregation", "split_id", "strategy"], ascending=[False, True, True],
                                  na_position="last").reset_index(drop=True)
 
 
-def evaluate_walk_forward_regime(samples: pd.DataFrame, reference_predictions: pd.DataFrame,
-                                 *, progress=None) -> tuple[dict, dict]:
-    splits = build_walk_forward_splits()
-    coverage = summarize_walk_forward(samples, splits)
-    reference_metrics = summarize_walk_forward_predictions(reference_predictions)
+def _fit_walk_forward_partitions(samples: pd.DataFrame, splits: pd.DataFrame, columns: list[str], *, progress=None):
     pieces, coefficients, diagnostics = [], [], []
     for (split_id, year), calendar in splits.groupby(["split_id", "test_year"], sort=True):
         for rule in RULES:
             rows = samples.loc[samples.strategy.eq(rule) & samples.sample_usable].merge(
                 calendar[["target_period", "role"]], on="target_period", validate="one_to_one")
             p, c, d = fit_partition(rows.loc[rows.role.eq("train")], rows.loc[rows.role.eq("validation")],
-                                    strategy=rule, split_id=int(split_id), columns=M2_COLUMNS)
+                                    strategy=rule, split_id=int(split_id), columns=columns)
             p.insert(1, "test_year", int(year))
             c.insert(1, "test_year", int(year))
-            pieces.append(p.rename(columns={"probability_logistic": "probability_regime", "fit_status": "fit_status_regime"}))
+            pieces.append(p)
             coefficients.append(c)
             diagnostics.append({**d, "test_year": int(year)})
         if progress:
             progress(int(split_id), LAST_TEST_YEAR - FIRST_TEST_YEAR + 1)
-    regime = pd.concat(pieces, ignore_index=True)
-    keys = ["split_id", "test_year", "strategy", "target_period", "label"]
-    checked = [*keys, "probability_naive"]
-    try:
-        pd.testing.assert_frame_equal(reference_predictions[checked].sort_values(keys[:4]).reset_index(drop=True),
-                                      regime[checked].sort_values(keys[:4]).reset_index(drop=True), check_exact=True)
-    except AssertionError as exc:
-        raise ValueError("M2 no comparte exactamente las fechas, etiquetas y referencia ingenua de M1.") from exc
-    predictions = reference_predictions.merge(regime.drop(columns="probability_naive"), on=keys,
-                                               how="left", validate="one_to_one")
-    metrics = summarize_walk_forward_predictions(predictions, models={"M2": "probability_regime"})
-    comparison = compare_walk_forward_regime(reference_metrics, metrics)
+    return pd.concat(pieces, ignore_index=True), pd.concat(coefficients, ignore_index=True), diagnostics
+
+
+def summarize_regime_stability(comparison: pd.DataFrame) -> list[dict]:
     stability = []
     for rule in RULES:
         annual = comparison.loc[comparison.aggregation.eq("year") & comparison.strategy.eq(rule)]
@@ -331,7 +358,29 @@ def evaluate_walk_forward_regime(samples: pd.DataFrame, reference_predictions: p
             "auc_tied_years": int(annual.auc_improvement.eq(0).sum()),
             "auc_unavailable_years": int(annual.auc_improved.isna().sum()),
             "majority_required": expected//2+1, "meets_majority": improved > expected/2})
-    tables = dict(zip(REGIME_RESULTS, [predictions, metrics, pd.concat(coefficients, ignore_index=True), comparison]))
+    return stability
+
+
+def evaluate_walk_forward_regime(samples: pd.DataFrame, reference_predictions: pd.DataFrame,
+                                 *, progress=None) -> tuple[dict, dict]:
+    splits = build_walk_forward_splits()
+    coverage = summarize_walk_forward(samples, splits)
+    reference_metrics = summarize_walk_forward_predictions(reference_predictions)
+    regime, coefficients, diagnostics = _fit_walk_forward_partitions(samples, splits, M2_COLUMNS, progress=progress)
+    regime = regime.rename(columns={"probability_logistic": "probability_regime", "fit_status": "fit_status_regime"})
+    keys = ["split_id", "test_year", "strategy", "target_period", "label"]
+    checked = [*keys, "probability_naive"]
+    try:
+        pd.testing.assert_frame_equal(reference_predictions[checked].sort_values(keys[:4]).reset_index(drop=True),
+                                      regime[checked].sort_values(keys[:4]).reset_index(drop=True), check_exact=True)
+    except AssertionError as exc:
+        raise ValueError("M2 no comparte exactamente las fechas, etiquetas y referencia ingenua de M1.") from exc
+    predictions = reference_predictions.merge(regime.drop(columns="probability_naive"), on=keys,
+                                               how="left", validate="one_to_one")
+    metrics = summarize_walk_forward_predictions(predictions, models={"M2": "probability_regime"})
+    comparison = compare_walk_forward_regime(reference_metrics, metrics)
+    stability = summarize_regime_stability(comparison)
+    tables = dict(zip(REGIME_RESULTS, [predictions, metrics, coefficients, comparison]))
     report = {"scope": "development_walk_forward_direct_regime_comparison", "variant": REGIME_VARIANT,
         "reference_variant": VARIANT, "model_columns": M2_COLUMNS, "regime_columns": REGIME_COLUMNS,
         "model_parameters": MODEL_PARAMETERS, "target": "label", "guide_version": "2026-11-15",
@@ -381,4 +430,133 @@ def run_walk_forward_regime(root: Path, *, progress=None) -> tuple[dict, dict]:
     report.update(parameters=label_report["parameters"], attempt=attempt, reference_attempt=original_report["attempt"],
                   experiment_status=status, trial_log="outputs/experiments/walk_forward_trials.jsonl",
                   protocol="docs/validacion_walk_forward.md")
+    return tables, report
+
+
+def load_walk_forward_regime_reference(root: Path, samples: pd.DataFrame,
+                                       label_report: dict) -> tuple[dict, dict]:
+    """Leer M2 y comprobar que sigue emparejado con la referencia M0/M1 actual."""
+    from tfm.data import read_result
+
+    baseline, original = load_walk_forward_reference(root, samples, label_report)
+    stored = {name: read_result(root, name) for name in REGIME_RESULTS}
+    report = stored["walk_forward_regime_metrics"][1]
+    if (report.get("variant") != REGIME_VARIANT or report.get("model_columns") != M2_COLUMNS
+            or report.get("model_parameters") != MODEL_PARAMETERS or report.get("versions") != original["versions"]
+            or report.get("parameters") != label_report["parameters"] or report.get("target") != "label"
+            or report.get("reference_attempt") != original["attempt"] or report.get("reference_variant") != VARIANT
+            or report.get("experiment_status") != "completed" or not report.get("attempt")
+            or any(info.get("attempt") != report["attempt"] for _, info in stored.values())):
+        raise ValueError("Ejecuta primero la parte M2 del notebook 14 con la referencia M0/M1 actual.")
+    tables = {name: table for name, (table, _) in stored.items()}
+    try:
+        predictions = tables["walk_forward_regime_predictions"]
+        pd.testing.assert_frame_equal(predictions[baseline["walk_forward_predictions"].columns],
+                                      baseline["walk_forward_predictions"], check_exact=True)
+        metrics = summarize_walk_forward_predictions(predictions, models={"M2": "probability_regime"})
+        pd.testing.assert_frame_equal(metrics, tables["walk_forward_regime_metrics"], check_exact=True)
+        pd.testing.assert_frame_equal(compare_walk_forward_regime(baseline["walk_forward_metrics"], metrics),
+                                      tables["walk_forward_regime_comparison"], check_exact=True)
+    except (AssertionError, KeyError) as exc:
+        raise ValueError("M2 no coincide con la referencia actual; repite su parte del notebook 14.") from exc
+    return tables, report
+
+
+def evaluate_walk_forward_interaction(samples: pd.DataFrame, features: pd.DataFrame,
+                                      reference_predictions: pd.DataFrame, *, progress=None) -> tuple[dict, dict]:
+    interaction = build_interaction_feature(features)
+    augmented = samples.merge(interaction[["target_period", INTERACTION_COLUMN]],
+                               on="target_period", how="left", validate="many_to_one")
+    if not np.isfinite(augmented.loc[augmented.sample_usable, INTERACTION_COLUMN].to_numpy(dtype=float)).all():
+        raise ValueError("La interacción no está disponible en la muestra común; no se han eliminado ejemplos para M3.")
+    splits = build_walk_forward_splits()
+    summarize_walk_forward(augmented, splits)
+    reference_metrics = summarize_walk_forward_predictions(reference_predictions,
+        models={"M1": "probability_logistic", "M2": "probability_regime"})
+    fitted, coefficients, diagnostics = _fit_walk_forward_partitions(augmented, splits, M3_COLUMNS, progress=progress)
+    fitted = fitted.rename(columns={"probability_logistic": "probability_interaction", "fit_status": "fit_status_interaction"})
+    keys = ["split_id", "test_year", "strategy", "target_period", "label"]
+    checked = [*keys, "probability_naive"]
+    try:
+        pd.testing.assert_frame_equal(reference_predictions[checked].sort_values(keys[:4]).reset_index(drop=True),
+                                      fitted[checked].sort_values(keys[:4]).reset_index(drop=True), check_exact=True)
+    except AssertionError as exc:
+        raise ValueError("M3 debe compartir fechas, etiquetas y referencia ingenua con M1/M2.") from exc
+    predictions = reference_predictions.merge(fitted.drop(columns="probability_naive"),
+                                                on=keys, how="left", validate="one_to_one")
+    metrics = summarize_walk_forward_predictions(predictions, models={"M3": "probability_interaction"})
+    comparisons, stability = [], []
+    for reference_model in ("M1", "M2"):
+        compared = compare_walk_forward_regime(reference_metrics, metrics,
+                                               reference_model=reference_model, candidate_model="M3")
+        compared = compared.rename(columns={f"{name}_{reference_model.lower()}": f"{name}_reference"
+                                             for name in ("status", "auc", "log_loss")})
+        compared.insert(0, "reference_model", reference_model)
+        compared.insert(1, "candidate_model", "M3")
+        comparisons.append(compared)
+        stability.extend({**row, "reference_model": reference_model, "candidate_model": "M3"}
+                         for row in summarize_regime_stability(compared))
+    tables = dict(zip(INTERACTION_RESULTS, [predictions, metrics, coefficients,
+                                           pd.concat(comparisons, ignore_index=True)]))
+    report = {"scope": "development_walk_forward_bear_volatility_interaction", "variant": INTERACTION_VARIANT,
+        "reference_variant": REGIME_VARIANT, "model_columns": M3_COLUMNS, "model_parameters": MODEL_PARAMETERS,
+        "target": "label", "guide_version": "2026-11-15", "development": [START, END],
+        "test_interval": [f"{FIRST_TEST_YEAR}-01", f"{LAST_TEST_YEAR}-12"],
+        "window": "expanding", "refit": "annual", "purge_months": PURGE_MONTHS,
+        "interaction": {"raw_formula": "1(market_return_24m < 0) * price_volatility_12m",
+            "column": INTERACTION_COLUMN, "normalization": "past-only 1/99 winsorization and sample z-score",
+            "min_history": MIN_HISTORY, "history_unit": "calendar months before signal filtering",
+            "zero_history_policy": "zero winsorized past gives zero winsorized current and zero standardized contribution",
+            "ready_months": int(interaction.interaction_ready.sum()),
+            "constant_zero_months": interaction.loc[interaction.scaling_status.eq("constant_zero_encoded"), "target_period"].tolist()},
+        "comparison": "M3-M2 isolates adding the interaction; M3-M1 evaluates the full augmented regime block",
+        "skill_gate_status": "pending_matched_cpcv_interaction_shadows_and_economic_evaluation",
+        "diagnostics": diagnostics, "stability": stability,
+        "versions": {name: version(name) for name in ("scikit-learn", "numpy", "pandas")},
+        "warnings": ["Interaction planned before M2 results; zero-history convention fixed before fitting M3.",
+                     "Fixed six predictors; no selection, changed sample, M2 refit or post-1989 evaluation.",
+                     "Comparisons with M1 and M2 do not create two fitted candidates; M3 is one new variant per rule.",
+                     "Predictive differences and annual stability do not establish economic utility or accept the regime.",
+                     "Source availability limitations of monthly means and reconstructed dividends still apply."]}
+    return tables, report
+
+
+def run_walk_forward_interaction(root: Path, *, progress=None) -> tuple[dict, dict]:
+    """Añadir M3 a las predicciones publicadas de M2 sin alterar los modelos anteriores."""
+    from tfm.data import read_result
+
+    samples, label_report, _ = load_walk_forward_inputs(root)
+    reference, original = load_walk_forward_regime_reference(root, samples, label_report)
+    features, _ = read_result(root, "monthly_features")
+    attempt = datetime.now(timezone.utc).isoformat()
+    record = {"attempt": attempt, "variant": INTERACTION_VARIANT, "purpose": "bear_volatility_interaction",
+        "reference_variant": REGIME_VARIANT, "reference_attempt": original["attempt"],
+        "baseline_attempt": original["reference_attempt"], "candidate_configurations_per_rule": 1,
+        "strategies": list(RULES), "target": "label", "model_columns": M3_COLUMNS,
+        "model_parameters": MODEL_PARAMETERS, "parameters": label_report["parameters"],
+        "development": [START, END], "test_years": [FIRST_TEST_YEAR, LAST_TEST_YEAR],
+        "purge_months": PURGE_MONTHS, "window": "expanding", "refit": "annual",
+        "interaction_formula": "1(market_return_24m < 0) * price_volatility_12m",
+        "zero_history_policy": "zero standardized contribution when the winsorized past is zero",
+        "guide_version": "2026-11-15"}
+    path = root / "outputs/experiments/walk_forward_trials.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    def append(event):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({**record, **event}, ensure_ascii=False, allow_nan=False) + "\n")
+
+    append({"status": "started"})
+    try:
+        tables, report = evaluate_walk_forward_interaction(samples, features,
+            reference["walk_forward_regime_predictions"], progress=progress)
+        main = tables["walk_forward_interaction_comparison"].loc[lambda t: t.aggregation.eq("pooled")]
+        status = "completed" if main.comparison_status.eq("available").all() else "incomplete"
+        append({"status": status, "comparison": json.loads(main.to_json(orient="records")), "stability": report["stability"]})
+    except (Exception, KeyboardInterrupt) as exc:
+        append({"status": "failed", "error": str(exc)})
+        raise
+    report.update(parameters=label_report["parameters"], attempt=attempt, reference_attempt=original["attempt"],
+        baseline_attempt=original["reference_attempt"], experiment_status=status,
+        trial_log="outputs/experiments/walk_forward_trials.jsonl", protocol="docs/validacion_walk_forward.md")
     return tables, report
