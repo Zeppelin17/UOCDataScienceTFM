@@ -17,7 +17,7 @@ El nuevo apartado 5 de la guía (pp. 19–21) pide demostrar que el régimen mej
 
 Las tres variables directas del núcleo ya existen en la tabla 07. Las diez candidatas se conservan para los experimentos más amplios. M3 se añade después de conocer M2, manteniendo la fórmula que ya estaba prevista; su convención de historia constante se fija al revisar cobertura y antes de ajustar M3. La hipótesis de su interacción es que la relación entre volatilidad y resultado puede cambiar tras un mercado bajista, sin asumir que la evidencia de momentum transversal se transfiera a nuestro índice. Para momentum se investigará un posible deterioro en ese entorno; para reversión el análisis seguirá siendo exploratorio, sin dirección inequívoca fijada por la literatura revisada. No se ha calculado su rendimiento para decidir esta definición.
 
-Se prevén tres retiradas individuales de M2: sin volatilidad, sin retorno de 24 meses y sin drawdown. La comparación principal será M2 frente a M1, para el conjunto; cada retirada estudiará el aporte adicional de una variable condicionado a las otras. La falta de mejora individual puede reflejar redundancia y no demuestra que la variable carezca de información. Son listas fijas; en esta comparación no se elegirá una lista usando los resultados de sus bloques de prueba. La posterior selección Clustered MDA constituirá otra variante, aprendida dentro del entrenamiento y evaluada por separado.
+Se implementan tres retiradas individuales de M2: sin volatilidad, sin retorno de 24 meses y sin drawdown. La comparación principal será M2 frente a M1, para el conjunto; cada retirada estudiará el aporte adicional de una variable condicionado a las otras. La falta de mejora individual puede reflejar redundancia y no demuestra que la variable carezca de información. Son listas fijas; en esta comparación no se elegirá una lista usando los resultados de sus bloques de prueba. La posterior selección Clustered MDA constituirá otra variante, aprendida dentro del entrenamiento y evaluada por separado.
 
 ## Calendario del notebook 14
 
@@ -93,7 +93,7 @@ Se guardan cuatro tablas adicionales con JSON:
 
 Su informe identifica `reference_attempt` y `reference_variant`, además de su propia variante e intento. Comparte `outputs/experiments/walk_forward_trials.jsonl`; M2 cuenta como una nueva configuración por regla, no como ochenta. Se registran inicio, resultado o fallo, también cuando M2 empeora. La referencia debe estar actualizada antes del primer ajuste. Volver a publicar cualquiera de sus cinco tablas retira las cuatro salidas de M2. Las preparaciones de 01/02/07/08 retiran ambas familias; repetir 09–13 no las invalida. El historial permanece.
 
-El estado de M2 es `pending_matched_cpcv_regime_shadows_and_economic_evaluation`. La robustez CPCV equivalente, sus sombras específicas, M3, retiradas individuales, selección interna, interpretación y utilidad económica siguen pendientes. Una mejora de AUC, por sí sola, no acepta el régimen.
+El estado de M2 es `pending_matched_cpcv_regime_shadows_and_economic_evaluation`. La robustez CPCV equivalente, las sombras específicas, selección interna, interpretación y utilidad económica siguen pendientes. Las ampliaciones M3 y retiradas individuales se documentan y ejecutan por separado en los apartados siguientes. Una mejora de AUC, por sí sola, no acepta el régimen.
 
 ## Ampliación M3: interacción mercado bajista y volatilidad
 
@@ -113,7 +113,23 @@ Se guardan cuatro tablas: `walk_forward_interaction_predictions` (probabilidades
 
 La comparación M3–M2 estudia añadir la interacción; M3–M1 estudia el bloque de régimen completo. Ambas usan el mismo candidato entrenado y no cuentan como dos configuraciones. El historial registra una nueva variante por regla, su fórmula, convención de escala e intentos de referencia. Republicar M0/M1 retira M2 y M3; republicar M2 retira M3. El resto de entradas anteriores sigue invalidando las tres familias y 09–13 las conserva.
 
-Se mantienen cuarenta años previstos por regla y comparación, con veintiuno favorables como mayoría estricta. El estado es `pending_matched_cpcv_interaction_shadows_and_economic_evaluation`. Las retiradas individuales, sombras específicas, robustez CPCV, selección interna, SHAP y evaluación económica siguen pendientes. No se cambia la fórmula ni el criterio de estabilidad después de ver M3 y una mejora predictiva no basta para aceptar el régimen.
+Se mantienen cuarenta años previstos por regla y comparación, con veintiuno favorables como mayoría estricta. El estado es `pending_matched_cpcv_interaction_shadows_and_economic_evaluation`. Las retiradas individuales se desarrollan en el apartado siguiente. Sombras específicas, robustez CPCV, selección interna, SHAP y evaluación económica siguen pendientes. No se cambia la fórmula ni el criterio de estabilidad después de ver M3 y una mejora predictiva no basta para aceptar el régimen.
+
+## Retiradas individuales de M2
+
+La última parte del notebook 14 implementa las tres retiradas ya previstas: sin volatilidad, sin retorno de 24 meses y sin drawdown. Cada candidato conserva las otras cuatro columnas de M2. No se retiran dos variables a la vez ni se incluye la interacción de M3. El módulo `src/tfm/walk_forward_ablation.py` reutiliza el calendario, los ajustes y las métricas de walk-forward; no introduce otro modelo, fuente o configuración de entrada.
+
+Se leen y contrastan las referencias M0/M1/M2 publicadas. Cada retirada se ajusta de nuevo en cada año y regla con los mismos ejemplos, etiquetas, purga y parámetros. Son 240 ajustes adicionales. Esto difiere de Clustered MDA: se elimina la columna y se reentrena, en vez de permutar sus valores manteniendo el modelo fijo. La aportación es condicional a los predictores restantes y a esta logística; la redundancia puede explicar que una variable resulte prescindible sin carecer de información. No es una atribución causal.
+
+La contribución de conservar la variable se define como `AUC(M2 completo) − AUC(sin la variable)` y `log_loss(sin la variable) − log_loss(M2 completo)`. En ambos casos, positivo favorece mantenerla. Es una orientación diferente de las comparaciones de nuevo candidato menos referencia; las columnas se llaman `auc_contribution` y `log_loss_contribution`. Las métricas de cada variante también se guardan para comprobar el signo y los niveles.
+
+Se mantienen los cuarenta años y todos sus estados, incluidos los no estimables. Los recuentos describen contribuciones positivas, negativas, empates y no estimables por regla y variable. La mayoría de veintiún años se muestra como descripción, sin aceptar automáticamente variables o el régimen. Si luego se elige un subconjunto por estos resultados, esa selección deberá repetirse dentro del entrenamiento antes de una evaluación separada. No se toma la mejor retirada y se presenta su resultado en los mismos meses como validación independiente.
+
+Se publican cuatro tablas con JSON: `walk_forward_ablation_predictions`, `walk_forward_ablation_metrics`, `walk_forward_ablation_coefficients` y `walk_forward_ablation_comparison`. Todas identifican `removed_feature` y `subset_model`. Las predicciones conservan también las probabilidades publicadas de M0/M1/M2. Con la muestra actual hay 2430 filas de predicciones (810 por variante), 246 métricas, 1200 coeficientes (intercepto y cuatro columnas por ajuste) y 246 comparaciones. Repetir un ejemplo en tres variantes no aumenta la información independiente.
+
+El historial compartido registra cada retirada antes de su ajuste, con su intento, referencia, columnas y parámetros; al terminar conserva resultado o fallo. Cada una cuenta como una configuración adicional por regla: tres en total, no 240. Si el recorrido falla, solo se registran las variantes que efectivamente empezaron y no se devuelve una familia parcial para publicar. El informe de la familia vincula los intentos y no constituye una cuarta configuración.
+
+Estas tablas dependen de M0/M1/M2 y de sus entradas. Republicar una referencia retira la familia; M3 no es una entrada y republicarlo la conserva. Calcular las retiradas no modifica ninguna tabla de M0/M1/M2/M3. El estado es `diagnostic_only_no_automatic_selection_or_regime_acceptance`. Este incremento no ejecuta sombras, CPCV equivalente, selección automática, SHAP o simulación económica.
 
 ## Límites y comprobaciones esenciales
 
@@ -171,3 +187,21 @@ Ninguna de las cuatro comparaciones alcanza los veintiún años favorables fijad
 Se reconstruyeron las probabilidades con los coeficientes guardados, con diferencia exactamente cero. Las AUC anuales y reunidas se contrastaron mediante pares de etiquetas y las log-loss con su fórmula directa. Las tablas publicadas coinciden exactamente con las calculadas y el notebook queda sin salidas ni contadores de ejecución.
 
 Pasan las 67 pruebas del proyecto. Se añadió una comprobación de la fórmula y causalidad de la interacción y se amplió el recorrido existente para cubrir sus referencias, resultados e invalidaciones. Las dos advertencias de gráficos no interactivos del 09 son las anteriores.
+
+## Ejecución de las retiradas individuales
+
+Se ejecutó el notebook ampliado completo, con datos locales y descargas bloqueadas. Convergieron los 240 ajustes adicionales. Se guardaron 2430 predicciones emparejadas, 246 métricas, 1200 coeficientes y 246 comparaciones, con sus JSON. Las trece tablas anteriores de M0/M1/M2/M3 se reprodujeron exactamente y los otros 65 archivos anteriores comprobados permanecieron intactos. El historial registró las tres retiradas por separado, además de las repeticiones de M1/M2/M3 del recorrido completo.
+
+| Variable conservada | Contribución AUC momentum | Contribución AUC reversión | Contribución log-loss momentum | Contribución log-loss reversión |
+|---|---:|---:|---:|---:|
+| Volatilidad | +0,000636 | +0,001866 | −0,002694 | −0,000584 |
+| Retorno de 24 meses | +0,009088 | +0,012916 | +0,002993 | +0,002116 |
+| Drawdown | −0,005236 | −0,005021 | −0,004073 | −0,000720 |
+
+El retorno de 24 meses aporta la mayor contribución de las tres en estas comparaciones reunidas. Conservar volatilidad mejora ligeramente AUC, pero empeora log-loss. Retirar drawdown mejora ambas métricas frente a M2 completo: las AUC sin esa variable son 0,600000 en momentum y 0,640860 en reversión. Estos resultados se limitan a esta logística y a las demás variables incluidas; no se declara una selección definitiva ni una importancia intrínseca de cada característica.
+
+Los años con contribución positiva de AUC son 9/40 y 8/40 para volatilidad, 12/40 y 17/40 para retorno de 24 meses, y 11/40 y 10/40 para drawdown, respectivamente para momentum y reversión. Ninguno alcanza los veintiún años. Los estados no estimables permanecen: ocho años de momentum y uno de reversión. El AUC reunido compara también ejemplos de años distintos y no promedia los anuales; por ello el signo global puede diferir del balance de años positivos y negativos.
+
+Se mantuvieron las variantes y criterios fijados antes de calcular estas retiradas. No se ha eliminado drawdown ni se ha adoptado automáticamente el subconjunto que obtiene mejores métricas. Cualquier elección posterior usará selección interna y evaluación separada, considerando también comparaciones con las referencias, sombras y utilidad económica.
+
+Se reconstruyeron las probabilidades con sus coeficientes, con diferencia exactamente cero. Las AUC se comprobaron con comparaciones entre pares y las log-loss con su fórmula directa, verificando asimismo el signo de las contribuciones. Las tablas publicadas coinciden exactamente con las calculadas. Pasan las 68 pruebas del proyecto, con las dos advertencias gráficas anteriores; se añadió una comprobación de retirada efectiva y signo y se amplió el recorrido existente. El notebook se conserva sin salidas ni contadores.

@@ -20,6 +20,8 @@ from tfm.walk_forward import (RESULT_NAMES, REGIME_RESULTS, SIGNAL_COLUMNS, M2_C
     INTERACTION_COLUMN, M3_COLUMNS, build_interaction_feature, load_walk_forward_regime_reference,
     run_walk_forward_interaction)
 from test_logistic import PARAMETERS, fixture_samples
+from tfm.walk_forward_ablation import (RESULT_NAMES as ABLATION_RESULTS, REMOVAL_MODELS,
+    evaluate_walk_forward_removal, run_walk_forward_ablation)
 
 
 def test_interaction_uses_raw_sign_and_only_past_for_normalization():
@@ -137,6 +139,28 @@ def test_metrics_are_pooled_once_and_preserve_empty_or_single_class_years():
     assert incomplete.loc[incomplete.strategy.eq("reversal"), "comparison_status"].eq("empty_validation").all()
 
 
+def test_removed_column_is_not_used_and_positive_contribution_favours_keeping_it():
+    _, _, samples = fixture_samples()
+    baseline, _ = evaluate_walk_forward(samples)
+    reference = baseline["walk_forward_predictions"].copy()
+    # Referencia numérica perfecta para comprobar la orientación de las diferencias.
+    reference["probability_regime"] = np.where(reference.label.eq(1), .95, .05)
+    feature = next(iter(REMOVAL_MODELS))
+    tables, info = evaluate_walk_forward_removal(samples, reference, feature)
+    assert feature not in info["model_columns"] and len(info["model_columns"]) == 4
+    assert feature not in set(tables["walk_forward_ablation_coefficients"].term)
+    changed = samples.copy(); changed[feature] = 1_000_000.
+    repeated, _ = evaluate_walk_forward_removal(changed, reference, feature)
+    for name in ABLATION_RESULTS:
+        pd.testing.assert_frame_equal(tables[name], repeated[name], check_exact=True)
+    pooled = tables["walk_forward_ablation_comparison"].loc[lambda t: t.aggregation.eq("pooled")]
+    assert pooled.auc_contribution.gt(0).all() and pooled.log_loss_contribution.gt(0).all()
+    predictions = tables["walk_forward_ablation_predictions"]
+    pd.testing.assert_frame_equal(predictions[reference.columns], reference, check_exact=True)
+    with pytest.raises(ValueError, match="tres retiradas"):
+        evaluate_walk_forward_removal(samples, reference, SIGNAL_COLUMNS[0])
+
+
 def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypatch):
     pytest.importorskip("IPython")
     import matplotlib
@@ -163,9 +187,11 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
         return load_walk_forward_reference(*args, **kwargs)
     monkeypatch.setattr("tfm.walk_forward.load_walk_forward_reference", inspect_reference)
     def inspect_regime_reference(*args, **kwargs):
-        reference_before.update({p: p.read_bytes() for name in REGIME_RESULTS for p in processed.glob(f"{name}.*")})
+        reference_before.update({p: p.read_bytes() for name in (*REGIME_RESULTS, *INTERACTION_RESULTS)
+                                 for p in processed.glob(f"{name}.*")})
         return load_walk_forward_regime_reference(*args, **kwargs)
     monkeypatch.setattr("tfm.walk_forward.load_walk_forward_regime_reference", inspect_regime_reference)
+    monkeypatch.setattr("tfm.walk_forward_ablation.load_walk_forward_regime_reference", inspect_regime_reference)
     namespace = {}
     notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
     for cell in notebook["cells"]:
@@ -201,9 +227,17 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     augmented = namespace["tablas_interaccion"]["walk_forward_interaction_predictions"]
     previous_predictions = namespace["tablas_regimen"]["walk_forward_regime_predictions"]
     pd.testing.assert_frame_equal(augmented[previous_predictions.columns], previous_predictions, check_exact=True)
+    removal_report = namespace["informe_retiradas"]
+    assert removal_report["experiment_status"] == "completed" and removal_report["candidate_configurations_per_rule"] == 3
+    assert removal_report["reference_attempt"] == regime_report["attempt"]
+    assert len(removal_report["variants"]) == 3
+    for name, length in zip(ABLATION_RESULTS, (expected_lengths[2]*3, 246, 1200, 246)):
+        table, saved = read_result(tmp_path, name)
+        assert len(table) == length and saved["attempt"] == removal_report["attempt"]
+        assert set(table.removed_feature) == set(REMOVAL_MODELS)
     log = tmp_path / report["trial_log"]
     events = [json.loads(line) for line in log.read_text().splitlines()]
-    assert [e["status"] for e in events] == ["started", "completed"]*3
+    assert [e["status"] for e in events] == ["started", "completed"]*6
     assert events[0]["candidate_configurations_per_rule"] == 1
     assert events[2]["candidate_configurations_per_rule"] == 1 and events[2]["variant"] != events[0]["variant"]
     report_path = processed / "walk_forward_metrics.json"
@@ -224,7 +258,7 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     monkeypatch.setattr("tfm.walk_forward.evaluate_walk_forward", failed)
     with pytest.raises(RuntimeError, match="Fallo cronológico"):
         run_walk_forward(tmp_path)
-    assert [json.loads(line)["status"] for line in log.read_text().splitlines()] == ["started", "completed"]*3 + ["started", "failed"]
+    assert [json.loads(line)["status"] for line in log.read_text().splitlines()] == ["started", "completed"]*6 + ["started", "failed"]
     monkeypatch.setattr("tfm.walk_forward.evaluate_walk_forward_regime", failed)
     with pytest.raises(RuntimeError, match="Fallo cronológico"):
         run_walk_forward_regime(tmp_path)
@@ -232,9 +266,18 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     monkeypatch.setattr("tfm.walk_forward.evaluate_walk_forward_interaction", failed)
     with pytest.raises(RuntimeError, match="Fallo cronológico"):
         run_walk_forward_interaction(tmp_path)
+    ablation_before = {p: p.read_bytes() for name in ABLATION_RESULTS for p in processed.glob(f"{name}.*")}
+    start_events = len(log.read_text().splitlines())
+    monkeypatch.setattr("tfm.walk_forward_ablation.evaluate_walk_forward_removal", failed)
+    with pytest.raises(RuntimeError, match="Fallo cronológico"):
+        run_walk_forward_ablation(tmp_path)
+    failed_events = [json.loads(line) for line in log.read_text().splitlines()[start_events:]]
+    assert [e["status"] for e in failed_events] == ["started", "failed"]
+    assert {e["removed_feature"] for e in failed_events} == {next(iter(REMOVAL_MODELS))}
+    assert all(p.read_bytes() == data for p, data in ablation_before.items())
     history = log.read_bytes()
     files = {processed / f"{name}.{ext}": (processed / f"{name}.{ext}").read_bytes()
-             for name in (*RESULT_NAMES, *REGIME_RESULTS, *INTERACTION_RESULTS) for ext in ("parquet", "json")}
+             for name in (*RESULT_NAMES, *REGIME_RESULTS, *INTERACTION_RESULTS, *ABLATION_RESULTS) for ext in ("parquet", "json")}
     for name in ("screening_tests", "validation_splits", "logistic_metrics", "logistic_shadows", "mda_feature_groups"):
         save_result(tmp_path, name, pd.DataFrame({"fixture": [1]}), {})
         assert all(path.read_bytes() == content for path, content in files.items())
@@ -243,14 +286,21 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
         save_result(tmp_path, name, namespace["tablas"][name], report)
         assert not any((processed / f"{n}.{ext}").exists() for n in REGIME_RESULTS for ext in ("parquet", "json"))
         assert not any((processed / f"{n}.{ext}").exists() for n in INTERACTION_RESULTS for ext in ("parquet", "json"))
+        assert not any((processed / f"{n}.{ext}").exists() for n in ABLATION_RESULTS for ext in ("parquet", "json"))
         assert all((processed / f"{n}.{ext}").exists() for n in RESULT_NAMES for ext in ("parquet", "json"))
         assert log.read_bytes() == history
     for name in REGIME_RESULTS:
         for path, content in files.items():path.write_bytes(content)
         save_result(tmp_path, name, namespace["tablas_regimen"][name], regime_report)
         assert not any((processed / f"{n}.{ext}").exists() for n in INTERACTION_RESULTS for ext in ("parquet", "json"))
+        assert not any((processed / f"{n}.{ext}").exists() for n in ABLATION_RESULTS for ext in ("parquet", "json"))
         assert all((processed / f"{n}.{ext}").exists() for n in (*RESULT_NAMES, *REGIME_RESULTS) for ext in ("parquet", "json"))
         assert log.read_bytes() == history
+    for name in INTERACTION_RESULTS:
+        for path, content in files.items():path.write_bytes(content)
+        save_result(tmp_path, name, namespace["tablas_interaccion"][name], interaction_report)
+        assert all(path.read_bytes() == content for path, content in files.items()
+                   if path.name.removesuffix(path.suffix) in ABLATION_RESULTS)
     for name, table, info in (("monthly_features", features, {"feature_columns": FEATURE_COLUMNS}),
                               ("labelled_signals", labels, {"feature_columns": FEATURE_COLUMNS, "parameters": PARAMETERS})):
         for path, content in files.items():path.write_bytes(content)
