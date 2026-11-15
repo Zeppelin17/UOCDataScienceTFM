@@ -213,3 +213,7 @@ La sección 16–18 del notebook 14 añade las comparaciones CPCV de los seis ca
 ## Evaluación económica con las predicciones cronológicas
 
 La sección 19–22 del notebook 14 usa las probabilidades M0–M3 ya publicadas para aceptar señales únicamente si superan 0,5. Su [protocolo económico](evaluacion_economica.md) mantiene cuentas continuas de 1950–1989, con iguales costes e inicio para los filtros y sus referencias. No recalcula modelos, no utiliza medias CPCV ni retornos aislados como una curva, y no anula los criterios de estabilidad incumplidos. Publica cuatro tablas económicas y su historial, sin modificar los experimentos anteriores.
+
+## Ampliación a random forest
+
+Las secciones 23–25 del 14 ajustan el [bosque de complejidad acotada](random_forest.md), manteniendo calendario y muestra. Las comparaciones RF_M1/RF_M2/RF_M3 distinguen la familia de modelo y las variables añadidas. Los controles de la logística no validan esta nueva familia; sus tablas e historial permanecen intactos y las comprobaciones del bosque se registran por separado.

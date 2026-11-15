@@ -38,7 +38,7 @@ Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de
 | [11 Regresión logística](notebooks/11_regresion_logistica.ipynb) | Compara probabilidades L2 con la frecuencia de éxitos del entrenamiento | Haber ejecutado 01 → 02 → 07 → 08 → 10; extra `models` |
 | [12 Sombras de la logística](notebooks/12_sombras_logistica.ipynb) | Compara el modelo original con 642 rotaciones conjuntas de las características | Tablas completas del 11 y sus entradas; extra `models` |
 | [13 Selección de grupos](notebooks/13_seleccion_clustered_mda.ipynb) | Selecciona con Clustered MDA dentro del entrenamiento y evalúa la logística en bloques exteriores | Tablas del 11 y sus entradas; extra `models` |
-| [14 Modelos con y sin régimen](notebooks/14_referencia_walk_forward.ipynb) | Compara M0–M3 y retiradas mediante walk-forward/CPCV y evalúa las cuentas filtradas | Tablas de 01 → 02 → 07 → 08; además 10 para CPCV; extra `models`; independiente de 09 y 11–13 |
+| [14 Modelos con y sin régimen](notebooks/14_referencia_walk_forward.ipynb) | Compara logística y random forest con y sin régimen; incluye CPCV y cuentas de la logística | Tablas de 01 → 02 → 07 → 08; además 10 para CPCV; extra `models`; independiente de 09 y 11–13 |
 
 El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 01 → 02 → 03–06. Los cuadernos 03–06 no necesitan ejecutarse entre sí. El 07 prepara diez características candidatas y no necesita las simulaciones ni el 02. Conserva 756 meses, de los que 749 tienen las diez variables completas. El 08 genera etiquetas centrales y una sensibilidad sin negociación, conservando las mismas filas. El 09 implementa el cribado descrito en [Hipótesis y protocolo](docs/hipotesis_y_cribado.md), con preparación causal y una muestra común tras su calentamiento. Es descriptivo: no selecciona automáticamente variables ni estima habilidad fuera de muestra.
 
@@ -51,6 +51,8 @@ El 12 implementa el [protocolo de sombras del modelo](docs/sombras_logistica.md)
 El 13 aplica la [selección interna mediante Clustered MDA](docs/seleccion_clustered_mda.md). Reserva el último bloque de cada entrenamiento exterior para seleccionar, agrupa con Spearman absoluto y enlace completo (umbral 0,70) sobre los otros tres, mide el aumento de log-loss al permutar cada grupo treinta veces y conserva los grupos con media positiva. Después reajusta con todo el entrenamiento exterior y evalúa sus bloques reservados. Si no queda ningún grupo, usa solo el intercepto. Guarda cinco tablas `mda_*` y el historial de la variante, sin modificar 11/12. La selección es específica de esta logística; sus sombras, otros modelos y la utilidad económica siguen pendientes. SciPy se declara como dependencia directa de modelado y ya estaba instalada con scikit-learn.
 
 El 14 desarrolla la [comparación cronológica con y sin régimen](docs/validacion_walk_forward.md) prevista tras la guía del 15 de noviembre. Reentrena cada año con ventana expansiva y purga de un mes anterior, y prueba 1950–1989. M0 es la frecuencia positiva del entrenamiento; M1 utiliza retorno mensual y momentum 12–1; M2 añade volatilidad, retorno de 24 meses y drawdown; M3 añade mercado bajista × volatilidad. Conserva las mismas fechas, etiquetas y parámetros. Guarda las referencias y comparaciones de M0–M3, y diagnostica las tres retiradas individuales de M2 con las mismas condiciones. Las tablas identifican cada variante y sus métricas; los recuentos conservan años no estimables. La [robustez CPCV equivalente](docs/cpcv_regimen.md) evalúa los mismos seis candidatos y muestra también el resumen de 1950–1989. La [evaluación económica](docs/evaluacion_economica.md) usa las predicciones cronológicas y acepta señales solo con probabilidad mayor que 0,5, comparando cuentas continuas con las referencias. Las sombras específicas y los controles finales siguen pendientes; el tramo desde 1990 permanece reservado.
+
+Las secciones 23–25 del 14 incorporan un [random forest pequeño](docs/random_forest.md), con 200 árboles, profundidad máxima tres y mínimo veinte observaciones por hoja. Compara RF_M1/RF_M2/RF_M3 en los mismos cuarenta años y con las mismas columnas y disponibilidad, incluyendo comparaciones con las logísticas M1/M2 correspondientes. Sus cuatro tablas `forest_walk_forward_*` conservan predicciones, métricas, diagnósticos y diferencias; M0 aparece una sola vez. No reajusta la logística ni hereda sus sombras o cuentas económicas. CPCV equivalente y las demás comprobaciones del bosque quedan pendientes.
 
 ## Supuestos y datos
 
@@ -90,6 +92,7 @@ src/tfm/
   walk_forward_ablation.py Retiradas individuales de M2 y contribución condicionada
   cpcv_regime.py           Robustez CPCV de los seis candidatos fijados
   economics.py            Decisiones con umbral fijo y cuentas continuas cronológicas
+  forest.py               Random forest pequeño y comparaciones cronológicas emparejadas
 data/raw/                Originales locales (fuera de Git)
 data/processed/          Tablas Parquet y resúmenes JSON (fuera de Git)
 outputs/diagnosis/       Tablas del diagnóstico (fuera de Git)
@@ -113,6 +116,8 @@ Recalcular entradas de 01, 02, 07 u 08 retira todas las familias de resultados w
 Las cinco tablas `cpcv_regime_*` dependen de 07/08 y de las particiones del 10, y se retiran al regenerar esas entradas o sus fuentes. Publicar modelos anteriores, incluidos los de walk-forward, las conserva. La sección 16–18 del 14 puede ejecutarse por separado con esas entradas. Su historial está en `outputs/experiments/cpcv_regime_trials.jsonl`.
 
 Las cuatro tablas `walk_forward_economic_*` dependen de las entradas de datos y de M0/M1/M2/M3. Publicar cualquiera de esas familias o regenerar sus datos retira las cuentas económicas; publicar CPCV, sombras o las retiradas de M2 las conserva. La sección 19–22 del 14 puede ejecutarse por separado con esos modelos preparados, sin ajustar de nuevo. El historial `outputs/experiments/walk_forward_economics_trials.jsonl` permanece. Todas las cuentas empiezan en efectivo en enero de 1950, mantienen los 480 meses y liquidan en diciembre de 1989, sin reinicios anuales.
+
+Las cuatro tablas `forest_walk_forward_*` requieren las entradas de datos y referencias M0/M1/M2 logísticas. Regenerar esas entradas o publicar dichas referencias las retira; publicar M3 logístico, CPCV, sombras, retiradas o cuentas económicas las conserva. La sección 23–25 puede ejecutarse por separado en un kernel nuevo. Su historial `outputs/experiments/forest_trials.jsonl` registra tres configuraciones nuevas por regla; cada año y árbol no es una configuración independiente. No se añaden dependencias.
 
 ## Verificación
 
