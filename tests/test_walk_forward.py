@@ -10,6 +10,7 @@ import pytest
 pytest.importorskip("sklearn")
 
 from tfm.data import read_result, save_result
+from tfm.feature_blocks import training_correlations
 from tfm.features import FEATURE_COLUMNS
 from tfm.logistic import fit_partition
 from tfm.validation import MODEL_COLUMNS, prepare_validation_samples
@@ -22,6 +23,19 @@ from tfm.walk_forward import (RESULT_NAMES, REGIME_RESULTS, SIGNAL_COLUMNS, M2_C
 from test_logistic import PARAMETERS, fixture_samples
 from tfm.walk_forward_ablation import (RESULT_NAMES as ABLATION_RESULTS, REMOVAL_MODELS,
     evaluate_walk_forward_removal, run_walk_forward_ablation)
+
+
+def test_block_correlations_exclude_the_test_year_and_previous_december():
+    _, _, samples = fixture_samples()
+    splits = build_walk_forward_splits().loc[lambda t: t.test_year.isin([1950, 1951])]
+    original = training_correlations(samples, splits)
+    changed = samples.copy()
+    affected = changed.target_period.ge("1949-12") & changed.sample_usable
+    changed.loc[affected, SIGNAL_COLUMNS[0]] *= -100
+    repeated = training_correlations(changed, splits)
+    pd.testing.assert_frame_equal(original.loc[original.test_year.eq(1950)],
+                                  repeated.loc[repeated.test_year.eq(1950)], check_exact=True)
+    assert not original.loc[original.test_year.eq(1951)].equals(repeated.loc[repeated.test_year.eq(1951)])
 
 
 def test_interaction_uses_raw_sign_and_only_past_for_normalization():
@@ -237,6 +251,16 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
         table, saved = read_result(tmp_path, name)
         assert len(table) == length and saved["attempt"] == removal_report["attempt"]
         assert set(table.removed_feature) == set(REMOVAL_MODELS)
+    blocks = namespace["resultados_bloques"]
+    baseline_predictions, _ = read_result(tmp_path, "walk_forward_predictions")
+    pd.testing.assert_frame_equal(blocks["predictions"][baseline_predictions.columns],
+                                  baseline_predictions, check_exact=True)
+    assert len(blocks["comparisons"]) == 4 * 82
+    assert blocks["summary"].expected_years.eq(40).all()
+    block_log = tmp_path / "outputs/experiments/walk_forward_block_trials.jsonl"
+    block_events = [json.loads(line) for line in block_log.read_text().splitlines()]
+    assert [event["status"] for event in block_events] == ["started", "completed"] * 4
+    assert [len(event["model_columns"]) for event in block_events[::2]] == [3, 5, 7, 10]
     log = tmp_path / report["trial_log"]
     events = [json.loads(line) for line in log.read_text().splitlines()]
     assert [e["status"] for e in events] == ["started", "completed"]*6

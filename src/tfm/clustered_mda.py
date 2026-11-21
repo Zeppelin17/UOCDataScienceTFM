@@ -53,8 +53,11 @@ def build_inner_splits(splits: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(pieces, ignore_index=True)
 
 
-def cluster_features(train: pd.DataFrame) -> tuple[list[list[str]], list[str], pd.DataFrame]:
-    """Agrupar por |Spearman| >= 0,70 con enlace completo, sin etiquetas."""
+def cluster_features(train: pd.DataFrame, *, threshold: float = CORRELATION_THRESHOLD
+                     ) -> tuple[list[list[str]], list[str], pd.DataFrame]:
+    """Agrupar por correlación absoluta de Spearman con enlace completo, sin etiquetas."""
+    if not 0 < threshold <= 1:
+        raise ValueError("El umbral de correlación debe ser mayor que cero y como máximo uno.")
     if train.empty or not np.isfinite(train[MODEL_COLUMNS].to_numpy(dtype=float)).all():
         raise ValueError("Se necesitan características internas de entrenamiento finitas.")
     constants = [name for name in MODEL_COLUMNS if train[name].nunique() <= 1]
@@ -74,7 +77,7 @@ def cluster_features(train: pd.DataFrame) -> tuple[list[list[str]], list[str], p
     np.fill_diagonal(corr, 1.)
     distance = np.clip(1 - np.abs(corr), 0, 1)
     tree = linkage(squareform(distance, checks=False), method="complete")
-    cutoff = np.nextafter(1 - CORRELATION_THRESHOLD, np.inf)
+    cutoff = np.nextafter(1 - threshold, np.inf)
     ids = fcluster(tree, cutoff, criterion="distance")
     groups = [[name for name, cluster in zip(eligible, ids) if cluster == group] for group in np.unique(ids)]
     groups.sort(key=lambda members: MODEL_COLUMNS.index(members[0]))
