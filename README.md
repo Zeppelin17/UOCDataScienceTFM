@@ -6,8 +6,6 @@ El trabajo se ejecuta mediante **notebooks**, sin CLI ni archivos de configuraci
 
 La [estructura prevista para la entrega](docs/estructura_notebooks.md) agrupa el estudio en siete notebooks. Los archivos actuales 00–14 siguen siendo los ejecutables durante el desarrollo; las próximas ampliaciones se incorporarán por secciones y se consolidarán conservando resultados y metodología.
 
-Para comprender el estudio desde cero, abre la [guía interactiva del proyecto](docs/guia_del_proyecto.html) en un navegador. Recorre los fundamentos y los notebooks 00–10, con ejemplos, detalles de fórmulas y código y un glosario. [Instrucciones de lectura](docs/guia_del_proyecto.md).
-
 ## Cómo empezar
 
 Con Python 3.11 o posterior, desde la raíz del repositorio:
@@ -44,7 +42,7 @@ El 00 puede ejecutarse por separado. Para reproducir las simulaciones, ejecuta 0
 
 El 10 implementa el [diseño de validación temporal](docs/plan_validacion_temporal.md): seis bloques, quince combinaciones, purga de un mes y embargo de seis meses. Separa el calendario de los ejemplos utilizables por regla, conserva las diez candidatas y no entrena modelos. Guarda las particiones y sus recuentos, sin depender de los resultados del cribado.
 
-El 11 implementa el [primer experimento de logística L2](docs/primer_modelo.md), con las diez candidatas, `C=1` y sin ponderación de clases ni búsqueda de parámetros. Guarda las cinco predicciones de validación por ejemplo y su media mensual, log-loss/AUC y coeficientes. La referencia es la frecuencia positiva del entrenamiento. El historial de intentos está en `outputs/experiments/logistic_trials.jsonl`. Su puerta de capacidad predictiva se concreta en el 12. La selección de grupos se desarrolla en el 13; SHAP y la evaluación económica del filtro vendrán después. La guía interactiva cubre los fundamentos y notebooks 00–10; los posteriores incluyen sus propias explicaciones.
+El 11 implementa el [primer experimento de logística L2](docs/primer_modelo.md), con las diez candidatas, `C=1` y sin ponderación de clases ni búsqueda de parámetros. Guarda las cinco predicciones de validación por ejemplo y su media mensual, log-loss/AUC y coeficientes. La referencia es la frecuencia positiva del entrenamiento. El historial de intentos está en `outputs/experiments/logistic_trials.jsonl`. Su puerta de capacidad predictiva se concreta en el 12. La selección de grupos se desarrolla en el 13; SHAP y la evaluación económica del filtro vendrán después.
 
 El 12 implementa el [protocolo de sombras del modelo](docs/sombras_logistica.md). Desplaza juntas las diez características sobre los 713 meses comunes, conservando etiquetas, señales y particiones, y repite los ajustes para 642 desplazamientos con distancia circular mínima de 36 meses. Compara la mejora de log-loss original con el percentil 95 de las sombras; la AUC de las sombras es descriptiva. El criterio operativo se fija tras conocer el 11 y antes de calcular las sombras. No equivale a un contraste exacto o a demostrar rentabilidad. Guarda dos tablas y un historial separado en `outputs/experiments/logistic_shadow_trials.jsonl`, conservando las salidas originales del 11.
 

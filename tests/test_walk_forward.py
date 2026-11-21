@@ -195,7 +195,7 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     namespace = {}
     notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
     for cell in notebook["cells"]:
-        if {"cpcv", "economics", "forest"} & set(cell.get("metadata", {}).get("tags", [])):
+        if {"cpcv", "economics", "forest", "annual-diagnostic"} & set(cell.get("metadata", {}).get("tags", [])):
             continue  # Las ampliaciones tienen sus propios recorridos de prueba.
         if cell["cell_type"] == "code":
             assert cell["execution_count"] is None and not cell["outputs"]

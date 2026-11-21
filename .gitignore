@@ -16,6 +16,10 @@ htmlcov/
 .env.*
 !.env.example
 
+# Guía personal de estudio: solo local
+/docs/guia_del_proyecto.html
+/docs/guia_del_proyecto.md
+
 # Datos y resultados: se conserva la estructura
 /data/**/*
 !/data/**/

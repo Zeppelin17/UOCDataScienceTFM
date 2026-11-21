@@ -220,3 +220,9 @@ Se fija antes del cálculo económico un umbral estricto de 0,5 para M0–M3, si
 ## Segundo candidato: random forest pequeño
 
 Se incorporan las tres listas fijas RF_M1/RF_M2/RF_M3, sin búsqueda de parámetros: 200 árboles, profundidad máxima tres, mínimo veinte observaciones por hoja y semilla 42. Se conservan preparación causal, muestras, costes del etiquetado y cuarenta pruebas anuales; se comparan con la logística de iguales columnas sin reajustarla. El bosque ya permite interacciones en M2; M3 añade una representación explícita. Los tres candidatos por regla se registran como configuraciones nuevas, separando árboles y años del número de intentos. Sus sombras, CPCV y cuentas económicas quedan pendientes y no se transfieren desde la logística. Las secciones 23–25 del 14 y `docs/random_forest.md` describen el incremento; no se crea un notebook adicional.
+
+## Diagnóstico anual tras la reunión con el tutor
+
+Las secciones 26–29 del notebook 14 añaden lectura descriptiva por año para M0, tres logísticas y tres bosques. Se conservan las predicciones y listas fijadas. El bloque contrasta las referencias y los recuentos publicados, reconstruye las métricas de las probabilidades guardadas y muestra todos los años 1950–1989. Distingue el contexto del calendario completo del correspondiente a las señales de cada regla; los promedios anuales se usan únicamente para describir lo ocurrido.
+
+No se buscan hiperparámetros, cortes de régimen, listas o años favorables. Las observaciones que orienten un candidato posterior se declararán como exploración. El diagnóstico no modifica la aceptación del régimen o los controles pendientes, no consulta desde 1990 ni crea otra familia persistente de resultados. `docs/diagnostico_anual.md` concreta su alcance. La revisión incremental de grupos de características se abordará después de examinar estas salidas.
