@@ -234,3 +234,7 @@ Las secciones 30–31 del notebook 14 miden el efecto de añadir en orden la dis
 ## Tercer candidato con listas M1 y M2
 
 Las secciones 32–34 del notebook 14 incorporan gradient boosting con cien árboles, profundidad máxima dos, mínimo veinte ejemplos por hoja y tasa de aprendizaje 0,05. Se conservan los ejemplos, las listas M1/M2 y el calendario de logística y bosque. En reversión mejora ambas métricas reunidas frente a la logística y queda por debajo del bosque. El bloque de régimen en boosting mejora ambas métricas reunidas, pero el recuento anual queda por debajo de 21 en las dos reglas. Las probabilidades cronológicas se guardan para su posible evaluación económica. El diseño y los resultados están en `docs/gradient_boosting.md`.
+
+## Formas aprendidas por M1
+
+Las secciones 35–36 reproducen los modelos M1 de 1959, 1969, 1979 y 1989. Los gráficos comparan efectos locales acumulados en la puntuación previa a la sigmoide, con cortes comunes y recuentos de señales. En ambas reglas, bosque y boosting muestran un cambio de pendiente repetido en el retorno del último mes. Se documenta como hipótesis para un EBM aditivo y queda pendiente su evaluación cronológica. El método, las fechas y los resultados están en `docs/formas_m1.md`.
