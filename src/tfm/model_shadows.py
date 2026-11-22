@@ -56,28 +56,28 @@ def circular_shadow(samples: pd.DataFrame, shift: int) -> pd.DataFrame:
     return shadow
 
 
-def _main_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
+def _main_metrics(metrics: pd.DataFrame, *, rules: tuple[str, ...] = RULES) -> pd.DataFrame:
     main = metrics.loc[metrics.aggregation.eq("monthly_mean")].copy()
-    expected = {(rule, model) for rule in RULES for model in ("logistic", "naive")}
+    expected = {(rule, model) for rule in rules for model in ("logistic", "naive")}
     if (main.duplicated(["strategy", "model"]).any()
             or set(zip(main.strategy, main.model)) != expected):
-        raise ValueError("Se necesitan las métricas mensuales de ambos métodos y reglas.")
+        raise ValueError("Se necesitan las métricas mensuales de ambos métodos para las reglas previstas.")
     return main
 
 
 def compare_shadows(shadows: pd.DataFrame, original_metrics: pd.DataFrame,
-                    expected_shifts: list[int]) -> tuple[pd.DataFrame, dict]:
+                    expected_shifts: list[int], *, rules: tuple[str, ...] = RULES) -> tuple[pd.DataFrame, dict]:
     """No calcular umbrales con rotaciones ausentes, fallidas o incompletas."""
-    expected = {(shift, rule) for shift in expected_shifts for rule in RULES}
+    expected = {(shift, rule) for shift in expected_shifts for rule in rules}
     actual = set(zip(shadows.shift_months, shadows.strategy))
     if (not expected_shifts or len(set(expected_shifts)) != len(expected_shifts)
             or shadows.duplicated(["shift_months", "strategy"]).any() or not actual <= expected):
         raise ValueError("Las sombras deben ser únicas y pertenecer a los desplazamientos previstos.")
     finite = np.isfinite(shadows[["log_loss", "auc", "log_loss_improvement"]].to_numpy(dtype=float)).all(axis=1)
     available = bool(actual == expected and shadows.status.eq("completed").all() and finite.all())
-    main = _main_metrics(original_metrics)
+    main = _main_metrics(original_metrics, rules=rules)
     records = []
-    for rule in RULES:
+    for rule in rules:
         original = main.loc[main.strategy.eq(rule)].set_index("model")
         real = original.loc["logistic"]
         naive = original.loc["naive"]

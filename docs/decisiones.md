@@ -248,3 +248,9 @@ Las secciones 37–39 ajustan EBM con las dos entradas de M1, sin interacciones 
 ## Cuenta económica de reversión con RF_M1
 
 Las secciones 40–41 aplican el umbral fijo `p > 0,5` a las probabilidades guardadas de RF_M1 en 1950–1989. La cuenta sigue 151 de las 479 señales activas y termina con 751,30 unidades frente a 761,01 del efectivo y 454,06 de la logística M1. Se reutilizan los mismos costes y las cuentas de referencia ya publicadas. El resultado corresponde al diagnóstico económico de desarrollo. [Protocolo y resultados](evaluacion_economica_bosque.md)
+
+## Contraste con sombras de momentum M1
+
+Las secciones 42–43 usan el CPCV guardado de la logística M1 y comparan sus dos entradas alineadas con 642 rotaciones circulares conjuntas. El criterio operativo exige AUC de al menos 0,54, mejora de log-loss frente a M0 y superar el percentil 95 de la mejora de las sombras. Las señales, las etiquetas y las quince particiones conservan sus fechas. [Protocolo](sombras_momentum_m1.md)
+
+En 442 señales, M1 obtiene AUC de 0,593238 y mejora de log-loss de 0,017683 frente a M0. El percentil 95 de las sombras es 0,002731. M1 supera el criterio operativo y la mejora de todas las rotaciones evaluadas. [Resultados](sombras_momentum_m1.md#resultados)
