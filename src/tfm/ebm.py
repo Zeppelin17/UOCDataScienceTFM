@@ -20,6 +20,7 @@ EBM_PARAMETERS = {"interactions": 0, "feature_types": ["continuous", "continuous
     "greedy_ratio": 0, "cyclic_progress": True, "smoothing_rounds": 0, "validation_size": 0,
     "early_stopping_rounds": 0, "outer_bags": 1, "inner_bags": 0, "n_jobs": 1, "random_state": 42,
     "objective": "log_loss"}
+VARIANT = "ebm_m1_additive_bins16_leaf20_rounds300"
 REFERENCES = {name: PROBABILITIES[name] for name in ("M0", "L2_M1", "RF_M1", "GB_M1")}
 MODELS = {**REFERENCES, "EBM_M1": "probability_ebm"}
 COMPARISONS = [(name, "EBM_M1") for name in REFERENCES if name != "M0"]
@@ -87,7 +88,7 @@ def run_ebm(root: Path, *, progress=None) -> tuple[dict, dict]:
     path = root / "outputs/experiments/ebm_trials.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {**metadata, "attempt": datetime.now(timezone.utc).isoformat(),
-        "variant": "ebm_m1_additive_bins16_leaf20_rounds300", "candidate_configurations_per_rule": 1,
+        "variant": VARIANT, "candidate_configurations_per_rule": 1,
         "strategies": list(RULES), "model_columns": SIGNAL_COLUMNS, "model_parameters": EBM_PARAMETERS,
         "window": "expanding", "refit": "annual", "target": "label", "interpret_core_version": interpret_version}
     forecasts, curves, effects = [], [], []

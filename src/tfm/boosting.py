@@ -20,6 +20,7 @@ BOOSTING_PARAMETERS = {"loss": "log_loss", "n_estimators": 100, "learning_rate":
     "max_depth": 2, "min_samples_leaf": 20, "subsample": 1., "random_state": 42,
     "n_iter_no_change": None}
 CANDIDATE_COLUMNS = {"GB_M1": list(SIGNAL_COLUMNS), "GB_M2": list(M2_COLUMNS)}
+VARIANTS = {candidate: f"boosting_100_depth2_leaf20_lr005_{candidate.lower()}_central" for candidate in CANDIDATE_COLUMNS}
 REFERENCE_PROBABILITIES = {"M0": "probability_naive", "L2_M1": "probability_logistic", "L2_M2": "probability_regime",
     "RF_M1": "probability_rf_m1", "RF_M2": "probability_rf_m2"}
 PROBABILITIES = {**REFERENCE_PROBABILITIES, "GB_M1": "probability_gb_m1", "GB_M2": "probability_gb_m2"}
@@ -139,7 +140,7 @@ def run_boosting(root: Path, *, progress=None) -> tuple[dict, dict]:
             attempt = datetime.now(timezone.utc).isoformat()
             attempts[candidate] = attempt
             record = {**metadata, "attempt": attempt, "batch_attempt": batch, "candidate": candidate,
-                "variant": f"boosting_100_depth2_leaf20_lr005_{candidate.lower()}_central",
+                "variant": VARIANTS[candidate],
                 "candidate_configurations_per_rule": 1, "strategies": list(RULES), "target": "label",
                 "model_columns": columns, "model_parameters": BOOSTING_PARAMETERS}
 

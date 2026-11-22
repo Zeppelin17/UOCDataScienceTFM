@@ -24,11 +24,11 @@ M1 obtiene un Sharpe descriptivo mayor en la cuenta completa. Los tres intervalo
 
 El inventario recoge los identificadores registrados por regla en el desarrollo y reúne sus intentos. Cada serie publicada se enlaza con el intento de predicción de la logística o con el lote del bosque. Las repeticiones con la misma variante, las comprobaciones CPCV de candidatos cronológicos, los años de reajuste y las sombras aportan resultados a sus respectivas pruebas sin aumentar el número de identificadores de candidatos. M0 y los comparadores fijos siguen en las cuentas como referencias.
 
-| Estado actual | Momentum | Reversión |
+| Estado antes de construir la matriz común | Momentum | Reversión |
 |---|---:|---:|
 | Cuenta neta disponible | 3 | 4 |
 | Recorrido cronológico registrado, cuenta pendiente | 9 | 8 |
 | Comparación por bloques, reproducir predicciones y simular | 4 | 4 |
 | Predicciones CPCV, preparar recorrido cronológico si se incluye | 2 | 2 |
 
-La logística inicial con diez entradas y el último escalón por bloques comparten la especificación de variables e hiperparámetros, evaluada bajo dos diseños temporales. El inventario conserva ambos orígenes. El registro actual contiene 36 combinaciones de identificador y regla. Aún hay que determinar el conjunto de estrategias comparables que participará en la selección para DSR y PBO. El siguiente incremento debe obtener sus series sincronizadas con la política fijada y documentar la relación entre configuraciones y el papel de los análisis explicativos.
+La logística inicial con diez entradas y el último escalón por bloques comparten la especificación de variables e hiperparámetros, evaluada bajo dos diseños temporales. El inventario conserva ambos orígenes. El registro contiene 36 combinaciones de identificador y regla. Las secciones 47–48 construyen la matriz de series a partir del conjunto fijado para la selección económica. [Matriz común de retornos](series_dsr_pbo.md)

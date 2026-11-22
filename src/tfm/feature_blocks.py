@@ -22,6 +22,8 @@ BLOCKS = {
     "Con_industrias": ["z_industry_breadth_12m", "z_industry_dispersion"],
     "Con_regimen": REGIME_COLUMNS,
 }
+VARIANTS = {candidate: f"walk_forward_logistic_l2_{candidate.lower()}_central" for candidate in BLOCKS}
+PREDICTION_KEYS = ["split_id", "test_year", "strategy", "target_period", "label", "probability_naive"]
 CLUSTER_THRESHOLD = .80
 NEAR_THRESHOLD = .70
 
@@ -55,6 +57,17 @@ def summarize_training_correlations(correlations: pd.DataFrame) -> pd.DataFrame:
         ).sort_values(["strategy", "years_grouped", "years_strong", "years_near"], ascending=[True, False, False, False])
 
 
+def fit_feature_block(samples: pd.DataFrame, splits: pd.DataFrame, reference: pd.DataFrame,
+                      columns: list[str]) -> pd.DataFrame:
+    """Reproducir las probabilidades de un bloque en la muestra común de M1."""
+    fitted, _, _ = _fit_walk_forward_partitions(samples, splits, columns)
+    order = PREDICTION_KEYS[:4]
+    pd.testing.assert_frame_equal(fitted[PREDICTION_KEYS].sort_values(order).reset_index(drop=True),
+                                  reference[PREDICTION_KEYS].sort_values(order).reset_index(drop=True),
+                                  check_exact=True)
+    return fitted
+
+
 def run_feature_blocks(root: Path) -> dict:
     samples, label_report, _ = load_walk_forward_inputs(root)
     baseline, report = load_walk_forward_reference(root, samples, label_report)
@@ -63,9 +76,8 @@ def run_feature_blocks(root: Path) -> dict:
     reference = "M1"
     reference_metrics = baseline["walk_forward_metrics"]
     columns = list(SIGNAL_COLUMNS)
-    keys = ["split_id", "test_year", "strategy", "target_period", "label", "probability_naive"]
+    keys = PREDICTION_KEYS
     predictions = baseline["walk_forward_predictions"].copy()
-    checked_reference = predictions[keys].sort_values(keys[:4]).reset_index(drop=True)
     comparisons, stability = [], []
     path = root / "outputs/experiments/walk_forward_block_trials.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +85,7 @@ def run_feature_blocks(root: Path) -> dict:
         for candidate, added in BLOCKS.items():
             columns.extend(added)
             record = {"attempt": datetime.now(timezone.utc).isoformat(),
-                "variant": f"walk_forward_logistic_l2_{candidate.lower()}_central", "candidate": candidate,
+                "variant": VARIANTS[candidate], "candidate": candidate,
                 "reference_model": reference, "reference_attempt": report["attempt"],
                 "candidate_configurations_per_rule": 1, "strategies": list(RULES), "target": "label",
                 "model_columns": columns, "model_parameters": MODEL_PARAMETERS,
@@ -86,9 +98,7 @@ def run_feature_blocks(root: Path) -> dict:
 
             log_event("started")
             try:
-                fitted, _, _ = _fit_walk_forward_partitions(samples, splits, columns)
-                pd.testing.assert_frame_equal(fitted[keys].sort_values(keys[:4]).reset_index(drop=True),
-                                              checked_reference, check_exact=True)
+                fitted = fit_feature_block(samples, splits, predictions, columns)
                 probability = f"probability_{candidate.lower()}"
                 fitted = fitted.rename(columns={"probability_logistic": probability})
                 metrics = summarize_walk_forward_predictions(fitted, models={candidate: probability})

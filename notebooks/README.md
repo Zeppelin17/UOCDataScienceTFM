@@ -80,3 +80,5 @@ Las secciones 40–41 del 14 comparan la cuenta de reversión con RF_M1 frente a
 Las secciones 42–43 del 14 contrastan la logística M1 de momentum con 642 sombras. Usan las tablas de 07/08/10 y el CPCV guardado de las secciones 16–18. Ajustan las quince particiones de cada sombra, muestran el percentil 95 de referencia y guardan dos tablas `momentum_m1_shadow*`. Regenerar las entradas o el CPCV retira estas salidas. [Protocolo](../docs/sombras_momentum_m1.md)
 
 Las secciones 44–46 del 14 usan las cuentas guardadas en 19–22 para comparar el Sharpe de momentum M1 con sus referencias y desglosarlo por décadas. El inventario de series para DSR y PBO añade la cuenta del bosque si se guardó en 40–41. [Protocolo y resultados](../docs/contraste_economico.md)
+
+Las secciones 47–48 del 14 construyen y guardan las cuentas mensuales comparables para DSR y PBO. Reutilizan las cuentas de 19–22 y las predicciones guardadas de las retiradas, bosque, boosting y EBM. Reproducen en memoria las cuatro variantes por bloques. [Variantes y política de ejecución](../docs/series_dsr_pbo.md)
