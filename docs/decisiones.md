@@ -230,3 +230,7 @@ No se buscan hiperparámetros, cortes de régimen, listas o años favorables. La
 ## Ampliación progresiva de las entradas
 
 Las secciones 30–31 del notebook 14 miden el efecto de añadir en orden la distancia a la media, el crédito, las industrias y el régimen de precios a la logística M1. Se explican los solapamientos con grupos de Spearman absoluto de al menos 0,80 calculados por año y regla dentro del entrenamiento. El orden de los bloques se fija por su significado y fuente. Se comparan AUC, log-loss y estabilidad sobre la misma muestra y calendario de M1. El protocolo y el alcance están en `docs/comparacion_bloques.md`.
+
+## Tercer candidato con listas M1 y M2
+
+Las secciones 32–34 del notebook 14 incorporan gradient boosting con cien árboles, profundidad máxima dos, mínimo veinte ejemplos por hoja y tasa de aprendizaje 0,05. Se conservan los ejemplos, las listas M1/M2 y el calendario de logística y bosque. En reversión mejora ambas métricas reunidas frente a la logística y queda por debajo del bosque. El bloque de régimen en boosting mejora ambas métricas reunidas, pero el recuento anual queda por debajo de 21 en las dos reglas. Las probabilidades cronológicas se guardan para su posible evaluación económica. El diseño y los resultados están en `docs/gradient_boosting.md`.

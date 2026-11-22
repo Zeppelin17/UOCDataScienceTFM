@@ -14,7 +14,7 @@ from tfm.validation import PURGE_MONTHS
 from tfm.walk_forward import (FIRST_TEST_YEAR, LAST_TEST_YEAR, SIGNAL_COLUMNS, M2_COLUMNS,
     M3_COLUMNS, INTERACTION_COLUMN, build_interaction_feature, build_walk_forward_splits,
     load_walk_forward_inputs, load_walk_forward_regime_reference, summarize_walk_forward,
-    summarize_walk_forward_predictions, compare_walk_forward_regime, summarize_regime_stability)
+    summarize_walk_forward_predictions, compare_walk_forward_models)
 
 
 FOREST_PARAMETERS = {"n_estimators": 200, "criterion": "gini", "max_depth": 3,
@@ -98,18 +98,7 @@ def _compare_forest(metrics: pd.DataFrame, reference_predictions: pd.DataFrame) 
     combined = pd.concat([metrics, linear], ignore_index=True)
     pairs = [("RF_M1", "RF_M2"), ("RF_M1", "RF_M3"), ("RF_M2", "RF_M3"),
              ("L2_M1", "RF_M1"), ("L2_M2", "RF_M2")]
-    pieces, stability = [], []
-    for reference, candidate in pairs:
-        compared = compare_walk_forward_regime(combined, combined,
-            reference_model=reference, candidate_model=candidate)
-        compared = compared.rename(columns={f"{field}_{model.lower()}": f"{field}_{suffix}"
-            for model, suffix in ((reference, "reference"), (candidate, "candidate"))
-            for field in ("status", "auc", "log_loss")})
-        compared.insert(0, "reference_model", reference); compared.insert(1, "candidate_model", candidate)
-        pieces.append(compared)
-        stability.extend({"reference_model": reference, "candidate_model": candidate, **row}
-                          for row in summarize_regime_stability(compared))
-    return pd.concat(pieces, ignore_index=True), stability
+    return compare_walk_forward_models(combined, pairs)
 
 
 def run_forest(root: Path, *, progress=None) -> tuple[dict, dict]:

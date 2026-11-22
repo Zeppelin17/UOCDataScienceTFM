@@ -361,6 +361,23 @@ def summarize_regime_stability(comparison: pd.DataFrame) -> list[dict]:
     return stability
 
 
+def compare_walk_forward_models(metrics: pd.DataFrame, pairs: list[tuple[str, str]]) -> tuple[pd.DataFrame, list[dict]]:
+    """Comparar pares con los mismos ejemplos y resumir sus mejoras anuales."""
+    pieces, stability = [], []
+    for reference, candidate in pairs:
+        compared = compare_walk_forward_regime(metrics, metrics,
+            reference_model=reference, candidate_model=candidate)
+        compared = compared.rename(columns={f"{field}_{model.lower()}": f"{field}_{suffix}"
+            for model, suffix in ((reference, "reference"), (candidate, "candidate"))
+            for field in ("status", "auc", "log_loss")})
+        compared.insert(0, "reference_model", reference)
+        compared.insert(1, "candidate_model", candidate)
+        pieces.append(compared)
+        stability.extend({"reference_model": reference, "candidate_model": candidate, **row}
+                         for row in summarize_regime_stability(compared))
+    return pd.concat(pieces, ignore_index=True), stability
+
+
 def evaluate_walk_forward_regime(samples: pd.DataFrame, reference_predictions: pd.DataFrame,
                                  *, progress=None) -> tuple[dict, dict]:
     splits = build_walk_forward_splits()
