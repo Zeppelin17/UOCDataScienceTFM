@@ -18,6 +18,9 @@ from tfm.walk_forward import (FIRST_TEST_YEAR, LAST_TEST_YEAR, M3_COLUMNS, INTER
 
 
 THRESHOLD = .5
+DECISION_POLICY = {"threshold": THRESHOLD, "operator": ">", "tie": "cash",
+    "no_signal": "cash_without_prediction", "missing_active_prediction": "stop",
+    "sizing": "original_signal_or_cash", "threshold_selection": "fixed_without_search"}
 MODEL_PROBABILITIES = {"M0": "probability_naive", "M1": "probability_logistic",
                        "M2": "probability_regime", "M3": "probability_interaction"}
 RISK_PARAMETERS = {"lookback_months": 12, "target_annual_volatility": .12, "max_exposure": 1.0}
@@ -31,18 +34,22 @@ ACCOUNT_LABELS = {"buy_and_hold": "Comprar y mantener", "cash": "Efectivo",
                              **{m.lower(): m for m in MODEL_PROBABILITIES}}.items()}}
 
 
-def build_economic_decisions(signals: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFrame:
+def build_economic_decisions(signals: pd.DataFrame, predictions: pd.DataFrame, *, rules: tuple[str, ...] = RULES,
+                             model_probabilities: dict[str, str] | None = None) -> pd.DataFrame:
     """Una fila por mes, regla y filtro; ausencia de pronóstico activo es error."""
+    models = MODEL_PROBABILITIES if model_probabilities is None else model_probabilities
+    if not rules or len(set(rules)) != len(rules) or not set(rules) <= set(RULES) or not models:
+        raise ValueError("Se necesitan modelos de probabilidad y reglas de inversión válidas.")
     months = pd.period_range(f"{FIRST_TEST_YEAR}-01", f"{LAST_TEST_YEAR}-12", freq="M")
     required = {"target_period", "decision_period", "momentum_signal", "reversal_signal"}
     if (not required <= set(signals) or signals.target_period.tolist() != months.astype(str).tolist()
             or signals.decision_period.tolist() != (months-1).astype(str).tolist()):
         raise ValueError("Las decisiones requieren todos los meses de 1950–1989, ordenados y sin huecos.")
-    fields = {"strategy", "target_period", "split_id", "test_year", *MODEL_PROBABILITIES.values()}
+    fields = {"strategy", "target_period", "split_id", "test_year", *models.values()}
     if not fields <= set(predictions) or predictions.duplicated(["strategy", "target_period"]).any():
         raise ValueError("Se necesita una predicción cronológica única por señal activa.")
     expected = pd.concat([pd.DataFrame({"strategy": rule,
-        "target_period": signals.loc[signals[f"{rule}_signal"].ne(0), "target_period"]}) for rule in RULES], ignore_index=True)
+        "target_period": signals.loc[signals[f"{rule}_signal"].ne(0), "target_period"]}) for rule in rules], ignore_index=True)
     keys = ["strategy", "target_period"]
     try:
         pd.testing.assert_frame_equal(predictions[keys].sort_values(keys).reset_index(drop=True),
@@ -53,15 +60,15 @@ def build_economic_decisions(signals: pd.DataFrame, predictions: pd.DataFrame) -
     if (not np.array_equal(predictions.test_year, years)
             or not np.array_equal(predictions.split_id, years-FIRST_TEST_YEAR+1)):
         raise ValueError("Las probabilidades no corresponden a los años walk-forward previstos.")
-    for column in MODEL_PROBABILITIES.values():
+    for column in models.values():
         values = predictions[column]
         if (not pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values)
                 or values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all()
                 or not values.between(0, 1).all()):
             raise ValueError("Toda señal activa requiere probabilidades finitas entre cero y uno.")
     records = []
-    for model, column in MODEL_PROBABILITIES.items():
-        for rule in RULES:
+    for model, column in models.items():
+        for rule in rules:
             rows = signals[["target_period", "decision_period", f"{rule}_signal"]].rename(
                 columns={f"{rule}_signal": "original_signal"}).copy()
             rows = rows.merge(predictions.loc[predictions.strategy.eq(rule), ["target_period", column]],
@@ -129,9 +136,7 @@ def evaluate_economics(monthly: pd.DataFrame, signals: pd.DataFrame, components:
     comparisons = compare_economic_metrics(metrics)
     report = {"scope": "development_walk_forward_economic_diagnostic",
         "test_interval": [f"{FIRST_TEST_YEAR}-01", f"{LAST_TEST_YEAR}-12"],
-        "decision_policy": {"threshold": THRESHOLD, "operator": ">", "tie": "cash",
-            "no_signal": "cash_without_prediction", "missing_active_prediction": "stop",
-            "sizing": "original_signal_or_cash", "threshold_selection": "fixed_without_search"},
+        "decision_policy": dict(DECISION_POLICY),
         "parameters": parameters, "volatility_parameters": RISK_PARAMETERS, "months_per_account": 480,
         "accounts": ACCOUNT_LABELS, "model_probabilities": MODEL_PROBABILITIES,
         "experiment_status": "completed", "regime_acceptance": "not_assessed_economic_comparison_only",

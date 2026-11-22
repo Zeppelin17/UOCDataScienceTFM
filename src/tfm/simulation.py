@@ -64,7 +64,8 @@ def _check_inputs(components: pd.DataFrame, signals: pd.DataFrame) -> None:
 
 def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, parameters: dict, *,
                        exposure_scale: pd.Series | None = None,
-                       reset_each_month: bool = False) -> pd.DataFrame:
+                       reset_each_month: bool = False,
+                       strategies: tuple[str, ...] = tuple(STRATEGIES)) -> pd.DataFrame:
     """No descargar ni guardar; decidir exclusivamente con las señales anteriores.
 
     El nominal se ajusta a q * capital después de la comisión. Resolver el
@@ -75,6 +76,8 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
     """
     validate_parameters(parameters)
     _check_inputs(components, signals)
+    if not strategies or len(set(strategies)) != len(strategies) or not set(strategies) <= set(STRATEGIES):
+        raise ValueError("La simulación requiere estrategias válidas y sin repetir")
     if type(reset_each_month) is not bool:
         raise ValueError("reset_each_month debe ser booleano")
     if exposure_scale is not None:
@@ -88,7 +91,7 @@ def simulate_baselines(components: pd.DataFrame, signals: pd.DataFrame, paramete
     fee = float(parameters["transaction_cost_rate"])
     borrow_monthly = float(parameters["annual_borrow_rate"]) / 12
     records = []
-    for strategy in STRATEGIES:
+    for strategy in strategies:
         equity = float(parameters["initial_capital"])
         carried_notional = 0.0
         for i, row in enumerate(components.itertuples(index=False)):

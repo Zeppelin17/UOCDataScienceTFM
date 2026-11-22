@@ -2,6 +2,8 @@
 
 ## Alcance actual
 
+La evaluación desde 1990 queda pendiente de la autorización expresa de Pol. Antes quiere actualizar la memoria y completar sus verificaciones. Las ampliaciones autorizadas actualmente usan únicamente el periodo de desarrollo hasta diciembre de 1989.
+
 Se siguen los periodos recomendados por la guía 1.B: desarrollo mensual **1927–1989** y evaluación desde **1990**, con corte final de 2026 pendiente de fijar. Se conserva historia previa desde diciembre de 1924 para calcular todas las señales de 1927. El código actual prepara el desarrollo, calcula señales y componentes de rentabilidad con RF de French y simula las tres estrategias básicas, comparando también escenarios de costes y dividendos y un filtro de mercado bajista, además del ajuste por volatilidad y su comparación conjunta. El notebook 07 prepara diez características candidatas con fechas de fuente explícitas, sin seleccionarlas por sus resultados. El notebook 08 construye etiquetas y una sensibilidad de negociación. El notebook 09 realiza el cribado descriptivo de las diez candidatas para ambas reglas, sin selección automática ni entrenamiento. El notebook 10 prepara el calendario CPCV y los recuentos de ejemplos con purga y embargo. El notebook 11 incorpora el primer experimento de probabilidades con logística L2. El notebook 12 compara la logística con sus sombras circulares, conservando el diseño y las salidas del 11. El notebook 13 incorpora selección de grupos dentro del entrenamiento de cada partición exterior, con una división interna fija y Clustered MDA para la logística. Sus sombras y la evaluación económica del filtro siguen pendientes; la evaluación final permanece sin implementar.
 
 El notebook 14 incorpora la referencia cronológica M0/M1: entrenamiento anual expansivo con historia anterior y prueba en 1950–1989, usando únicamente dos características de las señales. Ahora añade M2 con volatilidad, retorno de 24 meses y drawdown sobre los mismos ejemplos. Es la comparación predictiva inicial exigida por la guía del 15 de noviembre; sus sombras, robustez CPCV y evaluación económica siguen pendientes.
@@ -242,3 +244,7 @@ Las secciones 35–36 reproducen los modelos M1 de 1959, 1969, 1979 y 1989. Los 
 ## EBM aditivo en el mismo calendario
 
 Las secciones 37–39 ajustan EBM con las dos entradas de M1, sin interacciones y con un máximo de 16 intervalos y 300 rondas fijadas. La prueba cronológica utiliza las mismas 810 señales que logística, bosque y boosting. El EBM reproduce el cambio de pendiente del retorno mensual en las cuatro fechas de diagnóstico. En reversión mejora ambas métricas globales frente a logística y boosting. Frente al bosque obtiene menor log-loss y menor AUC. Ninguna comparación logra la mejora anual requerida. El protocolo y los resultados están en `docs/ebm_m1.md`.
+
+## Cuenta económica de reversión con RF_M1
+
+Las secciones 40–41 aplican el umbral fijo `p > 0,5` a las probabilidades guardadas de RF_M1 en 1950–1989. La cuenta sigue 151 de las 479 señales activas y termina con 751,30 unidades frente a 761,01 del efectivo y 454,06 de la logística M1. Se reutilizan los mismos costes y las cuentas de referencia ya publicadas. El resultado corresponde al diagnóstico económico de desarrollo. [Protocolo y resultados](evaluacion_economica_bosque.md)
