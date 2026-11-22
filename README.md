@@ -16,7 +16,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev,notebooks,models]"
 ```
 
-En PowerShell, activa el entorno con `.venv\Scripts\Activate.ps1`. El extra `models` añade scikit-learn para el notebook 11; si ya tenías el entorno de notebooks, incorpora ese extra con `python -m pip install -e ".[models]"`. Los notebooks 01–10 no lo necesitan. `requirements-lock.txt` conserva las versiones verificadas del flujo base, pytest y modelado; las dependencias opcionales de notebooks se instalan por separado.
+En PowerShell, activa el entorno con `.venv\Scripts\Activate.ps1`. El extra `models` incorpora scikit-learn y SciPy para el modelado e `interpret-core` para EBM. Si ya tenías el entorno de notebooks, actualiza el extra con `python -m pip install -e ".[models]"`. Los notebooks 01–10 no lo necesitan. `requirements-lock.txt` conserva las versiones verificadas del flujo base, pytest y modelado; las dependencias opcionales de notebooks se instalan por separado.
 
 Abre los cuadernos con un editor compatible con Jupyter, selecciona el Python de `.venv`, reinicia el kernel y ejecuta las celdas en orden. Pueden ejecutarse desde la raíz del proyecto o desde `notebooks/`.
 

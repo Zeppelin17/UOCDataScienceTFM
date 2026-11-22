@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import logit
 
-from tfm.boosting import (BOOSTING_PARAMETERS, CANDIDATE_COLUMNS, KEYS, PROBABILITIES,
-                          _classifier as make_boosting, load_boosting_inputs)
+from tfm.boosting import PROBABILITIES, _classifier as make_boosting, load_boosting_reference
 from tfm.forest import _classifier as make_forest
 from tfm.logistic import fit_logistic
 from tfm.screening import RULES
@@ -50,22 +49,18 @@ def _score(model, rows: np.ndarray) -> np.ndarray:
     return logit(np.clip(model.predict_proba(rows)[:, 1], PROBABILITY_FLOOR, 1 - PROBABILITY_FLOOR))
 
 
-def run_m1_profiles(root: Path) -> dict[str, pd.DataFrame]:
-    from tfm.data import read_result
-
-    samples, reference, linked = load_boosting_inputs(root)
-    predictions, report = read_result(root, "boosting_walk_forward_predictions")
-    attempts = ("baseline_attempt", "reference_attempt", "forest_attempt", "versions")
-    if (any(report.get(key) != linked[key] for key in attempts) or report.get("experiment_status") != "completed"
-            or report.get("model_parameters") != BOOSTING_PARAMETERS or report.get("model_columns") != CANDIDATE_COLUMNS):
-        raise ValueError("Ejecuta las secciones 32–34 del notebook 14 con las referencias actuales.")
-    pd.testing.assert_frame_equal(predictions[reference.columns], reference, check_exact=True)
-
-    splits = build_walk_forward_splits()
+def m1_profile_cuts(usable: pd.DataFrame, splits: pd.DataFrame) -> pd.DataFrame:
+    """Fijar los mismos cortes de las dos entradas para los diagnósticos de M1."""
     first_train = splits.loc[splits.test_year.eq(YEARS[0]) & splits.role.eq("train"), "target_period"]
-    usable = samples.loc[samples.sample_usable]
     first_months = usable.loc[usable.target_period.isin(first_train)].drop_duplicates("target_period")
-    cuts = first_months[SIGNAL_COLUMNS].quantile(QUANTILES)
+    return first_months[SIGNAL_COLUMNS].quantile(QUANTILES)
+
+
+def run_m1_profiles(root: Path) -> dict[str, pd.DataFrame]:
+    samples, predictions, _ = load_boosting_reference(root)
+    splits = build_walk_forward_splits()
+    usable = samples.loc[samples.sample_usable]
+    cuts = m1_profile_cuts(usable, splits)
     intervals, curves, fits = [], [], []
     for (split, year), calendar in splits.loc[splits.test_year.isin(YEARS)].groupby(["split_id", "test_year"], sort=True):
         rows = usable.merge(calendar[["target_period", "role"]], on="target_period", validate="many_to_one")

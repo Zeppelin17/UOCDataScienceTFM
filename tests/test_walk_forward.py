@@ -208,7 +208,7 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     monkeypatch.setattr("tfm.walk_forward_ablation.load_walk_forward_regime_reference", inspect_regime_reference)
     namespace = {}
     notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
-    separate = {"cpcv", "economics", "forest", "annual-diagnostic", "boosting", "m1-profiles"}
+    separate = {"cpcv", "economics", "forest", "annual-diagnostic", "boosting", "m1-profiles", "ebm"}
     for cell in notebook["cells"]:
         if separate & set(cell.get("metadata", {}).get("tags", [])):
             continue  # Las ampliaciones tienen sus propios recorridos de prueba.

@@ -238,3 +238,7 @@ Las secciones 32–34 del notebook 14 incorporan gradient boosting con cien árb
 ## Formas aprendidas por M1
 
 Las secciones 35–36 reproducen los modelos M1 de 1959, 1969, 1979 y 1989. Los gráficos comparan efectos locales acumulados en la puntuación previa a la sigmoide, con cortes comunes y recuentos de señales. En ambas reglas, bosque y boosting muestran un cambio de pendiente repetido en el retorno del último mes. Se documenta como hipótesis para un EBM aditivo y queda pendiente su evaluación cronológica. El método, las fechas y los resultados están en `docs/formas_m1.md`.
+
+## EBM aditivo en el mismo calendario
+
+Las secciones 37–39 ajustan EBM con las dos entradas de M1, sin interacciones y con un máximo de 16 intervalos y 300 rondas fijadas. La prueba cronológica utiliza las mismas 810 señales que logística, bosque y boosting. El EBM reproduce el cambio de pendiente del retorno mensual en las cuatro fechas de diagnóstico. En reversión mejora ambas métricas globales frente a logística y boosting. Frente al bosque obtiene menor log-loss y menor AUC. Ninguna comparación logra la mejora anual requerida. El protocolo y los resultados están en `docs/ebm_m1.md`.

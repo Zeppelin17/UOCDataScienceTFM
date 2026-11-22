@@ -107,6 +107,21 @@ def load_boosting_inputs(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     return samples, forest[[*KEYS, *REFERENCE_PROBABILITIES.values()]], metadata
 
 
+def load_boosting_reference(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Leer probabilidades de boosting emparejadas con el bosque y la logística actuales."""
+    from tfm.data import read_result
+
+    samples, reference, linked = load_boosting_inputs(root)
+    predictions, report = read_result(root, RESULT_NAMES[0])
+    attempts = ("baseline_attempt", "reference_attempt", "forest_attempt", "versions")
+    if (any(report.get(key) != linked[key] for key in attempts) or report.get("experiment_status") != "completed"
+            or report.get("model_parameters") != BOOSTING_PARAMETERS or report.get("model_columns") != CANDIDATE_COLUMNS
+            or not report.get("attempt")):
+        raise ValueError("Ejecuta las secciones 32–34 del notebook 14 con las referencias actuales.")
+    pd.testing.assert_frame_equal(predictions[reference.columns], reference, check_exact=True)
+    return samples, predictions, {**linked, "boosting_attempt": report["attempt"]}
+
+
 def run_boosting(root: Path, *, progress=None) -> tuple[dict, dict]:
     samples, reference, metadata = load_boosting_inputs(root)
     splits = build_walk_forward_splits()
