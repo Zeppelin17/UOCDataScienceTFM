@@ -23,4 +23,4 @@ Se leen las probabilidades cronológicas guardadas y se reproducen en memoria lo
 
 La tabla `development_selection_returns.parquet` reúne **20.160 filas**. Cada regla tiene 16 filtros y 5 comparadores, todos con 480 meses. Cada fila contiene la regla, la función de la cuenta en la comparación, el identificador de la variante o referencia, el mes, el retorno neto y el retorno del efectivo. El JSON conserva los supuestos y el origen de las predicciones. Cambiar las tablas de origen exige regenerar esta salida.
 
-El siguiente incremento usará las series sincronizadas para el DSR y el PBO. Las dos métricas se calcularán sobre el desarrollo. El periodo desde 1990 queda reservado hasta autorización expresa.
+Las secciones 49–51 usan estas series sincronizadas para el DSR y el PBO. El periodo desde 1990 queda reservado hasta autorización expresa. [Método y resultados](dsr_pbo.md)

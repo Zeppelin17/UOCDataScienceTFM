@@ -209,7 +209,7 @@ def test_notebook_without_cpcv_inputs_and_result_dependencies(tmp_path, monkeypa
     namespace = {}
     notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
     separate = {"cpcv", "economics", "forest", "annual-diagnostic", "boosting", "m1-profiles", "ebm",
-                "forest-economics", "momentum-shadows", "economic-validation", "selection-returns"}
+                "forest-economics", "momentum-shadows", "economic-validation", "selection-returns", "overfitting"}
     for cell in notebook["cells"]:
         if separate & set(cell.get("metadata", {}).get("tags", [])):
             continue  # Las ampliaciones tienen sus propios recorridos de prueba.

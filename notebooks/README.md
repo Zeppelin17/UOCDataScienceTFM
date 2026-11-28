@@ -82,3 +82,5 @@ Las secciones 42–43 del 14 contrastan la logística M1 de momentum con 642 som
 Las secciones 44–46 del 14 usan las cuentas guardadas en 19–22 para comparar el Sharpe de momentum M1 con sus referencias y desglosarlo por décadas. El inventario de series para DSR y PBO añade la cuenta del bosque si se guardó en 40–41. [Protocolo y resultados](../docs/contraste_economico.md)
 
 Las secciones 47–48 del 14 construyen y guardan las cuentas mensuales comparables para DSR y PBO. Reutilizan las cuentas de 19–22 y las predicciones guardadas de las retiradas, bosque, boosting y EBM. Reproducen en memoria las cuatro variantes por bloques. [Variantes y política de ejecución](../docs/series_dsr_pbo.md)
+
+Las secciones 49–51 del 14 calculan DSR por filtro y PBO por regla con la matriz guardada en 47–48. Muestran el número efectivo de ensayos y el reparto de rangos complementarios, y guardan el resumen y sus combinaciones. Se pueden ejecutar por separado. [Método y resultados](../docs/dsr_pbo.md)
