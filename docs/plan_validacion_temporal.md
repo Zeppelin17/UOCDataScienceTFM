@@ -2,6 +2,8 @@
 
 Diseño fijado el 7 de noviembre de 2026. Implementado el 8 de noviembre en el notebook 10 y `src/tfm/validation.py`. No se han entrenado modelos. Se conserva el plan original y se documenta abajo su implementación; las verificaciones usan copias temporales de los datos preparados.
 
+Las secciones 1–10 documentan el recorrido inicial. La [sección 11](#11-calendario-con-120-meses-de-calentamiento) recoge el calendario que ejecuta ahora el notebook 10.
+
 ## 1. Objetivo y alcance
 
 Preparar las particiones de descubrimiento de 1927–1989 antes de entrenar el filtro de momentum y el de reversión. El notebook explicará qué fechas se utilizan para aprender, cuáles para validar y cuáles se excluyen por proximidad temporal o por no contener un ejemplo utilizable.
@@ -117,3 +119,27 @@ Las dos tablas y sus informes se guardan mediante las funciones existentes. Si u
 El 8 de noviembre de 2026 se ejecutó el notebook completo desde un kernel limpio sobre una copia temporal de las tablas 07/08. No se descargaron fuentes ni se escribieron datos en el proyecto del estudiante. La carpeta temporal no contenía resultados del cribado, confirmando que no son una entrada. Se verificaron 11.340 filas de pertenencia temporal y treinta resúmenes, con los rangos de ejemplos indicados en el apartado 5 y ambas clases presentes en todas las particiones. Los Parquet guardados coinciden exactamente con las tablas calculadas.
 
 Pasan las 53 pruebas del proyecto, incluidas las dos comprobaciones de este incremento. No se han entrenado modelos, elegido variables por rendimiento o consultado importes desde 1990. El gráfico de particiones se revisó visualmente.
+
+## 11. Calendario con 120 meses de calentamiento
+
+Con las diez variables actuales y 120 observaciones mensuales anteriores válidas, la muestra común comprende los **629 meses objetivo de agosto de 1937 a diciembre de 1989**. Las primeras fechas del desarrollo aportan historia para calcular transformaciones. Las fronteras del CPCV se fijan sobre el tramo común a ambas reglas antes de contar señales o clases. [Protocolo de cribado revisado](hipotesis_y_cribado.md#10-protocolo-para-la-guía-del-28-de-noviembre)
+
+| Bloque | Primer objetivo | Último objetivo | Meses |
+|---|---|---|---:|
+| 1 | 1937-08 | 1946-04 | 105 |
+| 2 | 1946-05 | 1955-01 | 105 |
+| 3 | 1955-02 | 1963-10 | 105 |
+| 4 | 1963-11 | 1972-07 | 105 |
+| 5 | 1972-08 | 1981-04 | 105 |
+| 6 | 1981-05 | 1989-12 | 104 |
+
+Cada combinación reserva dos bloques de prueba. Se mantienen la purga de un mes en cada frontera, el embargo de seis meses desde el final de la prueba y la unión de intervalos adyacentes. En total se guardan 9.435 filas de calendario en `validation_120_splits` y 30 recuentos por regla y combinación en `validation_120_summary`. La preparación parte de las características y etiquetas de 07 y 08. Regenerar entradas de 01, 02, 07 u 08 invalida los dos calendarios. Las salidas del cribado 09 son independientes.
+
+Al ejecutar el notebook con los datos locales, las 15 combinaciones tienen ambas clases en entrenamiento y prueba para cada regla. Los tamaños siguientes describen la cobertura con las etiquetas actuales.
+
+| Regla | Ejemplos de entrenamiento por combinación | Ejemplos de prueba por combinación |
+|---|---:|---:|
+| Momentum | 240–278 | 114–151 |
+| Reversión | 404–419 | 208–210 |
+
+Las tablas `validation_splits` y `validation_summary` conservan el calendario que utilizan los experimentos anteriores. El calendario actualizado se usará al reproducir la referencia y evaluar después los filtros de régimen. Un cambio de calendario exige nuevas métricas de CPCV. La comparación de candidatos del nuevo diseño se hará en las mismas particiones. El periodo de prueba anual walk-forward sigue siendo 1950–1989.

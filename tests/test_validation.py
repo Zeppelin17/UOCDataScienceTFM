@@ -10,9 +10,10 @@ import pytest
 from tfm.data import (calculate_signals, prepare_french_data, prepare_return_components,
                       prepare_shiller_data, read_result, save_result)
 from tfm.features import FEATURE_COLUMNS
+from tfm.screening import REGIME_MIN_HISTORY
 from tfm.sources.shiller import XLS_SIGNATURE
-from tfm.validation import (MODEL_COLUMNS, RESULT_NAMES, build_temporal_splits,
-                            prepare_validation_samples, summarize_validation)
+from tfm.validation import (MODEL_COLUMNS, REGIME_CPCV_START, REGIME_RESULT_NAMES, RESULT_NAMES,
+                            build_temporal_splits, prepare_validation_samples, summarize_validation)
 from test_return_components import french_zip
 from test_screening import linear_features
 from test_shiller import workbook
@@ -60,6 +61,24 @@ def test_fixed_blocks_purge_embargo_and_inclusive_label_intervals():
             assert not ((train > end) & (train <= end + 6)).any()
 
 
+def test_regime_calendar_uses_every_eligible_month_and_preserves_exclusions():
+    splits, report = build_temporal_splits(calendar_start=REGIME_CPCV_START)
+    assert len(splits) == 9435 and len(report["partitions"]) == 15
+    assert splits.groupby("split_id").size().eq(629).all()
+    assert splits.loc[splits.role.eq("validation")].groupby("target_period").size().eq(5).all()
+    assert [(b["first_target"], b["last_target"], b["months"]) for b in report["blocks"]] == [
+        ("1937-08", "1946-04", 105), ("1946-05", "1955-01", 105), ("1955-02", "1963-10", 105),
+        ("1963-11", "1972-07", 105), ("1972-08", "1981-04", 105), ("1981-05", "1989-12", 104)]
+    first = splits.loc[splits.split_id.eq(1)].set_index("target_period")
+    assert first.loc["1946-04":"1946-05", "role"].eq("validation").all()
+    selected = splits.loc[splits.split_id.eq(2)].set_index("target_period")
+    assert selected.loc["1955-01", "role"] == "purge"
+    assert selected.loc["1963-11", "role"] == "purge" and selected.loc["1963-11", "in_embargo_window"]
+    assert selected.loc["1963-12":"1964-04", "role"].eq("embargo").all()
+    assert selected.loc["1964-05", "role"] == "train"
+    assert not splits.loc[splits.split_id.eq(15), "in_embargo_window"].any()
+
+
 def test_samples_notebook_persistence_and_upstream_invalidations(tmp_path, monkeypatch):
     pytest.importorskip("IPython")
     import matplotlib
@@ -93,6 +112,9 @@ def test_samples_notebook_persistence_and_upstream_invalidations(tmp_path, monke
     assert summary.train_classifier_ready.all() and summary.validation_auc_estimable.all()
     assert (summary.train_positive + summary.train_negative).equals(summary.train_examples)
     assert (summary.validation_positive + summary.validation_negative).equals(summary.validation_examples)
+    regime_splits, _ = build_temporal_splits(calendar_start=REGIME_CPCV_START)
+    with pytest.raises(ValueError, match="disponibilidad"):
+        summarize_validation(regime_splits, samples, calendar_start=REGIME_CPCV_START)
     # Una clase única no cambia fechas ni disponibilidad: se conserva y se marca.
     changed = labels.copy(); changed.loc[changed.has_signal, "label"] = 0
     after, _ = prepare_validation_samples(features, changed)
@@ -115,6 +137,12 @@ def test_samples_notebook_persistence_and_upstream_invalidations(tmp_path, monke
         prepare_validation_samples(features, bad)
     save_result(tmp_path, "monthly_features", features, {"feature_columns": FEATURE_COLUMNS})
     save_result(tmp_path, "labelled_signals", labels, {"feature_columns": FEATURE_COLUMNS, "parameters": PARAMETERS})
+    for name, table in zip(RESULT_NAMES, (splits, summary), strict=True):
+        save_result(tmp_path, name, table, {"min_history": 36})
+    save_result(tmp_path, "logistic_metrics", pd.DataFrame({"previous": [1]}), {})
+    previous_paths = [tmp_path / "data/processed" / f"{name}.{ext}"
+                      for name in (*RESULT_NAMES, "logistic_metrics") for ext in ("parquet", "json")]
+    previous = {path: path.read_bytes() for path in previous_paths}
     monkeypatch.setattr("tfm.data.project_root", lambda: tmp_path)
     monkeypatch.setattr("tfm.sources.shiller.urlopen", lambda *a, **k: pytest.fail("No descargar"))
     monkeypatch.setattr("tfm.sources.french.urlopen", lambda *a, **k: pytest.fail("No descargar"))
@@ -126,13 +154,24 @@ def test_samples_notebook_persistence_and_upstream_invalidations(tmp_path, monke
             assert cell["execution_count"] is None and not cell["outputs"]
             exec(compile("".join(cell["source"]), "10_validacion_temporal.ipynb", "exec"), namespace)
     plt.close("all")
-    paths = [tmp_path / "data/processed" / f"{name}.{ext}" for name in RESULT_NAMES for ext in ("parquet", "json")]
-    for name, count in (("validation_splits", 11340), ("validation_summary", 30)):
-        path = tmp_path / "data/processed" / f"{name}.parquet"
-        info = json.loads(path.with_suffix(".json").read_text())
-        assert info["rows"] == len(pd.read_parquet(path)) == count
+    assert all(path.read_bytes() == content for path, content in previous.items())
+    assert namespace["resumen"].train_classifier_ready.all() and namespace["resumen"].validation_auc_estimable.all()
+    for name, table, count in zip(REGIME_RESULT_NAMES, (regime_splits, namespace["resumen"]), (9435, 30), strict=True):
+        saved, info = read_result(tmp_path, name)
+        pd.testing.assert_frame_equal(saved, table, check_exact=True)
+        assert info["rows"] == len(saved) == count
         assert info["scope"] == "development_partition_preparation_only" and info["embargo_months"] == 6
         assert info["model_columns"] == MODEL_COLUMNS
+        assert info["min_history"] == REGIME_MIN_HISTORY
+        assert info["first_causal_target"] == REGIME_CPCV_START and info["causal_common_months"] == 629
+    path = tmp_path / "data/processed" / f"{REGIME_RESULT_NAMES[0]}.json"
+    content = path.read_bytes()
+    path.write_text(json.dumps({**json.loads(content), "min_history": 36}))
+    with pytest.raises(ValueError, match="calendario CPCV con 120 meses"):
+        read_result(tmp_path, REGIME_RESULT_NAMES[0])
+    path.write_bytes(content)
+    paths = [tmp_path / "data/processed" / f"{name}.{ext}"
+             for name in (*REGIME_RESULT_NAMES, *RESULT_NAMES) for ext in ("parquet", "json")]
     before = {path: path.read_bytes() for path in paths}
     # Los resultados del cribado son independientes de las particiones.
     save_result(tmp_path, "screening_tests", pd.DataFrame({"fixture": [1]}), {})

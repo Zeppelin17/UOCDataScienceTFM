@@ -21,17 +21,24 @@ PURGE_MONTHS = 1
 EMBARGO_MONTHS = 6
 MODEL_COLUMNS = [f"z_{name}" for name in FEATURE_COLUMNS]
 RESULT_NAMES = ("validation_splits", "validation_summary")
+REGIME_CPCV_START = "1937-08"
+REGIME_RESULT_NAMES = ("validation_120_splits", "validation_120_summary")
 
 
-def build_temporal_splits() -> tuple[pd.DataFrame, dict]:
-    """Particionar fechas completas antes de filtrar por señales o calentamiento.
+def build_temporal_splits(*, calendar_start: str = START) -> tuple[pd.DataFrame, dict]:
+    """Particionar el calendario fijado sin filtrar fechas por señales o etiquetas.
 
     Prioridad: validation > purge > embargo > train. El primer mes de embargo
     coincide con la purga posterior; no son siete meses de exclusión posterior.
     """
-    months = pd.period_range(START, END, freq="M")
-    size = len(months) // N_BLOCKS
-    blocks = [months[i*size:(i+1)*size] for i in range(N_BLOCKS)]
+    months = pd.period_range(calendar_start, END, freq="M")
+    if len(months) < N_BLOCKS or months[0] < pd.Period(START, freq="M"):
+        raise ValueError("El calendario CPCV requiere seis bloques dentro del desarrollo 1927–1989.")
+    size, remainder = divmod(len(months), N_BLOCKS)
+    sizes = [size + int(index < remainder) for index in range(N_BLOCKS)]
+    edges = np.cumsum([0, *sizes])
+    blocks = [months[start:stop] for start, stop in zip(edges[:-1], edges[1:], strict=True)]
+    block_ids = np.repeat(np.arange(1, N_BLOCKS + 1), sizes)
     frames, descriptions = [], []
     for split_id, pair in enumerate(combinations(range(N_BLOCKS), VALIDATION_BLOCKS), 1):
         intervals = []
@@ -56,14 +63,16 @@ def build_temporal_splits() -> tuple[pd.DataFrame, dict]:
         frames.append(pd.DataFrame({
             "split_id": split_id, "validation_block_1": pair[0] + 1,
             "validation_block_2": pair[1] + 1, "target_period": months.astype(str),
-            "block_id": np.repeat(np.arange(1, N_BLOCKS + 1), size), "role": roles,
+            "block_id": block_ids, "role": roles,
             "in_purge_window": purge & ~validation, "in_embargo_window": embargo & ~validation,
         }))
         descriptions.append({"split_id": split_id, "validation_blocks": [i + 1 for i in pair],
                              "validation_intervals": [{"start": str(a), "end": str(b)} for a, b in intervals]})
     report = {
         "development_start": START, "development_end": END, "calendar_months": len(months),
-        "n_blocks": N_BLOCKS, "months_per_block": size, "validation_blocks_per_split": VALIDATION_BLOCKS,
+        "cpcv_calendar_start": str(months[0]), "cpcv_calendar_end": str(months[-1]),
+        "n_blocks": N_BLOCKS, "months_per_block": sizes if remainder else size,
+        "validation_blocks_per_split": VALIDATION_BLOCKS,
         "n_splits": len(frames), "validation_occurrences_per_month": 5,
         "purge_months": PURGE_MONTHS, "embargo_months": EMBARGO_MONTHS,
         "role_priority": ["validation", "purge", "embargo", "train"],
@@ -75,13 +84,14 @@ def build_temporal_splits() -> tuple[pd.DataFrame, dict]:
     return pd.concat(frames, ignore_index=True), report
 
 
-def prepare_validation_samples(features: pd.DataFrame, labels: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def prepare_validation_samples(features: pd.DataFrame, labels: pd.DataFrame, *, min_history: int = MIN_HISTORY
+                               ) -> tuple[pd.DataFrame, dict]:
     """Conservar el calendario por regla; separar pertenencia temporal de cobertura.
 
     No leer resultados del cribado. La preparación causal fija usa covariables
     pasadas, no las etiquetas ni la asignación de bloques de validación.
     """
-    transformed, preparation = transform_features(features)
+    transformed, preparation = transform_features(features, min_history=min_history)
     required = {"asset", "strategy", "target_period", "decision_period", "label_end_period", "label",
                 "label_no_transaction_cost", "has_signal", "features_ready", "training_ready", *FEATURE_COLUMNS}
     months = pd.period_range(START, END, freq="M")
@@ -119,7 +129,7 @@ def prepare_validation_samples(features: pd.DataFrame, labels: pd.DataFrame) -> 
         transformed[keep], on=["asset", "target_period", "decision_period"], how="left", validate="many_to_one")
     samples["sample_usable"] = samples.causal_features_ready & samples.has_signal
     usable_months = transformed.loc[transformed.causal_features_ready, "target_period"]
-    report = {"feature_columns": FEATURE_COLUMNS, "model_columns": MODEL_COLUMNS, "min_history": MIN_HISTORY,
+    report = {"feature_columns": FEATURE_COLUMNS, "model_columns": MODEL_COLUMNS, "min_history": min_history,
               "causal_common_months": len(usable_months),
               "first_causal_target": usable_months.iloc[0] if len(usable_months) else None,
               "last_causal_target": usable_months.iloc[-1] if len(usable_months) else None,
@@ -135,9 +145,9 @@ def prepare_validation_samples(features: pd.DataFrame, labels: pd.DataFrame) -> 
     return samples, report
 
 
-def summarize_validation(splits: pd.DataFrame, samples: pd.DataFrame) -> pd.DataFrame:
+def summarize_validation(splits: pd.DataFrame, samples: pd.DataFrame, *, calendar_start: str = START) -> pd.DataFrame:
     """Treinta resúmenes; no retirar particiones por su distribución de clases."""
-    expected, _ = build_temporal_splits()
+    expected, _ = build_temporal_splits(calendar_start=calendar_start)
     try:
         pd.testing.assert_frame_equal(splits, expected, check_exact=True)
     except AssertionError as exc:
@@ -146,6 +156,12 @@ def summarize_validation(splits: pd.DataFrame, samples: pd.DataFrame) -> pd.Data
     if (len(samples) != 2 * len(months) or set(samples.strategy) != set(RULES)
             or any(samples.loc[samples.strategy.eq(rule), "target_period"].tolist() != months for rule in RULES)):
         raise ValueError("Se requiere el calendario completo preparado para ambas reglas.")
+    if calendar_start != START:
+        eligible = expected.loc[expected.split_id.eq(1), "target_period"].tolist()
+        for rule in RULES:
+            ready = samples.loc[samples.strategy.eq(rule) & samples.causal_features_ready, "target_period"]
+            if ready.tolist() != eligible:
+                raise ValueError("La disponibilidad de las características no coincide con el calendario CPCV fijado.")
     merged = splits.merge(samples, on="target_period", how="left", validate="many_to_many")
     rows = []
     for (split_id, rule), part in merged.groupby(["split_id", "strategy"], sort=True):
