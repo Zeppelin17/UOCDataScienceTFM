@@ -52,13 +52,13 @@ def build_walk_forward_splits() -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def load_walk_forward_inputs(root: Path) -> tuple[pd.DataFrame, dict, dict]:
+def load_walk_forward_inputs(root: Path, *, min_history: int = MIN_HISTORY) -> tuple[pd.DataFrame, dict, dict]:
     """Reconstruir la muestra común del desarrollo sin requerir los notebooks 09–13."""
     from tfm.data import read_result
 
     features, _ = read_result(root, "monthly_features")
     labels, label_report = read_result(root, "labelled_signals")
-    samples, preparation = prepare_validation_samples(features, labels)
+    samples, preparation = prepare_validation_samples(features, labels, min_history=min_history)
     return samples, label_report, preparation
 
 

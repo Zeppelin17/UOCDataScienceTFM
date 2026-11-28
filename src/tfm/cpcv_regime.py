@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from tfm.diagnostics import START
 from tfm.logistic import (MODEL_PARAMETERS, _sklearn, fit_partition, load_logistic_inputs,
                          summarize_predictions)
 from tfm.screening import RULES
@@ -48,10 +49,10 @@ def _common_period_metrics(monthly: pd.DataFrame) -> pd.DataFrame:
 
 
 def evaluate_cpcv_candidate(samples: pd.DataFrame, splits: pd.DataFrame, model: str,
-                            *, progress=None) -> tuple[dict, list[dict]]:
+                            *, calendar_start: str = START, progress=None) -> tuple[dict, list[dict]]:
     if model not in CANDIDATE_COLUMNS:
         raise ValueError("Solo se evaluarán los seis candidatos CPCV previstos.")
-    coverage = summarize_validation(splits, samples)
+    coverage = summarize_validation(splits, samples, calendar_start=calendar_start)
     usable = samples.loc[samples.sample_usable]
     if model == "M3" and not np.isfinite(usable[INTERACTION_COLUMN].to_numpy(dtype=float)).all():
         raise ValueError("M3 no conserva la muestra común; no se han eliminado ejemplos.")

@@ -1,5 +1,7 @@
 # Comparación cronológica con y sin régimen
 
+La [referencia con 120 meses](#referencia-m0m1-con-120-meses) establece la base del protocolo del 28 de noviembre. El recorrido que se documenta a continuación corresponde al protocolo anterior.
+
 Diseño fijado el 15 de noviembre de 2026, tras revisar la guía de esa fecha y conocer los experimentos CPCV de los notebooks 11–13. No es un prerregistro anterior a toda exploración. El notebook 14 implementa las referencias M0/M1, su comparación con M2 y la interacción prevista de M3. Esta ampliación se fija después de conocer M0/M1 y antes de calcular M2 con los datos reales. No acepta regímenes ni utiliza datos desde 1990.
 
 ## Motivo y escalera prevista
@@ -217,3 +219,25 @@ La sección 19–22 del notebook 14 usa las probabilidades M0–M3 ya publicadas
 ## Ampliación a random forest
 
 Las secciones 23–25 del 14 ajustan el [bosque de complejidad acotada](random_forest.md), manteniendo calendario y muestra. Las comparaciones RF_M1/RF_M2/RF_M3 distinguen la familia de modelo y las variables añadidas. Los controles de la logística no validan esta nueva familia; sus tablas e historial permanecen intactos y las comprobaciones del bosque se registran por separado.
+
+## Referencia M0/M1 con 120 meses
+
+Se reproducen M0 y M1 antes de evaluar candidatos con régimen. M0 usa la proporción de etiquetas positivas en el entrenamiento de cada regla y partición. M1 conserva el retorno previo de un mes y el momentum 12–1, con la misma logística L2, `C=1`, solver `lbfgs`, intercepto y pesos uniformes. Se usan las etiquetas centrales de 08 y los 120 meses de historia de las características. La disponibilidad común se calcula con las diez variables y se aplica a ambos modelos.
+
+- **Walk-forward.** Las pruebas siguen siendo de 1950 a 1989. Cada modelo ajusta con pasado disponible, separa un mes de purga antes del año de prueba y conserva sus coeficientes durante ese año. El resumen reúne una predicción por señal probada.
+- **CPCV.** Se comprueba que las dos tablas del notebook 10 son coherentes con la muestra preparada. Se usan las 15 parejas del calendario de agosto de 1937 a diciembre de 1989, con un mes de purga y seis de embargo. Los resúmenes promedian las cinco predicciones por señal y calculan una vez las métricas sobre todas las fechas y sobre 1950–1989. Al restringir fechas se conservan las mismas probabilidades CPCV y su información de entrenamiento. [Calendario CPCV](plan_validacion_temporal.md#11-calendario-con-120-meses-de-calentamiento)
+
+La sección inicial del notebook 14 se ejecuta de forma independiente y guarda ocho tablas `walk_forward_120_*` y `cpcv_120_*`. El registro `outputs/experiments/reference_120_trials.jsonl` identifica la configuración actualizada y registra ambos métodos dentro de un mismo intento por regla. Los reajustes anuales y las combinaciones CPCV forman parte de la validación de esa configuración. Las tablas originales identifican los experimentos previos. Las probabilidades y las cuentas simuladas de cada protocolo se interpretarán con su propia muestra y sus propios costes. Este bloque prepara la referencia predictiva de desarrollo para evaluar después los regímenes y la utilidad neta del filtro.
+
+### Comprobación con los datos de desarrollo
+
+Con los datos locales se completaron los 80 ajustes anuales y los 30 ajustes CPCV de la logística. Los dos protocolos conservan exactamente las mismas 331 señales de momentum y 479 de reversión y sus etiquetas entre 1950 y 1989. En el CPCV completo se obtienen cinco predicciones por cada una de las 405 señales de momentum y 628 de reversión.
+
+| Recorrido en las mismas fechas de 1950–1989 | Regla | AUC de M0 con 120 meses | AUC de M1, 36 → 120 meses | Log-loss de M1, 36 → 120 meses |
+|---|---|---:|---:|---:|
+| Walk-forward | Momentum | 0,4621 | 0,5956 → 0,5921 | 0,6690 → 0,6694 |
+| Walk-forward | Reversión | 0,4406 | 0,6303 → 0,6338 | 0,6450 → 0,6475 |
+| CPCV | Momentum | 0,4324 | 0,5784 → 0,5865 | 0,6728 → 0,6683 |
+| CPCV | Reversión | 0,4651 | 0,6322 → 0,6314 | 0,6451 → 0,6463 |
+
+Con 120 meses, M1 mejora a M0 en AUC y log-loss en estos cuatro resúmenes. Frente a la referencia anterior, el cambio de AUC de M1 es inferior a 0,01 en valor absoluto. En el walk-forward cambia el comienzo de la muestra de ajuste. En CPCV cambian también las fronteras de los bloques y las combinaciones de historia que aportan las probabilidades de cada mes. La comparación es predictiva y se refiere a los resultados del desarrollo.

@@ -11,10 +11,68 @@ pytest.importorskip("sklearn")
 from tfm.cpcv_regime import (CANDIDATE_COLUMNS, RESULT_NAMES, evaluate_cpcv_candidate,
                               run_cpcv_regime, _common_period_metrics)
 from tfm.data import read_result, save_result
+from tfm.economic_validation import read_candidate_attempts
 from tfm.features import FEATURE_COLUMNS
-from tfm.validation import build_temporal_splits, summarize_validation
+from tfm.regime_reference import REFERENCE_VARIANT, RESULT_NAMES as REFERENCE_RESULTS, run_regime_reference
+from tfm.screening import REGIME_MIN_HISTORY
+from tfm.validation import (REGIME_CPCV_START, REGIME_RESULT_NAMES, build_temporal_splits,
+                            prepare_validation_samples, summarize_validation)
 from tfm.walk_forward import INTERACTION_COLUMN, build_interaction_feature
 from test_logistic import PARAMETERS, fixture_samples
+
+
+def test_updated_reference_notebook_keeps_one_attempt_and_guarded_inputs(tmp_path, monkeypatch):
+    pytest.importorskip("IPython")
+    features, labels, _ = fixture_samples()
+    samples, preparation = prepare_validation_samples(features, labels, min_history=REGIME_MIN_HISTORY)
+    splits, calendar = build_temporal_splits(calendar_start=REGIME_CPCV_START)
+    coverage = summarize_validation(splits, samples, calendar_start=REGIME_CPCV_START)
+    report = {**calendar, **preparation}
+    save_result(tmp_path, "monthly_features", features, {"feature_columns": FEATURE_COLUMNS})
+    save_result(tmp_path, "labelled_signals", labels, {"feature_columns": FEATURE_COLUMNS, "parameters": PARAMETERS})
+    save_result(tmp_path, REGIME_RESULT_NAMES[0], splits, report)
+    save_result(tmp_path, REGIME_RESULT_NAMES[1], coverage, report)
+    processed = tmp_path / "data/processed"
+    previous = processed / "walk_forward_metrics.parquet"
+    previous.write_bytes(b"previous experiment, independent of the 120-month reference")
+
+    monkeypatch.setattr("tfm.data.project_root", lambda: tmp_path)
+    monkeypatch.setattr("IPython.display.display", lambda *_: None)
+    notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
+    cell, = [c for c in notebook["cells"] if c["cell_type"] == "code" and "reference-120" in c["metadata"].get("tags", [])]
+    assert cell["execution_count"] is None and not cell["outputs"]
+    namespace = {}
+    exec(compile("".join(cell["source"]), "14:reference-120", "exec"), namespace)
+    tables = namespace["tablas_120"]
+    attempt = namespace["informe_120"]
+    assert attempt["experiment_status"] == "completed" and attempt["min_history"] == 120
+    assert previous.read_bytes() == b"previous experiment, independent of the 120-month reference"
+
+    for name in REFERENCE_RESULTS:
+        table, info = read_result(tmp_path, name)
+        pd.testing.assert_frame_equal(table, tables[name], check_exact=True)
+        assert info["attempt"] == attempt["attempt"] and info["variant"] == REFERENCE_VARIANT
+    walk = tables["walk_forward_120_predictions"]
+    monthly = tables["cpcv_120_monthly"]
+    assert walk.target_period.between("1950-01", "1989-12").all()
+    assert monthly.target_period.between(REGIME_CPCV_START, "1989-12").all()
+    assert monthly.validation_appearances.eq(5).all() and monthly.available_model.eq(5).all()
+    keys = ["strategy", "target_period", "label"]
+    common = monthly.loc[monthly.target_period.ge("1950-01"), keys].sort_values(keys).reset_index(drop=True)
+    pd.testing.assert_frame_equal(walk[keys].sort_values(keys).reset_index(drop=True), common, check_exact=True)
+    events = [json.loads(line) for line in (tmp_path / attempt["trial_log"]).read_text().splitlines()]
+    assert [event["status"] for event in events] == ["started", "completed"]
+    assert set(events[-1]["metrics"]) == {"walk_forward", "CPCV"}
+    inventory = read_candidate_attempts(tmp_path)
+    assert len(inventory) == 2 and inventory.variant.eq(REFERENCE_VARIANT).all()
+
+    wrong = coverage.copy()
+    wrong.loc[0, "train_examples"] += 1
+    save_result(tmp_path, REGIME_RESULT_NAMES[1], wrong, report)
+    with pytest.raises(ValueError, match="resumen CPCV"):
+        run_regime_reference(tmp_path)
+    assert not any((processed / f"{name}.parquet").exists() for name in REFERENCE_RESULTS)
+    assert previous.exists()
 
 
 def test_cpcv_fit_does_not_use_held_labels_and_common_period_keeps_months():
