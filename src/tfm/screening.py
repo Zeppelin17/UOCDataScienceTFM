@@ -17,19 +17,25 @@ from tfm.sources.shiller import INSTRUMENT
 
 
 MIN_HISTORY = 36
+REGIME_MIN_HISTORY = 120
 HAC_LAGS = 6
 BH_ALPHA = 0.10
 MIN_SHIFT = 36
 RULES = ("momentum", "reversal")
-POSITIVE_MOMENTUM = {"momentum_12_1", "market_return_24m", "distance_ma_12m",
-                     "drawdown_12m", "industry_breadth_12m"}
+REGIME_FEATURE_COLUMNS = tuple(feature for feature in FEATURE_COLUMNS
+                               if feature not in {"price_return_1m", "momentum_12_1"})
+POSITIVE_MOMENTUM = {"market_return_24m", "distance_ma_12m", "drawdown_12m", "industry_breadth_12m"}
+POSITIVE_MAGNITUDE = {"price_volatility_12m", "credit_spread_pp"}
 SUBPERIODS = (("1927-01", "1942-12"), ("1943-01", "1958-12"),
               ("1959-01", "1974-12"), ("1975-01", "1989-12"))
-RESULT_NAMES = ("screening_monthly", "screening_tests", "screening_terciles",
-                "screening_stability", "screening_shadows")
+PREVIOUS_RESULT_NAMES = ("screening_monthly", "screening_tests", "screening_terciles",
+                         "screening_stability", "screening_shadows")
+RESULT_NAMES = ("screening_120_monthly", "screening_120_tests", "screening_120_terciles",
+                "screening_120_stability", "screening_120_shadows")
 
 
-def transform_feature_series(series: pd.Series) -> tuple[np.ndarray, pd.arrays.IntegerArray, list[str | None]]:
+def transform_feature_series(series: pd.Series, *, min_history: int = MIN_HISTORY
+                             ) -> tuple[np.ndarray, pd.arrays.IntegerArray, list[str | None]]:
     """Winsorización/z-score y terciles con historia estrictamente anterior a cada fila."""
     name = str(series.name)
     if (not pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series)
@@ -48,7 +54,7 @@ def transform_feature_series(series: pd.Series) -> tuple[np.ndarray, pd.arrays.I
         reason = None
         if not math.isfinite(value):
             reason = "missing_current"
-        elif len(history) < MIN_HISTORY:
+        elif len(history) < min_history:
             reason = "history_warmup"
         else:
             lower, upper = np.quantile(history, [.01, .99], method="linear")
@@ -66,7 +72,7 @@ def transform_feature_series(series: pd.Series) -> tuple[np.ndarray, pd.arrays.I
     return z, terciles, exclusions
 
 
-def transform_features(features: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def transform_features(features: pd.DataFrame, *, min_history: int = MIN_HISTORY) -> tuple[pd.DataFrame, dict]:
     """Estadísticos de x anteriores a cada fila; nunca usar su valor actual ni y."""
     months = pd.period_range(START, END, freq="M")
     required = {"asset", "target_period", "decision_period", "price_source_period",
@@ -81,7 +87,7 @@ def transform_features(features: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
                        "context_source_period"]].reset_index(drop=True).copy()
     reasons = [[] for _ in months]
     for name in FEATURE_COLUMNS:
-        z, terciles, exclusions = transform_feature_series(features[name])
+        z, terciles, exclusions = transform_feature_series(features[name], min_history=min_history)
         for i, reason in enumerate(exclusions):
             if reason:
                 reasons[i].append(f"{name}:{reason}")
@@ -90,7 +96,7 @@ def transform_features(features: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     result["screening_ready"] = result[[f"z_{f}" for f in FEATURE_COLUMNS]].notna().all(axis=1)
     result["exclusion_reason"] = ["; ".join(items) for items in reasons]
     report = {
-        "calendar_months": len(result), "min_history": MIN_HISTORY,
+        "calendar_months": len(result), "min_history": min_history,
         "excluded_targets": [{"target_period": str(month), "reasons": items}
                              for month, items in zip(months, reasons) if items],
     }
@@ -100,7 +106,7 @@ def transform_features(features: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 def build_screening_monthly(features: pd.DataFrame, components: pd.DataFrame,
                              signals: pd.DataFrame, parameters: dict) -> tuple[pd.DataFrame, dict]:
     """Simular todo el calendario antes del calentamiento y conservar sus dos reglas."""
-    transformed, report = transform_features(features)
+    transformed, report = transform_features(features, min_history=REGIME_MIN_HISTORY)
     if components.period.tolist() != transformed.target_period.tolist():
         raise ValueError("Componentes y características deben cubrir el mismo calendario 1927–1989.")
     ledger = simulate_baselines(components, signals, parameters)
@@ -117,14 +123,17 @@ def build_screening_monthly(features: pd.DataFrame, components: pd.DataFrame,
     if common.tolist() != pd.period_range(common.iloc[0], common.iloc[-1], freq="M").astype(str).tolist():
         raise ValueError("Hay huecos interiores en la muestra común; no se comprime el calendario.")
     report.update({"common_months": len(common), "first_target": common.iloc[0], "last_target": common.iloc[-1],
-                   "response": "continuous_unfiltered_net_return_minus_rf", "parameters": parameters,
+                   "responses": {"return": "continuous_unfiltered_net_return_minus_rf",
+                                 "magnitude": "absolute_continuous_unfiltered_net_return_minus_rf"},
+                   "parameters": parameters,
                    "feature_columns": FEATURE_COLUMNS, "hac_lags": HAC_LAGS,
-                   "hac_small_sample_correction": False, "family_size": 20,
+                   "regime_feature_columns": list(REGIME_FEATURE_COLUMNS),
+                   "hac_small_sample_correction": False, "family_size": len(REGIME_FEATURE_COLUMNS) * len(RULES) * 2,
                    "multiple_testing": {
                        "primary": {"method": "BH", "adjusted_p_threshold": BH_ALPHA, "comparison": "<"},
-                       "family": "all ten features and both rules jointly",
+                       "family": "eight regime features, both rules and both responses jointly",
                        "non_estimable_p_for_adjustment": 1.0,
-                       "revision": "2026-11-14; BH at 10% as sole multiplicity criterion after tutor feedback",
+                       "revision": "2026-11-28; return and magnitude with 120 months of past history",
                    },
                    "min_circular_shift_months": MIN_SHIFT,
                    "transform": "past-only expanding 1/99 winsorization and sample z-score; linear quantiles",
@@ -191,33 +200,37 @@ def _common_arrays(monthly: pd.DataFrame):
             or by_rule[1].target_period.tolist() != periods
             or set(rows.strategy) != set(RULES)):
         raise ValueError("Las dos reglas necesitan el mismo tramo mensual continuo para el cribado.")
-    columns = [f"z_{f}" for f in FEATURE_COLUMNS]
+    columns = [f"z_{f}" for f in REGIME_FEATURE_COLUMNS]
     x = by_rule[0][columns].to_numpy(dtype=float)
     if (not np.isfinite(x).all() or not np.array_equal(x, by_rule[1][columns].to_numpy(dtype=float))):
         raise ValueError("Las dos reglas deben tener las mismas características finitas por fecha.")
     y = [part.anomaly_return.to_numpy(dtype=float) for part in by_rule]
     if not all(np.isfinite(values).all() for values in y):
         raise ValueError("Faltan resultados en la muestra común; no se eliminan meses.")
-    return rows, by_rule, x, y
+    return by_rule, x, y
 
 
 def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Veinte contrastes: BH al 10% y sombras descriptivas separadas."""
-    _, _, x, targets = _common_arrays(monthly)
+    """Cribar retorno y magnitud con una familia BH y sombras conjuntas."""
+    _, x, returns = _common_arrays(monthly)
+    targets = [(rule, response, values) for rule, y in zip(RULES, returns, strict=True)
+               for response, values in (("return", y), ("magnitude", np.abs(y)))]
     records = []
-    for rule, y in zip(RULES, targets):
-        for j, feature in enumerate(FEATURE_COLUMNS):
-            records.append({"strategy": rule, "feature": feature,
-                            "expected_sign": "+" if rule == "momentum" and feature in POSITIVE_MOMENTUM else "unspecified",
+    for rule, response, y in targets:
+        positive = POSITIVE_MAGNITUDE if response == "magnitude" else POSITIVE_MOMENTUM if rule == "momentum" else ()
+        for j, feature in enumerate(REGIME_FEATURE_COLUMNS):
+            records.append({"strategy": rule, "feature": feature, "response": response,
+                            "expected_sign": "+" if feature in positive else "unspecified",
                             **hac_regression(x[:, j], y)})
     tests = pd.DataFrame(records)
     family_p = tests.p_value.fillna(1).to_numpy()
     tests["p_bh"] = bh_adjust(family_p)
     tests["passes_bh"] = tests.estimable & tests.p_bh.lt(BH_ALPHA)
+    tests["passes_directional_screen"] = tests.passes_bh & tests.expected_sign.eq("+") & tests.slope.gt(0)
     shadows = []
     for shift in range(MIN_SHIFT, len(x) - MIN_SHIFT + 1):
-        moved = np.roll(x, shift, axis=0)  # Mismo desplazamiento para las diez columnas y ambas reglas.
-        stats = [hac_regression(moved[:, j], y)["t_hac"] for y in targets for j in range(len(FEATURE_COLUMNS))]
+        moved = np.roll(x, shift, axis=0)  # El mismo desplazamiento para toda la familia.
+        stats = [hac_regression(column, y)["t_hac"] for _, _, y in targets for column in moved.T]
         valid = [abs(value) for value in stats if value is not None and math.isfinite(value)]
         shadows.append({"shift_months": shift, "circular_distance_months": min(shift, len(x) - shift),
                         "max_abs_t_hac": max(valid) if len(valid) == len(tests) else None, "estimable_tests": len(valid)})
@@ -250,10 +263,10 @@ def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
 
 def describe_regimes(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Terciles y pendientes por tramos; sin contrastes extra ni reiniciar carteras."""
-    _, by_rule, _, _ = _common_arrays(monthly)
+    by_rule, _, _ = _common_arrays(monthly)
     terciles, stability = [], []
     for rule, rows in zip(RULES, by_rule):
-        for feature in FEATURE_COLUMNS:
+        for feature in REGIME_FEATURE_COLUMNS:
             for tercile in (1, 2, 3):
                 part = rows.loc[rows[f"tercile_{feature}"].eq(tercile)]
                 excess = part.anomaly_return
@@ -262,12 +275,16 @@ def describe_regimes(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]
                                  "months": len(part), "signal_months": int(part.has_signal.sum()),
                                  "signal_fraction": float(part.has_signal.mean()) if len(part) else None,
                                  "mean_excess_return": float(excess.mean()) if len(part) else None,
+                                 "mean_absolute_excess_return": float(excess.abs().mean()) if len(part) else None,
+                                 "worst_month_excess_return": float(excess.min()) if len(part) else None,
                                  "annualized_conditional_sharpe": float(excess.mean() / deviation * math.sqrt(12)) if deviation > 1e-12 else None})
             for start, end in SUBPERIODS:
                 part = rows.loc[rows.target_period.between(start, end)]
-                fit = hac_regression(part[f"z_{feature}"], part.anomaly_return)
-                stability.append({"strategy": rule, "feature": feature, "subperiod_start": start,
-                                  "subperiod_end": end, "first_observed_target": part.target_period.min() if len(part) else None,
-                                  "last_observed_target": part.target_period.max() if len(part) else None,
-                                  "months": len(part), "slope": fit["slope"], "reason": fit["reason"]})
+                for response, y in (("return", part.anomaly_return), ("magnitude", part.anomaly_return.abs())):
+                    fit = hac_regression(part[f"z_{feature}"], y)
+                    stability.append({"strategy": rule, "feature": feature, "response": response,
+                                      "subperiod_start": start, "subperiod_end": end,
+                                      "first_observed_target": part.target_period.min() if len(part) else None,
+                                      "last_observed_target": part.target_period.max() if len(part) else None,
+                                      "months": len(part), "slope": fit["slope"], "reason": fit["reason"]})
     return pd.DataFrame(terciles), pd.DataFrame(stability)

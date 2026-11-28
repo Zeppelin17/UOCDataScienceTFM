@@ -18,7 +18,7 @@ from tfm.sensitivity import sensitivity_scenarios
 from tfm.comparators import BEAR_STRATEGIES
 from tfm.volatility import SIMPLE_STRATEGIES
 from tfm.features import FEATURE_COLUMNS
-from tfm.screening import RESULT_NAMES as SCREENING_RESULTS
+from tfm.screening import PREVIOUS_RESULT_NAMES as PREVIOUS_SCREENING_RESULTS, RESULT_NAMES as SCREENING_RESULTS
 from tfm.validation import RESULT_NAMES as VALIDATION_RESULTS, build_temporal_splits
 from tfm.logistic import RESULT_NAMES as LOGISTIC_RESULTS
 from tfm.model_shadows import RESULT_NAMES as MODEL_SHADOW_RESULTS
@@ -69,7 +69,7 @@ def _simple_paths(processed: Path) -> tuple[Path, Path]:
 
 
 def _screening_paths(processed: Path) -> tuple[Path, ...]:
-    return tuple(processed / f"{name}.{extension}" for name in SCREENING_RESULTS
+    return tuple(processed / f"{name}.{extension}" for name in (*PREVIOUS_SCREENING_RESULTS, *SCREENING_RESULTS)
                  for extension in ("parquet", "json"))
 
 
@@ -579,7 +579,7 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *SCREENING_RESULTS, *VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, SELECTION_RETURNS, *OVERFITTING_RESULTS}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *PREVIOUS_SCREENING_RESULTS, *SCREENING_RESULTS, *VALIDATION_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, SELECTION_RETURNS, *OVERFITTING_RESULTS}:
         raise ValueError("Nombre de resultado desconocido")
     processed = root / "data/processed"
     dependents = ()

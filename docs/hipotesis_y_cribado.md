@@ -2,6 +2,8 @@
 
 Protocolo inicial: 7 de noviembre de 2026. Actualización: 14 de noviembre de 2026. Por recomendación del tutor y para simplificar el primer análisis, BH con p ajustado < 0,10 queda como único criterio de significación. Se retira la comprobación adicional de Holm. Esta revisión es posterior a los primeros resultados con Holm; no se presenta como fijada antes de observarlos. Las hipótesis, reglas, fuentes, etiquetas, costes y preparación se conservan. No añade configuraciones.
 
+Las secciones 1–9 documentan el cribado ya ejecutado con 36 meses. La [sección 10](#10-protocolo-para-la-guía-del-28-de-noviembre) fija el diseño de la siguiente ejecución.
+
 ## 1. Qué queremos comprobar
 
 El cribado desarrolla H1 de la memoria: si el resultado de cada regla cambia según el entorno anterior. H2 y H3 —utilidad económica del filtro frente a las alternativas— se comprobarán después, con modelos y simulaciones fuera de muestra. Encontrar una asociación aquí no demuestra esas dos hipótesis.
@@ -120,3 +122,43 @@ Fuentes consultadas: [Benjamini y Hochberg (1995), texto completo](https://www.s
 El notebook completo se verificó con los originales locales preparados, sobre una copia temporal y sin descargar fuentes ni modificar los datos del estudiante. El calentamiento deja 713 meses comunes, de agosto de 1930 a diciembre de 1989, y 642 desplazamientos circulares. Los veinte contrastes son estimables. La revisión del 14 de noviembre de 2026 mantiene las mismas pendientes y valores p sin ajustar. **Cinco asociaciones de momentum superan BH al 10 %**: retorno del último mes, momentum 12–1, distancia a la media de doce meses, drawdown y amplitud industrial. Cuatro destacan también frente a la referencia de sombras: todas las anteriores excepto momentum 12–1, cuyo p BH es aproximadamente 0,0157. La del último mes sigue siendo exploratoria, sin signo previo. Ninguna relación de reversión supera BH al 10 %.
 
 Estos resultados no seleccionan variables ni demuestran mejora del filtro. La activación de momentum y el uso de precios medios siguen limitando la interpretación. Se mantienen las diez candidatas y las comprobaciones de terciles y subperiodos. Las pruebas del proyecto cubren el cálculo actual; la referencia HAC exacta, la preparación causal y el recorrido del notebook están incluidos. La respuesta mensual coincide con la del simulador continuo, que no se ha modificado.
+
+## 10. Protocolo para la guía del 28 de noviembre
+
+Este diseño se fija después de los análisis anteriores de desarrollo y antes de ejecutar el cribado con el nuevo calentamiento. Aplica las fases 0–2 de la sublínea 1.B, páginas 23–24 de la guía del 28 de noviembre de 2026. Mantiene las reglas, las fuentes, los costes y las etiquetas actuales en este incremento.
+
+### Calendario y contraste
+
+- Se requieren **120 observaciones mensuales anteriores válidas por característica**. Se conservan los percentiles 1 y 99 y el z-score expansivo, con los desfases de las series ya documentados. El calendario común se fija con las diez variables disponibles, antes de observar resultados del nuevo cribado. Con las fuentes actuales, abarca agosto de 1937 a diciembre de 1989, **629 meses**. El CPCV usa seis bloques consecutivos de 104–105 meses sobre ese tramo, repartiendo los meses sobrantes entre los primeros bloques. Se mantienen dos bloques de prueba por combinación, un mes de purga y seis de embargo. El walk-forward mantiene los 40 años de prueba de 1950 a 1989.
+- El retorno del último mes y el momentum 12–1 permanecen como entradas de M1. El cribado de régimen se aplica a las otras ocho variables. Para cada regla sin filtrar se usa su retorno mensual neto en exceso del efectivo, con las posiciones de la cuenta continua y los meses sin señal. Se ajustan dos regresiones por variable, una con ese retorno para estudiar la media y otra con su valor absoluto para estudiar la magnitud de los movimientos de la cuenta. Los meses en efectivo pueden influir en ambos resultados. La frecuencia de señales por tercil ayuda a interpretar ese efecto.
+- Se conservan los contrastes bilaterales con Newey–West a seis retardos y **BH con p ajustado < 0,10** sobre una familia fija de **32 contrastes** por análisis: ocho variables, dos reglas y dos respuestas. Una relación puede dar entrada al grupo si supera BH en alguna respuesta con el signo esperado. Las relaciones sin signo previo se muestran como exploratorias. Una asociación significativa con signo contrario se registra como evidencia contraria a la hipótesis direccional. Se incluyen la media, el Sharpe, el peor mes y la frecuencia de señales por tercil causal. Las sombras conjuntas se desplazan al menos 36 meses y su percentil 95 se obtiene del máximo de los estadísticos absolutos de la familia. Los terciles y las sombras ayudan a interpretar el cribado. BH es el único umbral cuantitativo de entrada en esta fase.
+- Para la **media de momentum** se mantienen las hipótesis positivas de retorno a 24 meses, distancia a la media, distancia al máximo y amplitud industrial. Para la **magnitud del retorno de ambas reglas** se espera una relación positiva con la volatilidad a 12 meses y el nivel de Baa–Aaa, como hipótesis de persistencia del riesgo y de tensión crediticia. El resto de relaciones se registra como exploratorio. Estas hipótesis de riesgo se formulan con conocimiento de los análisis previos de la media.
+
+### Familias y construcción de los compuestos
+
+La familia, la orientación de las variables y el orden de prioridad se fijan antes del cálculo. La prioridad favorece las medidas directas de mercado recomendadas por la guía y el nivel del diferencial frente a su variación.
+
+| Familia | Variables por orden de prioridad | Interpretación de un valor alto |
+|---|---|---|
+| Tendencia y caída | Retorno a 24 meses, distancia al máximo de 12 meses, distancia a la media de 12 meses, amplitud industrial | Tendencia más favorable, menor caída o mayor participación industrial |
+| Volatilidad y dispersión | Volatilidad del mercado a 12 meses, dispersión de retornos industriales | Mayor variación del índice o mayor disparidad entre industrias |
+| Crédito | Diferencial Baa–Aaa, variación mensual del diferencial | Mayor tensión crediticia o deterioro reciente |
+
+En cada familia se parte del primer miembro que supera el cribado. Se añaden por orden los demás miembros elegibles que muestren correlación de Spearman positiva con los ya incluidos, calculada con los meses de entrenamiento. Se mantienen las orientaciones de la tabla. Por ejemplo, un `drawdown_12m` más alto significa que el índice está más cerca de su máximo. El compuesto es la media con pesos iguales de los z-scores incluidos. Un único miembro conserva su z-score. Una correlación no estimable impide añadir ese miembro y se informa en la tabla. Se construyen **hasta tres compuestos**. Una familia sin candidatas admisibles queda vacía y, si todas quedan vacías, se conserva M1 como referencia sin régimen.
+
+### Uso de los notebooks y separación de la prueba
+
+El notebook 09 será el lugar del cribado descriptivo de todo el desarrollo y el 10 el de las particiones actualizadas. La selección que alimente un modelo se repetirá dentro de cada partición. Si se usa validación interna, se cribará y agrupará con su tramo de ajuste. Al calcular los retardos HAC en CPCV se cuentan distancias de meses reales entre observaciones de entrenamiento. Los bloques separados por meses excluidos conservan sus distancias originales. Las sombras descriptivas del 09 se calculan sobre el calendario común continuo. Más adelante, el Clustered MDA medirá en validación interna la caída del AUC al desplazar cada compuesto y contrastará su importancia con sombras. El bloque exterior se reserva para medir el resultado del procedimiento ya seleccionado.
+
+El notebook 14 conserva ahora el recorrido ya ejecutado. Cuando estén listas las nuevas entradas, se actualizarán sus secciones de modelado y validación afectadas en su lugar. Antes de regenerar, se conservarán las tablas de referencia y sus informes que se necesiten para contrastar las dos versiones. Las comparaciones anteriores quedan identificadas por su protocolo y commit. El gráfico de 1987 seguirá identificado como un diagnóstico de las cuentas originales. La reorganización general se hará al final, según la [estructura de entrega](estructura_notebooks.md). Los modelos que cambien de muestra o de entradas necesitarán nuevas predicciones, cuentas y controles económicos antes de actualizar la memoria. El periodo desde 1990 sigue reservado para la evaluación final autorizada.
+
+### Ejecución del nuevo cribado
+
+El notebook 09 se ejecutó en un proceso limpio con los datos locales. Los **629 meses** comunes permiten estimar los **32 contrastes** y construir **558 sombras** completas. El percentil 95 del máximo `abs(t HAC)` es **3,5064**. Las cinco tablas `screening_120_*` conservan el diagnóstico y sus supuestos junto a los resultados de la versión anterior.
+
+| Resultado | Relaciones que superan BH con el signo esperado | Relaciones de ese grupo que también superan las sombras |
+|---|---|---|
+| Media de momentum | Distancia a la media de 12 meses, distancia al máximo de 12 meses y amplitud industrial | Distancia a la media y distancia al máximo |
+| Magnitud en reversión | Volatilidad de 12 meses y nivel del diferencial Baa–Aaa | Ninguna |
+
+Son las cinco relaciones que superan el cribado direccional. Otras nueve superan BH y se conservan con su clasificación. Entre ellas, la volatilidad histórica presenta una pendiente de signo contrario al previsto para la magnitud de momentum. En el tercil bajo de volatilidad hay posición en el 75,2 % de los meses, frente al 48,5 % del tercil alto. La magnitud observada combina el efecto de tomar posición y la variación de la cuenta cuando opera. La elección de predictores se comprobará dentro de cada entrenamiento.

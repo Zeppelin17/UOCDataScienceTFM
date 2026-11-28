@@ -13,8 +13,8 @@ from tfm.data import (calculate_signals, prepare_french_data, prepare_return_com
                       prepare_shiller_data, read_result, save_result)
 from tfm.features import FEATURE_COLUMNS, build_monthly_features
 from tfm.labels import build_monthly_labels
-from tfm.screening import (RESULT_NAMES, build_screening_monthly, describe_regimes,
-                           bh_adjust, hac_regression, screen_relationships, transform_features)
+from tfm.screening import (PREVIOUS_RESULT_NAMES, REGIME_FEATURE_COLUMNS, REGIME_MIN_HISTORY, RESULT_NAMES,
+                           bh_adjust, describe_regimes, hac_regression, screen_relationships, transform_features)
 from tfm.simulation import simulate_baselines
 from tfm.sources.shiller import INSTRUMENT, XLS_SIGNATURE
 from test_features import inputs as feature_inputs
@@ -54,6 +54,10 @@ def test_causal_winsorization_warmup_ties_and_date_alignment():
     missing = features.copy(); missing.loc[:6, "industry_breadth_12m"] = np.nan
     actual, _ = transform_features(missing)
     assert actual.loc[43, "screening_ready"] and not actual.loc[:42, "screening_ready"].any()
+    updated, report = transform_features(missing, min_history=REGIME_MIN_HISTORY)
+    assert report["min_history"] == 120 and len(report["excluded_targets"]) == 127
+    assert not updated.loc[:126, "screening_ready"].any() and updated.loc[127:, "screening_ready"].all()
+    pd.testing.assert_frame_equal(actual.loc[127:], updated.loc[127:], check_exact=True)
     tied = features.copy(); tied.loc[:36, "credit_spread_pp"] = 7.0
     actual, _ = transform_features(tied)
     assert pd.isna(actual.loc[36, "z_credit_spread_pp"])
@@ -91,16 +95,26 @@ def test_known_hac_and_joint_circular_shadows():
             **{f"tercile_{f}": 1 + i % 3 for f in FEATURE_COLUMNS}}))
     monthly = pd.concat(pieces, ignore_index=True)
     tests, shadows, report = screen_relationships(monthly)
-    assert len(tests) == 20 and shadows.shift_months.tolist() == list(range(36, 65))
+    assert len(tests) == 32 and shadows.shift_months.tolist() == list(range(36, 65))
+    assert set(tests.feature) == set(REGIME_FEATURE_COLUMNS)
+    assert set(tests.response) == {"return", "magnitude"}
     assert shadows.circular_distance_months.min() == 36
-    assert shadows.estimable_tests.eq(20).all()
+    assert shadows.estimable_tests.eq(32).all()
     assert report["shadow_threshold_95"] == np.quantile(shadows.max_abs_t_hac, .95, method="higher")
-    expected_max = max(abs(hac_regression(np.roll(part[f"z_{f}"].to_numpy(), 36), part.anomaly_return)["t_hac"])
-                       for part in pieces for f in FEATURE_COLUMNS)
+    expected_max = max(abs(hac_regression(np.roll(part[f"z_{f}"].to_numpy(), 36), response)["t_hac"])
+                       for part in pieces for response in (part.anomaly_return, part.anomaly_return.abs())
+                       for f in REGIME_FEATURE_COLUMNS)
     assert shadows.max_abs_t_hac.iloc[0] == pytest.approx(expected_max)
+    magnitude = tests.loc[tests.strategy.eq("momentum") & tests.response.eq("magnitude")
+                          & tests.feature.eq("price_volatility_12m")].iloc[0]
+    assert magnitude.slope == pytest.approx(hac_regression(
+        pieces[0].z_price_volatility_12m, pieces[0].anomaly_return.abs())["slope"])
     terciles, stability = describe_regimes(monthly)
-    assert len(terciles) == 60 and len(stability) == 80
+    assert len(terciles) == 48 and len(stability) == 128
     assert terciles.groupby(["strategy", "feature"]).months.sum().eq(100).all()
+    first_group = pieces[0].loc[i % 3 == 0, "anomaly_return"]
+    assert terciles.worst_month_excess_return.iloc[0] == first_group.min()
+    assert terciles.mean_absolute_excess_return.iloc[0] == pytest.approx(first_group.abs().mean())
     # Un retorno constante no fabrica significación ni una referencia nula igual a cero.
     monthly["anomaly_return"] = 0.0
     tests, shadows, report = screen_relationships(monthly)
@@ -118,12 +132,19 @@ def test_bh_known_values_strict_boundary_and_independent_checks(monkeypatch):
         with pytest.raises(ValueError, match="BH"):
             bh_adjust(invalid)
 
-    # Una familia conocida: .004 supera BH; .01 da p BH = .10 exacto.
-    values = cycle(enumerate([.04, .004, .03, .01, .2, *([1.] * 15)]))
+    # Tres asociaciones pasan BH, pero solo una cumple la hipótesis direccional.
+    negative = REGIME_FEATURE_COLUMNS.index("market_return_24m")
+    exploratory = REGIME_FEATURE_COLUMNS.index("price_volatility_12m")
+    accepted = len(REGIME_FEATURE_COLUMNS) + exploratory
+    boundary = REGIME_FEATURE_COLUMNS.index("distance_ma_12m")
+    p_values = np.ones(32)
+    p_values[[negative, exploratory, accepted, boundary]] = [.001, .002, .003, .0125]
+    values = cycle(enumerate(p_values))
     def known_fit(x, y):
         index, p = next(values)
-        return {"months": len(x), "intercept": 0., "slope": -1. if index == 1 else 1.,
-                "standard_error": 1., "t_hac": -1. if index == 1 else 1.,
+        slope = -1. if index == negative else 1.
+        return {"months": len(x), "intercept": 0., "slope": slope,
+                "standard_error": 1., "t_hac": slope,
                 "p_value": p, "estimable": True, "reason": "ok"}
     monkeypatch.setattr("tfm.screening.hac_regression", known_fit)
     months = pd.period_range("1927-01", periods=100, freq="M").astype(str)
@@ -132,34 +153,34 @@ def test_bh_known_values_strict_boundary_and_independent_checks(monkeypatch):
         **{f"z_{feature}": np.arange(100, dtype=float) for feature in FEATURE_COLUMNS}})
         for rule in ("momentum", "reversal")], ignore_index=True)
     tests, _, _ = screen_relationships(monthly)
-    assert tests.passes_bh.sum() == 1
-    accepted = tests.loc[tests.passes_bh].iloc[0]
-    assert accepted.evidence_status == "bh_evidence" and not accepted.exceeds_shadows
-    assert accepted.direction_status == "does_not_support_expected_sign"
-    boundary = tests.loc[tests.p_value.eq(.01)].iloc[0]
-    assert boundary.p_bh == .10 and not boundary.passes_bh
-    assert boundary.evidence_status == "no_bh_evidence"
+    assert tests.passes_bh.sum() == 3
+    assert tests.passes_directional_screen.sum() == 1
+    assert tests.loc[accepted, "passes_directional_screen"] and not tests.loc[accepted, "exceeds_shadows"]
+    assert tests.loc[negative, "direction_status"] == "does_not_support_expected_sign"
+    assert tests.loc[exploratory, "direction_status"] == "exploratory"
+    assert tests.loc[boundary, "p_bh"] == .10 and not tests.loc[boundary, "passes_bh"]
+    assert tests.loc[boundary, "evidence_status"] == "no_bh_evidence"
 
 
 def test_partial_shadow_does_not_define_a_family_maximum():
     rng = np.random.default_rng(172)
     count = 100
-    x = rng.normal(size=(count, len(FEATURE_COLUMNS)))
+    x = rng.normal(size=(count, len(REGIME_FEATURE_COLUMNS)))
     months = pd.period_range("1927-01", periods=count, freq="M").astype(str)
     pieces = []
     # En la sombra 36, una regresión tiene ajuste perfecto y error HAC nulo.
-    # Las otras 19 son estimables: no deben convertirse en una familia completa.
+    # Las otras 31 son estimables: no deben convertirse en una familia completa.
     for rule, y in (("momentum", np.roll(x[:, 0], 36)),
                     ("reversal", rng.normal(size=count))):
         pieces.append(pd.DataFrame({
             "strategy": rule, "target_period": months, "screening_ready": True,
             "anomaly_return": y,
-            **{f"z_{feature}": x[:, j] for j, feature in enumerate(FEATURE_COLUMNS)},
+            **{f"z_{feature}": x[:, j] for j, feature in enumerate(REGIME_FEATURE_COLUMNS)},
         }))
     tests, shadows, report = screen_relationships(pd.concat(pieces, ignore_index=True))
     partial = shadows.loc[shadows.shift_months.eq(36)].iloc[0]
-    assert tests.estimable.all() and len(tests) == 20
-    assert partial.estimable_tests == 19
+    assert tests.estimable.all() and len(tests) == 32
+    assert partial.estimable_tests == 31
     assert pd.isna(partial.max_abs_t_hac)
     assert len(shadows) == 29  # No retirar el desplazamiento incompleto.
     assert report["shadow_unavailable_count"] == 1
@@ -202,6 +223,9 @@ def test_notebook_continuous_response_persistence_and_invalidations(tmp_path, mo
     labels = build_monthly_labels(components, signals, PARAMETERS).merge(features, on=["asset", "target_period", "decision_period"])
     labels["training_ready"] = labels.features_ready & labels.has_signal
     save_result(tmp_path, "labelled_signals", labels, {"feature_columns": FEATURE_COLUMNS, "parameters": PARAMETERS})
+    save_result(tmp_path, PREVIOUS_RESULT_NAMES[1], pd.DataFrame({"reference": [36]}), {"min_history": 36})
+    previous = tmp_path / "data/processed" / f"{PREVIOUS_RESULT_NAMES[1]}.parquet"
+    previous_bytes = previous.read_bytes()
     monkeypatch.setattr("tfm.data.project_root", lambda: tmp_path)
     monkeypatch.setattr("tfm.sources.shiller.urlopen", lambda *a, **k: pytest.fail("No descargar"))
     monkeypatch.setattr("tfm.sources.french.urlopen", lambda *a, **k: pytest.fail("No descargar"))
@@ -211,32 +235,36 @@ def test_notebook_continuous_response_persistence_and_invalidations(tmp_path, mo
         if cell["cell_type"] == "code":
             assert cell["execution_count"] is None and not cell["outputs"]
             exec(compile("".join(cell["source"]), "09_cribado_regimen.ipynb", "exec"), namespace)
-    monthly = pd.read_parquet(tmp_path / "data/processed/screening_monthly.parquet")
+    monthly = pd.read_parquet(tmp_path / "data/processed" / f"{RESULT_NAMES[0]}.parquet")
+    assert previous.read_bytes() == previous_bytes
     expected = simulate_baselines(components, signals, PARAMETERS)
     for rule in ("momentum", "reversal"):
         actual = monthly.loc[monthly.strategy.eq(rule)]
         source = expected.loc[expected.strategy.eq(rule)]
         assert actual.anomaly_return.tolist() == pytest.approx((source.net_return - source.rf_return).tolist())
-    assert len(monthly) == 1512 and monthly.groupby("strategy").screening_ready.sum().eq(713).all()
-    assert namespace["informe"]["first_target"] == "1930-08"
-    assert len(namespace["contrastes"]) == 20 and len(namespace["sombras"]) == 642
+    assert len(monthly) == 1512 and monthly.groupby("strategy").screening_ready.sum().eq(629).all()
+    assert namespace["informe"]["first_target"] == "1937-08"
+    assert namespace["informe"]["last_target"] == "1989-12"
+    assert len(namespace["contrastes"]) == 32 and len(namespace["sombras"]) == 558
     paths = [tmp_path / "data/processed" / f"{name}.{ext}" for name in RESULT_NAMES for ext in ("parquet", "json")]
     for name in RESULT_NAMES:
         path = tmp_path / "data/processed" / f"{name}.parquet"
         info = json.loads(path.with_suffix(".json").read_text())
         assert len(pd.read_parquet(path)) == info["rows"]
-        assert info["family_size"] == 20 and info["scope"] == "descriptive_development_screening_only"
+        assert info["family_size"] == 32 and info["scope"] == "descriptive_development_screening_only"
+        assert info["min_history"] == 120 and info["regime_feature_columns"] == list(REGIME_FEATURE_COLUMNS)
         assert info["multiple_testing"]["primary"] == {
             "method": "BH", "adjusted_p_threshold": .10, "comparison": "<"}
         assert "secondary" not in info["multiple_testing"]
-    persisted = pd.read_parquet(tmp_path / "data/processed/screening_tests.parquet")
-    assert {"p_bh", "passes_bh", "direction_status", "exceeds_shadows"} <= set(persisted)
+    persisted = pd.read_parquet(tmp_path / "data/processed" / f"{RESULT_NAMES[1]}.parquet")
+    assert {"p_bh", "passes_bh", "response", "passes_directional_screen", "direction_status", "exceeds_shadows"} <= set(persisted)
     assert not {"p_holm", "passes_holm"} & set(persisted)
     before = {p: p.read_bytes() for p in paths}
     for regenerate in (calculate_signals, prepare_return_components, prepare_french_data, prepare_shiller_data):
         for p, content in before.items():p.write_bytes(content)
         regenerate(tmp_path)
         assert not any(p.exists() for p in paths)
+        assert not previous.exists()
     for name, table, report in (("monthly_features", features, {"feature_columns": FEATURE_COLUMNS}),
                                ("labelled_signals", labels, {"feature_columns": FEATURE_COLUMNS, "parameters": PARAMETERS})):
         for p, content in before.items():p.write_bytes(content)
