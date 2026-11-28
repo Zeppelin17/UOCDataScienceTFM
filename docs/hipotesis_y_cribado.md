@@ -162,3 +162,22 @@ El notebook 09 se ejecutó en un proceso limpio con los datos locales. Los **629
 | Magnitud en reversión | Volatilidad de 12 meses y nivel del diferencial Baa–Aaa | Ninguna |
 
 Son las cinco relaciones que superan el cribado direccional. Otras nueve superan BH y se conservan con su clasificación. Entre ellas, la volatilidad histórica presenta una pendiente de signo contrario al previsto para la magnitud de momentum. En el tercil bajo de volatilidad hay posición en el 75,2 % de los meses, frente al 48,5 % del tercil alto. La magnitud observada combina el efecto de tomar posición y la variación de la cuenta cuando opera. La elección de predictores se comprobará dentro de cada entrenamiento.
+
+### Cribado y compuestos en cada entrenamiento
+
+La sección inicial del notebook 14 aplica las reglas anteriores a los **40 entrenamientos walk-forward** y las **15 combinaciones CPCV**. En cada partición, los 32 contrastes usan las filas de entrenamiento del calendario común, incluidos sus meses en efectivo. En Newey–West los pares se agrupan por distancia de meses calendario. Un hueco en CPCV deja ausentes las contribuciones de esos meses en la autocovarianza, de modo que los meses a ambos lados del hueco conservan su distancia real.
+
+Se usa la cuenta continua del notebook 09 como respuesta, con sus supuestos fijos y sus costes. Las correlaciones y la lista de miembros se estiman con los meses de entrenamiento. Después se promedian los valores estandarizados de los miembros fijados en cada mes de entrenamiento o prueba. Se conserva un valor ausente para las familias sin miembros seleccionados. Si ninguna familia supera el cribado, M2 reutilizará las predicciones de M1 en esa partición.
+
+Se guardan `regime_120_screening`, con los 32 contrastes de cada partición, `regime_120_members`, con la decisión de cada variable por regla y familia, y `regime_120_compounds`, con los valores de entrenamiento y prueba. Estas tablas preparan el M2 que se ajustará con el entrenamiento exterior. Una evaluación posterior con Clustered MDA usará el mismo cribado y la misma agrupación dentro de su tramo de ajuste interno.
+
+Con los datos locales se guardaron 1.760 contrastes, 880 decisiones de pertenencia y 50.110 filas con los valores de los compuestos. El número de entrenamientos que admitió cada familia fue el siguiente.
+
+| Validación | Regla | Tendencia y caída | Volatilidad y dispersión | Crédito | Sin compuesto |
+|---|---|---:|---:|---:|---:|
+| Walk-forward, 40 años | Momentum | 39 | 0 | 0 | 1 |
+| Walk-forward, 40 años | Reversión | 0 | 15 | 40 | 0 |
+| CPCV, 15 combinaciones | Momentum | 15 | 0 | 0 | 0 |
+| CPCV, 15 combinaciones | Reversión | 0 | 10 | 10 | 3 |
+
+En reversión, los compuestos de volatilidad y crédito contienen un miembro cada uno cuando aparecen, la volatilidad a 12 meses y el nivel de Baa–Aaa. En momentum domina el compuesto de tendencia y caída, con miembros que varían entre entrenamientos. Estos recuentos describen la admisión al modelo. La comparación predictiva y económica decidirá si usar las familias mejora las decisiones.

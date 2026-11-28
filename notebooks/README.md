@@ -33,6 +33,8 @@ Selecciona el Python de `.venv` en tu editor Jupyter, reinicia el kernel y ejecu
 
 Los cuadernos 03–06 requieren las tablas de 01 y 02 y se pueden ejecutar independientemente entre sí. Muestran y guardan sus supuestos centrales. Cambiarlos en uno no cambia los otros: para comparar resultados, utiliza los mismos supuestos.
 
+El bloque inicial de compuestos del 14 usa las tablas guardadas por 09 y 10. Repite el cribado solo con las fechas de entrenamiento de cada partición, verifica la correlación entre miembros y aplica sus medias a las fechas de entrenamiento y prueba. Guarda tres tablas `regime_120_*` para el próximo ajuste de M2. [Protocolo de compuestos](../docs/hipotesis_y_cribado.md#cribado-y-compuestos-en-cada-entrenamiento)
+
 El diagnóstico `00_diagnostico_fuentes.ipynb` funciona por separado. Revisa Shiller, doce industrias de French, Baa/Aaa de FRED y diarios de Yahoo `^GSPC`. Compara medias y cierres sobre una muestra común; los resultados brutos allí no incluyen RF, dividendos o costes. Reutiliza originales y guarda sus tablas en `outputs/diagnosis/` al ejecutar la última celda. No sustituye las tablas de 01–06.
 
 ## Guardado y reproducción

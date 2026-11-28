@@ -31,6 +31,7 @@ from tfm.walk_forward import (RESULT_NAMES as WALK_FORWARD_RESULTS,
 
 from tfm.walk_forward_ablation import RESULT_NAMES as WALK_FORWARD_ABLATION_RESULTS
 from tfm.cpcv_regime import RESULT_NAMES as CPCV_REGIME_RESULTS
+from tfm.regime_compounds import RESULT_NAMES as REGIME_COMPOUND_RESULTS
 from tfm.regime_reference import RESULT_NAMES as REGIME_REFERENCE_RESULTS
 from tfm.momentum_shadows import RESULT_NAMES as MOMENTUM_SHADOW_RESULTS
 from tfm.economics import RESULT_NAMES as ECONOMIC_RESULTS
@@ -77,7 +78,7 @@ def _screening_paths(processed: Path) -> tuple[Path, ...]:
 
 
 def _validation_paths(processed: Path) -> tuple[Path, ...]:
-    return tuple(processed / f"{name}.{extension}" for name in (*VALIDATION_RESULTS, *REGIME_VALIDATION_RESULTS, *REGIME_REFERENCE_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, SELECTION_RETURNS, *OVERFITTING_RESULTS)
+    return tuple(processed / f"{name}.{extension}" for name in (*VALIDATION_RESULTS, *REGIME_VALIDATION_RESULTS, *REGIME_REFERENCE_RESULTS, *REGIME_COMPOUND_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, SELECTION_RETURNS, *OVERFITTING_RESULTS)
                  for extension in ("parquet", "json"))
 
 
@@ -314,7 +315,7 @@ def read_result(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
             raise ValueError("Repite las secciones 47–48 del notebook 14 para preparar las series.")
         validate_selection_returns(table)
         return table, summary
-    if name in (*VALIDATION_RESULTS, *REGIME_VALIDATION_RESULTS, *REGIME_REFERENCE_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, *OVERFITTING_RESULTS):
+    if name in (*SCREENING_RESULTS, *VALIDATION_RESULTS, *REGIME_VALIDATION_RESULTS, *REGIME_REFERENCE_RESULTS, *REGIME_COMPOUND_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, *OVERFITTING_RESULTS):
         table, summary = _read_table(root, name)
         if summary.get("status") != "passed":
             raise ValueError("Resultado sin preparación válida; repite su notebook.")
@@ -578,6 +579,10 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
             raise ValueError("Faltan las particiones CPCV con 120 meses; ejecuta el notebook 10.") from exc
         if name in REGIME_REFERENCE_RESULTS:
             raise ValueError("Falta la referencia M0/M1 con 120 meses; ejecuta su sección del notebook 14.") from exc
+        if name in REGIME_COMPOUND_RESULTS:
+            raise ValueError("Faltan los compuestos de régimen; ejecuta su sección del notebook 14.") from exc
+        if name in SCREENING_RESULTS:
+            raise ValueError("Falta el cribado con 120 meses; ejecuta el notebook 09.") from exc
         if name == "labelled_signals":
             raise ValueError("Faltan las etiquetas; ejecuta primero el notebook 08.") from exc
         if name == "monthly_features":
@@ -590,7 +595,7 @@ def _read_table(root: Path, name: str) -> tuple[pd.DataFrame, dict]:
 
 def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dict:
     """Guardar una tabla calculada y sus supuestos, sin configuraciones de entrada."""
-    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *PREVIOUS_SCREENING_RESULTS, *SCREENING_RESULTS, *VALIDATION_RESULTS, *REGIME_VALIDATION_RESULTS, *REGIME_REFERENCE_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, SELECTION_RETURNS, *OVERFITTING_RESULTS}:
+    if name not in {"baseline_simulations", "baseline_sensitivity", "bear_filter_simulations", "simple_comparisons", "monthly_features", "labelled_signals", *PREVIOUS_SCREENING_RESULTS, *SCREENING_RESULTS, *VALIDATION_RESULTS, *REGIME_VALIDATION_RESULTS, *REGIME_REFERENCE_RESULTS, *REGIME_COMPOUND_RESULTS, *LOGISTIC_RESULTS, *MODEL_SHADOW_RESULTS, *MDA_RESULTS, *WALK_FORWARD_RESULTS, *WALK_FORWARD_REGIME_RESULTS, *WALK_FORWARD_INTERACTION_RESULTS, *WALK_FORWARD_ABLATION_RESULTS, *CPCV_REGIME_RESULTS, *MOMENTUM_SHADOW_RESULTS, *ECONOMIC_RESULTS, *FOREST_RESULTS, *BOOSTING_RESULTS, *EBM_RESULTS, *FOREST_ECONOMIC_RESULTS, SELECTION_RETURNS, *OVERFITTING_RESULTS}:
         raise ValueError("Nombre de resultado desconocido")
     processed = root / "data/processed"
     dependents = ()
@@ -601,7 +606,10 @@ def save_result(root: Path, name: str, table: pd.DataFrame, report: dict) -> dic
     elif name in VALIDATION_RESULTS:
         dependents = _logistic_paths(processed)
     elif name in REGIME_VALIDATION_RESULTS:
-        dependents = tuple(processed / f"{result}.{extension}" for result in REGIME_REFERENCE_RESULTS
+        dependents = tuple(processed / f"{result}.{extension}" for result in (*REGIME_REFERENCE_RESULTS, *REGIME_COMPOUND_RESULTS)
+                           for extension in ("parquet", "json"))
+    elif name == SCREENING_RESULTS[0]:
+        dependents = tuple(processed / f"{result}.{extension}" for result in REGIME_COMPOUND_RESULTS
                            for extension in ("parquet", "json"))
     elif name in CPCV_REGIME_RESULTS:
         dependents = tuple(processed / f"{result}.{extension}" for result in MOMENTUM_SHADOW_RESULTS

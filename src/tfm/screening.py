@@ -141,7 +141,7 @@ def build_screening_monthly(features: pd.DataFrame, components: pd.DataFrame,
     return table, report
 
 
-def hac_regression(x, y) -> dict:
+def hac_regression(x, y, *, month_ordinals: np.ndarray | None = None) -> dict:
     """OLS con intercepto y varianza HAC de la pendiente; no eliminar filas ausentes.
 
     Con x centrada, Var(b) = [sum(u²) + 2 sum_l w_l sum_t(u_t u_(t-l))] / Sxx²,
@@ -151,6 +151,9 @@ def hac_regression(x, y) -> dict:
     x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
     if (x.ndim != 1 or y.shape != x.shape or not np.isfinite(x).all() or not np.isfinite(y).all()):
         raise ValueError("La regresión requiere dos series finitas alineadas, sin eliminar meses.")
+    if month_ordinals is not None and (month_ordinals.shape != x.shape
+            or not np.issubdtype(month_ordinals.dtype, np.integer) or not (np.diff(month_ordinals) > 0).all()):
+        raise ValueError("Los meses de la regresión deben ser únicos, estar ordenados y corresponder a sus filas.")
     result = {"months": len(x), "intercept": None, "slope": None, "standard_error": None,
               "t_hac": None, "p_value": None, "estimable": False, "reason": "insufficient_months"}
     if len(x) <= HAC_LAGS + 2:
@@ -166,6 +169,11 @@ def hac_regression(x, y) -> dict:
     if np.max(np.abs(residual)) <= 32 * np.finfo(float).eps * max(1.0, float(np.max(np.abs(y)))):
         return {**result, "reason": "zero_residual_variance"}
     scores = centered * residual
+    if month_ordinals is not None:
+        offsets = month_ordinals - month_ordinals[0]
+        calendar_scores = np.zeros(int(offsets[-1]) + 1)
+        calendar_scores[offsets] = scores  # Los huecos no aportan pares al calcular cada retardo HAC.
+        scores = calendar_scores
     meat = float(scores @ scores)
     for lag in range(1, HAC_LAGS + 1):
         meat += 2 * (1 - lag / (HAC_LAGS + 1)) * float(scores[lag:] @ scores[:-lag])
@@ -190,16 +198,17 @@ def bh_adjust(p_values) -> np.ndarray:
     return result
 
 
-def _common_arrays(monthly: pd.DataFrame):
-    """Impedir que las sombras cuenten filas separadas como meses consecutivos."""
+def _common_arrays(monthly: pd.DataFrame, *, continuous: bool = True):
+    """Compartir fechas por regla y exigir continuidad para las sombras."""
     rows = monthly.loc[monthly.screening_ready].copy()
     by_rule = [rows.loc[rows.strategy.eq(rule)] for rule in RULES]
     periods = by_rule[0].target_period.tolist()
-    if (not periods or len(periods) < 2 * MIN_SHIFT + 1
-            or periods != pd.period_range(periods[0], periods[-1], freq="M").astype(str).tolist()
-            or by_rule[1].target_period.tolist() != periods
+    if (not periods or by_rule[1].target_period.tolist() != periods
             or set(rows.strategy) != set(RULES)):
-        raise ValueError("Las dos reglas necesitan el mismo tramo mensual continuo para el cribado.")
+        raise ValueError("Las dos reglas necesitan los mismos meses para el cribado.")
+    if continuous and (len(periods) < 2 * MIN_SHIFT + 1
+            or periods != pd.period_range(periods[0], periods[-1], freq="M").astype(str).tolist()):
+        raise ValueError("El cálculo de sombras requiere un tramo mensual continuo.")
     columns = [f"z_{f}" for f in REGIME_FEATURE_COLUMNS]
     x = by_rule[0][columns].to_numpy(dtype=float)
     if (not np.isfinite(x).all() or not np.array_equal(x, by_rule[1][columns].to_numpy(dtype=float))):
@@ -210,23 +219,39 @@ def _common_arrays(monthly: pd.DataFrame):
     return by_rule, x, y
 
 
-def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Cribar retorno y magnitud con una familia BH y sombras conjuntas."""
-    _, x, returns = _common_arrays(monthly)
-    targets = [(rule, response, values) for rule, y in zip(RULES, returns, strict=True)
-               for response, values in (("return", y), ("magnitude", np.abs(y)))]
+def _relationship_targets(returns: list[np.ndarray]) -> list[tuple[str, str, np.ndarray]]:
+    return [(rule, response, values) for rule, y in zip(RULES, returns, strict=True)
+            for response, values in (("return", y), ("magnitude", np.abs(y)))]
+
+
+def _fit_relationships(x, targets, *, month_ordinals: np.ndarray | None = None) -> pd.DataFrame:
     records = []
     for rule, response, y in targets:
         positive = POSITIVE_MAGNITUDE if response == "magnitude" else POSITIVE_MOMENTUM if rule == "momentum" else ()
         for j, feature in enumerate(REGIME_FEATURE_COLUMNS):
             records.append({"strategy": rule, "feature": feature, "response": response,
                             "expected_sign": "+" if feature in positive else "unspecified",
-                            **hac_regression(x[:, j], y)})
+                            **hac_regression(x[:, j], y, month_ordinals=month_ordinals)})
     tests = pd.DataFrame(records)
     family_p = tests.p_value.fillna(1).to_numpy()
     tests["p_bh"] = bh_adjust(family_p)
     tests["passes_bh"] = tests.estimable & tests.p_bh.lt(BH_ALPHA)
     tests["passes_directional_screen"] = tests.passes_bh & tests.expected_sign.eq("+") & tests.slope.gt(0)
+    return tests
+
+
+def screen_training_relationships(monthly: pd.DataFrame) -> pd.DataFrame:
+    """Aplicar el cribado a meses de entrenamiento, conservando distancias calendario."""
+    by_rule, x, returns = _common_arrays(monthly, continuous=False)
+    dates = pd.PeriodIndex(by_rule[0].target_period, freq="M")
+    return _fit_relationships(x, _relationship_targets(returns), month_ordinals=dates.asi8)
+
+
+def screen_relationships(monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Cribar retorno y magnitud con una familia BH y sombras conjuntas."""
+    _, x, returns = _common_arrays(monthly)
+    targets = _relationship_targets(returns)
+    tests = _fit_relationships(x, targets)
     shadows = []
     for shift in range(MIN_SHIFT, len(x) - MIN_SHIFT + 1):
         moved = np.roll(x, shift, axis=0)  # El mismo desplazamiento para toda la familia.

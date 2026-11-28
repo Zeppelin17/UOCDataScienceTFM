@@ -140,7 +140,7 @@ def test_bh_known_values_strict_boundary_and_independent_checks(monkeypatch):
     p_values = np.ones(32)
     p_values[[negative, exploratory, accepted, boundary]] = [.001, .002, .003, .0125]
     values = cycle(enumerate(p_values))
-    def known_fit(x, y):
+    def known_fit(x, y, *, month_ordinals=None):
         index, p = next(values)
         slope = -1. if index == negative else 1.
         return {"months": len(x), "intercept": 0., "slope": slope,
@@ -160,6 +160,21 @@ def test_bh_known_values_strict_boundary_and_independent_checks(monkeypatch):
     assert tests.loc[exploratory, "direction_status"] == "exploratory"
     assert tests.loc[boundary, "p_bh"] == .10 and not tests.loc[boundary, "passes_bh"]
     assert tests.loc[boundary, "evidence_status"] == "no_bh_evidence"
+
+
+def test_hac_uses_calendar_lags_across_removed_months():
+    x = np.arange(12, dtype=float)
+    y = np.array([1, 2, 1, 4, 3, 6, 4, 8, 7, 9, 8, 12], dtype=float)
+    months = np.r_[0:6, 24:30]
+    fit = hac_regression(x, y, month_ordinals=months)
+    intercept, slope = np.linalg.lstsq(np.column_stack((np.ones_like(x), x)), y, rcond=None)[0]
+    scores = (x - x.mean()) * (y - intercept - slope * x)
+    distance = np.abs(months[:, None] - months[None, :])
+    weights = np.maximum(1 - distance / 7, 0)
+    variance = (scores @ weights @ scores) / (np.sum((x - x.mean()) ** 2) ** 2)
+    assert fit["slope"] == pytest.approx(slope)
+    assert fit["standard_error"] == pytest.approx(np.sqrt(variance))
+    assert fit["standard_error"] != pytest.approx(hac_regression(x, y)["standard_error"])
 
 
 def test_partial_shadow_does_not_define_a_family_maximum():
