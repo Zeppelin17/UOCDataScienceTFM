@@ -6,17 +6,13 @@ import numpy as np
 import pandas as pd
 
 from tfm.diagnostics import END
+from tfm.features import REGIME_FAMILIES as FAMILIES
 from tfm.screening import (REGIME_FEATURE_COLUMNS, REGIME_MIN_HISTORY, RESULT_NAMES as SCREENING_RESULTS,
                            RULES, screen_training_relationships)
 from tfm.validation import MODEL_COLUMNS, REGIME_CPCV_START, REGIME_RESULT_NAMES
 from tfm.walk_forward import FIRST_TEST_YEAR, LAST_TEST_YEAR, build_walk_forward_splits
 
 
-FAMILIES = {
-    "trend_drawdown": ("market_return_24m", "drawdown_12m", "distance_ma_12m", "industry_breadth_12m"),
-    "volatility_dispersion": ("price_volatility_12m", "industry_dispersion"),
-    "credit": ("credit_spread_pp", "credit_spread_change_pp"),
-}
 RESULT_NAMES = ("regime_120_screening", "regime_120_members", "regime_120_compounds")
 
 

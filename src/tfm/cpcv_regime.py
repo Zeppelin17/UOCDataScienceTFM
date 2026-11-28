@@ -82,10 +82,12 @@ def evaluate_cpcv_candidate(samples: pd.DataFrame, splits: pd.DataFrame, model: 
     return {"predictions": predictions, "monthly": monthly, "metrics": metrics, "coefficients": coefficients}, diagnostics
 
 
-def compare_cpcv_models(metrics: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
-    """Seis contrastes emparejados; positivo favorece al candidato indicado."""
-    pairs = [("M1", "M2", None), ("M1", "M3", None), ("M2", "M3", None),
-             *[(model, "M2", feature) for feature, model in REMOVAL_MODELS.items()]]
+def compare_cpcv_models(metrics: pd.DataFrame, *, pairs: list[tuple[str, str, str | None]] | None = None
+                         ) -> tuple[pd.DataFrame, list[dict]]:
+    """Contrastes emparejados; positivo favorece al candidato indicado."""
+    if pairs is None:
+        pairs = [("M1", "M2", None), ("M1", "M3", None), ("M2", "M3", None),
+                 *[(model, "M2", feature) for feature, model in REMOVAL_MODELS.items()]]
     keys = ["aggregation", "split_id", "strategy"]
     fields = [*keys, "examples", "positive", "negative", "status", "auc", "log_loss"]
     pieces, stability = [], []

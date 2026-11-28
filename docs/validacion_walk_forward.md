@@ -241,3 +241,31 @@ Con los datos locales se completaron los 80 ajustes anuales y los 30 ajustes CPC
 | CPCV | Reversión | 0,4651 | 0,6322 → 0,6314 | 0,6451 → 0,6463 |
 
 Con 120 meses, M1 mejora a M0 en AUC y log-loss en estos cuatro resúmenes. Frente a la referencia anterior, el cambio de AUC de M1 es inferior a 0,01 en valor absoluto. En el walk-forward cambia el comienzo de la muestra de ajuste. En CPCV cambian también las fronteras de los bloques y las combinaciones de historia que aportan las probabilidades de cada mes. La comparación es predictiva y se refiere a los resultados del desarrollo.
+
+## M2 con compuestos de régimen
+
+M2 conserva los dos predictores de M1, las etiquetas y la logística L2 con `C=1`. Añade todos los compuestos admitidos por el cribado en el entrenamiento de cada partición. Si ninguna familia resulta admisible, reutiliza exactamente la probabilidad de M1 para esa regla y partición. Las señales y etiquetas de prueba se verifican contra las de la referencia M1 con 120 meses antes de calcular métricas. [Formación de compuestos](hipotesis_y_cribado.md#cribado-y-compuestos-en-cada-entrenamiento)
+
+La comparación usa la diferencia de AUC y la reducción de log-loss. Se muestran las métricas agrupadas y los recuentos de mejora, empeoramiento, empate e imposibilidad de estimar AUC. La mayoría necesita 21 de los 40 años de walk-forward y 8 de las 15 combinaciones CPCV. En CPCV se promedian cinco probabilidades por señal y también se muestra el resultado restringido a 1950–1989. Esta media conserva el entrenamiento CPCV.
+
+Las tres tablas `regime_120_m2_*` guardan las predicciones emparejadas, la comparación y los coeficientes de los ajustes con compuestos. El registro `outputs/experiments/compounds_m2_trials.jsonl` identifica un candidato por regla y enlaza el intento de M1 usado como referencia. La prueba se limita al desarrollo. La aceptación de un régimen requiere después sus comprobaciones con sombras y la comparación económica.
+
+### Resultados en las mismas señales de prueba
+
+| Recorrido | Regla | AUC de M1 | AUC de M2 | Mejora de log-loss |
+|---|---|---:|---:|---:|
+| Walk-forward, 1950–1989 | Momentum | 0,59211 | 0,58549 | −0,00174 |
+| Walk-forward, 1950–1989 | Reversión | 0,63380 | 0,62024 | −0,00197 |
+| CPCV, 1950–1989 | Momentum | 0,58654 | 0,57513 | −0,00403 |
+| CPCV, 1950–1989 | Reversión | 0,63143 | 0,62253 | +0,00037 |
+| CPCV, muestra completa | Momentum | 0,59717 | 0,58756 | −0,00336 |
+| CPCV, muestra completa | Reversión | 0,62571 | 0,61543 | −0,00020 |
+
+| Recorrido | Regla | Mejoras de AUC | Empeoramientos | Empates | Sin AUC | Particiones que reutilizaron M1 |
+|---|---|---:|---:|---:|---:|---:|
+| Walk-forward | Momentum | 4 | 7 | 21 | 8 | 1 |
+| Walk-forward | Reversión | 7 | 3 | 29 | 1 | 0 |
+| CPCV | Momentum | 3 | 12 | 0 | 0 | 0 |
+| CPCV | Reversión | 4 | 8 | 3 | 0 | 3 |
+
+La AUC de M2 queda por debajo de M1 en los seis resúmenes y las mejoras por partición quedan por debajo de las mayorías fijadas. La reducción de log-loss en la reversión del CPCV común es de 0,00037 y coexiste con una AUC menor. Las 640 predicciones de las cuatro particiones sin compuestos coinciden exactamente con M1. Se conserva M1 como referencia para el siguiente contraste económico. M2 queda registrado como configuración evaluada en desarrollo para la auditoría del DSR y el PBO.

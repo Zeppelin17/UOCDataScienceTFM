@@ -16,6 +16,11 @@ FEATURE_COLUMNS = [
 ]
 # Derivada de M3; no cambia las diez candidatas ni la tabla del notebook 07.
 BEAR_VOLATILITY_FEATURE = "bear_volatility_12m"
+REGIME_FAMILIES = {
+    "trend_drawdown": ("market_return_24m", "drawdown_12m", "distance_ma_12m", "industry_breadth_12m"),
+    "volatility_dispersion": ("price_volatility_12m", "industry_dispersion"),
+    "credit": ("credit_spread_pp", "credit_spread_change_pp"),
+}
 
 # Diccionario de salida para explicar la tabla; no configura la ejecución.
 FEATURE_DESCRIPTIONS = [
