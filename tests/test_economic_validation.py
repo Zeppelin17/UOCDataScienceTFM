@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from tfm.data import save_result
-from tfm.economic_validation import TEST_INTERVAL, paired_sharpe_test
+from tfm.economic_validation import SHARPE_REFERENCES, TEST_INTERVAL, load_momentum_capital_gaps, paired_sharpe_test
 from tfm.economics import ACCOUNT_LABELS, DECISION_POLICY, RESULT_NAMES
 from tfm.logistic import VARIANT as INITIAL_LOGISTIC
 from tfm.walk_forward import VARIANT as M1_VARIANT
@@ -82,3 +82,48 @@ def test_notebook_leaves_inputs_intact_and_matches_completed_origin(tmp_path, mo
     save_result(tmp_path, RESULT_NAMES[1], accounts, report)
     with pytest.raises(ValueError, match="retornos completos de 1950–1989"):
         namespace["run_economic_validation"](tmp_path)
+
+
+def test_notebook_reads_capital_gaps_in_a_clean_kernel(tmp_path, monkeypatch):
+    pytest.importorskip("IPython")
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    months = pd.period_range(*TEST_INTERVAL, freq="M").astype(str)
+    episode = months.isin(["1987-10", "1987-11"])
+    names = ("momentum_m1", *SHARPE_REFERENCES)
+    candidate_returns = np.where(episode, .04, .01)
+    accounts = []
+    for index, name in enumerate(names):
+        returns = candidate_returns if index == 0 else np.full(len(months), .001 * index)
+        capital = 100 * np.cumprod(1 + returns)
+        accounts.append(pd.DataFrame({"strategy": name, "period": months, "rf_return": .002,
+            "net_return": returns, "capital_start": np.r_[100, capital[:-1]], "capital_end": capital}))
+    accounts = pd.concat(accounts, ignore_index=True)
+    report = {"attempt": "econ", "experiment_status": "completed", "test_interval": TEST_INTERVAL,
+              "decision_policy": DECISION_POLICY}
+    save_result(tmp_path, RESULT_NAMES[1], accounts, report)
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    monkeypatch.setattr("tfm.data.project_root", lambda: tmp_path)
+    monkeypatch.setattr("IPython.display.display", lambda *_: None)
+    monkeypatch.setattr(plt, "show", lambda: None)
+    notebook = json.loads((Path(__file__).parents[1] / "notebooks/14_referencia_walk_forward.ipynb").read_text())
+    cell, = [c for c in notebook["cells"] if c["cell_type"] == "code"
+             and "momentum-capital-gap" in c["metadata"].get("tags", [])]
+    assert cell["execution_count"] is None and not cell["outputs"]
+    namespace = {}
+    exec(compile("".join(cell["source"]), "14:momentum-capital-gap", "exec"), namespace)
+    for index, name in enumerate(SHARPE_REFERENCES, start=1):
+        monthly_gap = np.log1p(candidate_returns) - np.log1p(.001 * index)
+        expected = np.cumsum(monthly_gap)
+        np.testing.assert_allclose(namespace["brechas_capital"][name], expected)
+        np.testing.assert_allclose(namespace["ax"].lines[index - 1].get_ydata(), np.r_[0, expected])
+        assert namespace["aporte_1987"][name] == pytest.approx(monthly_gap[episode].sum())
+    plt.close(namespace["fig"])
+    assert {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()} == before
+
+    accounts.loc[0, "capital_end"] = 0
+    save_result(tmp_path, RESULT_NAMES[1], accounts, report)
+    with pytest.raises(ValueError, match="capitales mensuales positivos"):
+        load_momentum_capital_gaps(tmp_path)

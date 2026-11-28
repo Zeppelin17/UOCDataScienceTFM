@@ -84,3 +84,5 @@ Las secciones 44–46 del 14 usan las cuentas guardadas en 19–22 para comparar
 Las secciones 47–48 del 14 construyen y guardan las cuentas mensuales comparables para DSR y PBO. Reutilizan las cuentas de 19–22 y las predicciones guardadas de las retiradas, bosque, boosting y EBM. Reproducen en memoria las cuatro variantes por bloques. [Variantes y política de ejecución](../docs/series_dsr_pbo.md)
 
 Las secciones 49–51 del 14 calculan DSR por filtro y PBO por regla con la matriz guardada en 47–48. Muestran el número efectivo de ensayos y el reparto de rangos complementarios, y guardan el resumen y sus combinaciones. Se pueden ejecutar por separado. [Método y resultados](../docs/dsr_pbo.md)
+
+La sección 52 del 14 compara mes a mes el capital acumulado de momentum M1 frente a la regla original, el veto bajista y el ajuste por volatilidad. Solo requiere las cuentas guardadas en 19–22 y muestra el gráfico y su desglose en el notebook. [Método y resultados](../docs/contraste_economico.md#cuándo-se-acumula-la-ventaja-de-m1)

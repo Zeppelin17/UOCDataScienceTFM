@@ -101,13 +101,37 @@ def aligned_accounts(accounts: pd.DataFrame, expected: set[str]) -> tuple[pd.Dat
     return returns, risk_free.iloc[:, 0]
 
 
-def load_development_accounts(root: Path) -> tuple[pd.DataFrame, pd.Series, dict]:
+def _read_development_economics(root: Path) -> tuple[pd.DataFrame, dict]:
     from tfm.data import read_result
 
     accounts, linear = read_result(root, ECONOMIC_RESULTS[1])
     if (linear.get("test_interval") != TEST_INTERVAL or linear.get("experiment_status") != "completed"
             or linear.get("decision_policy") != DECISION_POLICY or not linear.get("attempt")):
         raise ValueError("Ejecuta las secciones 19–22 del notebook 14 para preparar las cuentas de desarrollo.")
+    return accounts, linear
+
+
+def load_momentum_capital_gaps(root: Path) -> pd.DataFrame:
+    """Brecha de log-capital de M1 frente a cada referencia, al final de cada mes."""
+    accounts, _ = _read_development_economics(root)
+    names = ("momentum_m1", *SHARPE_REFERENCES)
+    accounts = accounts.loc[accounts.strategy.isin(names)]
+    aligned_accounts(accounts, set(names))
+    initial = accounts.loc[accounts.period.eq(TEST_INTERVAL[0]), "capital_start"].to_numpy(dtype=float)
+    if not np.isfinite(initial).all() or (initial <= 0).any() or not (initial == initial[0]).all():
+        raise ValueError("La comparación requiere el mismo capital inicial positivo en las cuatro cuentas.")
+    final = accounts.pivot(index="period", columns="strategy", values="capital_end")
+    values = final.to_numpy(dtype=float)
+    if not np.isfinite(values).all() or (values <= 0).any():
+        raise ValueError("La diferencia de logaritmos requiere capitales mensuales positivos y finitos.")
+    log_capital = np.log(final.astype(float))
+    return log_capital[list(SHARPE_REFERENCES)].rsub(log_capital["momentum_m1"], axis="index")
+
+
+def load_development_accounts(root: Path) -> tuple[pd.DataFrame, pd.Series, dict]:
+    from tfm.data import read_result
+
+    accounts, linear = _read_development_economics(root)
     returns, risk_free = aligned_accounts(accounts, set(ACCOUNT_LABELS))
     attempts = linear["source_attempts"]
     published = {(variant, rule): (f"{rule}_{model.lower()}", attempts["M0_M1" if model == "M1" else model])

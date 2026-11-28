@@ -20,6 +20,18 @@ El diagnóstico por décadas usa tramos fijos de 120 meses y segmenta las cuenta
 
 M1 obtiene un Sharpe descriptivo mayor en la cuenta completa. Los tres intervalos incluyen cero. En los años cincuenta M1 queda ligeramente por debajo de los tres comparadores. En cada una de las tres décadas siguientes queda por encima, con la mayor diferencia en los ochenta.
 
+## Cuándo se acumula la ventaja de M1
+
+La sección 52 del notebook 14 usa los capitales al final de cada mes de las cuentas guardadas en 19–22. Traza $\log(V_{\mathrm{M1},t}) - \log(V_{\mathrm{referencia},t})$ frente al momentum original, el veto bajista y el ajuste por volatilidad. La brecha empieza en cero porque las cuentas parten del mismo capital. Su variación mensual mide cuánto terreno ganó o perdió M1 frente al comparador en ese mes. Se conservan las posiciones, los costes y la liquidación de las cuentas originales.
+
+| Comparador | Brecha final | Aporte de octubre y noviembre de 1987 | Aporte del resto de los meses | Porcentaje de la brecha final aportado por esos dos meses |
+|---|---:|---:|---:|---:|
+| Momentum original | 0,2810 | 0,2659 | 0,0151 | 94,6 % |
+| Veto bajista | 0,3627 | 0,2659 | 0,0968 | 73,3 % |
+| Ajuste por volatilidad | 0,3576 | 0,2182 | 0,1394 | 61,0 % |
+
+En octubre y noviembre de 1987, M1 quedó en efectivo y los tres comparadores mantuvieron exposición. El ajuste por volatilidad redujo su exposición en noviembre. Esos dos meses, identificados al inspeccionar las curvas, explican gran parte de la ventaja acumulada de M1, sobre todo frente al momentum original. Su aporte se mide en unidades logarítmicas y los 480 meses permanecen en la comparación principal. Se trata de un diagnóstico descriptivo que complementa el contraste de Sharpe. Los capitales proceden de una simulación con precios medios mensuales.
+
 ## Inventario de variantes
 
 El inventario recoge los identificadores registrados por regla en el desarrollo y reúne sus intentos. Cada serie publicada se enlaza con el intento de predicción de la logística o con el lote del bosque. Las repeticiones con la misma variante, las comprobaciones CPCV de candidatos cronológicos, los años de reajuste y las sombras aportan resultados a sus respectivas pruebas sin aumentar el número de identificadores de candidatos. M0 y los comparadores fijos siguen en las cuentas como referencias.
